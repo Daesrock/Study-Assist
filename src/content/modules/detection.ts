@@ -69,6 +69,72 @@ export const QUESTION_PATTERNS: QuestionPatterns = {
 };
 
 // ============================================
+// Text Cleaning Helpers
+// ============================================
+
+/**
+ * Clean question text by extracting only the actual question part
+ * Removes context like routing tables, code snippets, etc. that appear before the question
+ */
+function cleanQuestionText(rawText: string): string {
+  if (!rawText || rawText.length < 100) {
+    return rawText; // Short text, probably already clean
+  }
+
+  // Patterns that typically indicate the start of the actual question
+  const questionStartPatterns = [
+    /(?:consulte\s+(?:la\s+)?(?:imagen|ilustraci[oó]n|exhibici[oó]n|figura|tabla|gr[aá]fic[ao]))[.:,]?\s*/i,
+    /(?:refer\s+to\s+the\s+(?:exhibit|figure|diagram|image|table|graphic))[.:,]?\s*/i,
+    /(?:see\s+the\s+(?:exhibit|figure|diagram|image|table|graphic))[.:,]?\s*/i,
+  ];
+
+  // Try to find where the actual question starts
+  for (const pattern of questionStartPatterns) {
+    const match = rawText.match(pattern);
+    if (match && match.index !== undefined) {
+      // Extract from this point to the end
+      const questionPart = rawText.substring(match.index).trim();
+      
+      // Make sure we got a substantial question (has a question mark)
+      if (questionPart.includes('?')) {
+        log(`[Study Assist] Cleaned question text: "${rawText.substring(0, 50)}..." → "${questionPart.substring(0, 100)}..."`);
+        return questionPart;
+      }
+    }
+  }
+
+  // If no "Consulte..." pattern found, check if there's a lot of non-question text
+  // (like routing tables with many lines starting with letters/numbers and network addresses)
+  const lines = rawText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  
+  // Detect if many lines look like routing table entries or code
+  const tableLinePatt = /^[A-Z]\s+[\d\.:/]+|^\w+\([^)]+\)\s*#|^[\d\.]+ \[|gateway\s+of\s+last\s+resort/i;
+  const tableLines = lines.filter(l => tableLinePatt.test(l));
+  
+  // If more than 30% of lines look like tables/code, extract just the last sentence with "?"
+  if (tableLines.length > lines.length * 0.3) {
+    // Find the last substantial sentence with a question mark
+    const sentences = rawText.split(/[.!¿]\s+/).filter(s => s.includes('?'));
+    if (sentences.length > 0) {
+      const lastQuestion = sentences[sentences.length - 1].trim();
+      
+      // Include any "Consulte..." prefix if present
+      const contextMatch = rawText.match(/(consulte\s+(?:la\s+)?(?:imagen|ilustraci[oó]n|exhibici[oó]n)[.:,]?\s+[^¿?]+\?)/i);
+      if (contextMatch) {
+        log(`[Study Assist] Cleaned question text (table detected): "${rawText.substring(0, 50)}..." → "${contextMatch[1].trim().substring(0, 100)}..."`);
+        return contextMatch[1].trim();
+      }
+      
+      log(`[Study Assist] Cleaned question text (table detected): "${rawText.substring(0, 50)}..." → "${lastQuestion.substring(0, 100)}..."`);
+      return lastQuestion;
+    }
+  }
+
+  // No cleaning needed - return original
+  return rawText;
+}
+
+// ============================================
 // Internal Types
 // ============================================
 
@@ -208,7 +274,8 @@ export function detectNetAcadQuestions(): void {
         shadowRoot,
       );
       if (questionBodyEls.length > 0) {
-        questionText = questionBodyEls[0].textContent?.trim() || "";
+        const rawText = questionBodyEls[0].textContent?.trim() || "";
+        questionText = cleanQuestionText(rawText);
       }
 
       // If still not found, try getting all text from the header
@@ -218,7 +285,8 @@ export function detectNetAcadQuestions(): void {
           shadowRoot,
         );
         if (headerEls.length > 0) {
-          questionText = headerEls[0].textContent?.trim() || "";
+          const rawText = headerEls[0].textContent?.trim() || "";
+          questionText = cleanQuestionText(rawText);
         }
       }
 
@@ -307,9 +375,10 @@ export function detectNetAcadQuestions(): void {
         ".mcq__body-inner",
         container.shadowRoot || container,
       )[0];
-      const questionText = questionBody
+      const rawText = questionBody
         ? questionBody.textContent?.trim() || `Question ${index + 1}`
         : `Question ${index + 1}`;
+      const questionText = cleanQuestionText(rawText);
 
       const options: QuestionOption[] = optionTexts.map((text, i) => ({
         letter: String.fromCharCode(65 + i),

@@ -28,7 +28,7 @@ import type {
 } from "./constants.js";
 import { fetchWithRetry } from "./fetchUtils.js";
 import { logError } from "./fetchUtils.js";
-import { findMatchingQuestion } from "./questionBank.js";
+import { findMatchingQuestion, normalizeForSearch, calculateSimilarity, calculateContainment } from "./questionBank.js";
 import {
   buildDeepSeekPrompt,
   buildClaudeValidationPrompt,
@@ -166,6 +166,87 @@ export async function testDeepSeekApiKey(apiKey: string): Promise<MessageRespons
 }
 
 // ============================================
+// Question Bank → Letter Matching
+// ============================================
+
+import type { QuestionOption } from "../../types/index.js";
+
+/**
+ * Match a single correctAnswer text from the question bank to the option letter (A, B, C...)
+ * from the current page's detected options.
+ * Uses normalized text comparison to handle accent/case differences.
+ */
+function matchSingleAnswerToLetter(
+  correctAnswer: string,
+  pageOptions: QuestionOption[],
+): string | null {
+  const normalizedCorrect = normalizeForSearch(correctAnswer);
+
+  // 1. Exact normalized match
+  for (const opt of pageOptions) {
+    if (normalizeForSearch(opt.text) === normalizedCorrect) {
+      return opt.letter;
+    }
+  }
+
+  // 2. Contains match (bank answer is substring or vice versa)
+  for (const opt of pageOptions) {
+    const normalizedOpt = normalizeForSearch(opt.text);
+    if (normalizedOpt.includes(normalizedCorrect) || normalizedCorrect.includes(normalizedOpt)) {
+      return opt.letter;
+    }
+  }
+
+  // 3. High word-overlap similarity (>= 80%)
+  for (const opt of pageOptions) {
+    const similarity = calculateSimilarity(normalizedCorrect, normalizeForSearch(opt.text));
+    if (similarity >= 0.8) {
+      return opt.letter;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Match correctAnswer(s) from question bank to page option letters.
+ * Handles both single answer (correctAnswer) and multiple answers (correctAnswers).
+ * Returns comma-separated letters like "A" or "A, C, E".
+ */
+function matchCorrectAnswerToLetter(
+  bankMatch: { correctAnswer?: string; correctAnswers?: string[] },
+  pageOptions?: QuestionOption[],
+): string | null {
+  if (!pageOptions || pageOptions.length === 0) return null;
+
+  // Determine all correct answers
+  const answers: string[] = bankMatch.correctAnswers
+    ? bankMatch.correctAnswers
+    : bankMatch.correctAnswer
+      ? [bankMatch.correctAnswer]
+      : [];
+
+  if (answers.length === 0) return null;
+
+  const matchedLetters: string[] = [];
+
+  for (const answer of answers) {
+    const letter = matchSingleAnswerToLetter(answer, pageOptions);
+    if (letter) {
+      matchedLetters.push(letter);
+    } else {
+      log(`[Study Assist] Could not match correctAnswer "${answer}" to any page option`);
+    }
+  }
+
+  if (matchedLetters.length === 0) return null;
+
+  // Sort alphabetically and deduplicate
+  const unique = [...new Set(matchedLetters)].sort();
+  return unique.join(", ");
+}
+
+// ============================================
 // Question Analysis (Main Orchestrator)
 // ============================================
 
@@ -173,6 +254,39 @@ export async function analyzeQuestion(context: AnalysisContext): Promise<Analysi
   const startTime = Date.now();
 
   try {
+    // ============================================
+    // Question Bank Instant Match (skip AI entirely)
+    // ============================================
+    const bankMatch = await findMatchingQuestion(
+      context.questionText,
+      (context as AnalysisContext & { moduleInfo?: string }).moduleInfo || context.pageTitle,
+      context.pageUrl,
+    );
+
+    if (bankMatch && (bankMatch.correctAnswer || bankMatch.correctAnswers) && bankMatch.similarity >= 80) {
+      const answerLetter = matchCorrectAnswerToLetter(bankMatch, context.options);
+      if (answerLetter) {
+        const displayAnswer = bankMatch.correctAnswers ? bankMatch.correctAnswers.join(' | ') : bankMatch.correctAnswer || '';
+        log(`[Study Assist] INSTANT ANSWER from question bank (${bankMatch.similarity}% match): ${answerLetter}`);
+        await trackUsage({
+          timestamp: Date.now(),
+          questionText: context.questionText.substring(0, 200),
+          questionType: context.questionType,
+          answer: answerLetter,
+          source: "question-bank",
+          model: "questions-bank.json",
+          inputTokens: 0,
+          outputTokens: 0,
+          responseMode: context.responseMode,
+          success: true,
+          latencyMs: Date.now() - startTime,
+          platform: detectPlatform(context.pageUrl),
+          confidence: "HIGH",
+        });
+        return { success: true, result: answerLetter, source: "question-bank" };
+      }
+    }
+
     // Rate limiting check
     const rateLimitError = checkRateLimit(context.questionText);
     if (rateLimitError) {
@@ -596,6 +710,44 @@ export async function analyzeQuestionStreaming(
   const startTime = Date.now();
 
   try {
+    // ============================================
+    // Question Bank Instant Match (skip AI entirely)
+    // ============================================
+    const bankMatch = await findMatchingQuestion(
+      context.questionText,
+      (context as AnalysisContext & { moduleInfo?: string }).moduleInfo || context.pageTitle,
+      context.pageUrl,
+    );
+
+    if (bankMatch && (bankMatch.correctAnswer || bankMatch.correctAnswers) && bankMatch.similarity >= 80) {
+      const answerLetter = matchCorrectAnswerToLetter(bankMatch, context.options);
+      if (answerLetter) {
+        const displayAnswer = bankMatch.correctAnswers ? bankMatch.correctAnswers.join(' | ') : bankMatch.correctAnswer || '';
+        log(`[Study Assist] ✅ INSTANT ANSWER (streaming) from question bank (${bankMatch.similarity}% match): ${answerLetter}`);
+        await trackUsage({
+          timestamp: Date.now(),
+          questionText: context.questionText.substring(0, 200),
+          questionType: context.questionType,
+          answer: answerLetter,
+          source: "question-bank",
+          model: "questions-bank.json",
+          inputTokens: 0,
+          outputTokens: 0,
+          responseMode: context.responseMode,
+          success: true,
+          latencyMs: Date.now() - startTime,
+          platform: detectPlatform(context.pageUrl),
+          confidence: "HIGH",
+        });
+        try {
+          port.postMessage({ type: "STREAM_STATUS", status: "started" });
+          port.postMessage({ type: "STREAM_CHUNK", chunk: `**Respuesta del banco de preguntas (${bankMatch.similarity}% coincidencia):**\n\n**${answerLetter}** — ${displayAnswer}\n\n${bankMatch.explanation || ""}` });
+          port.postMessage({ type: "STREAM_STATUS", status: "complete", outputTokens: 0 });
+        } catch { /* port disconnected */ }
+        return;
+      }
+    }
+
     // Rate limiting
     const rateLimitError = checkRateLimit(context.questionText);
     if (rateLimitError) {
@@ -613,11 +765,7 @@ export async function analyzeQuestionStreaming(
       return;
     }
 
-    const matchedQuestion = await findMatchingQuestion(
-      context.questionText,
-      (context as AnalysisContext & { moduleInfo?: string }).moduleInfo || context.pageTitle,
-      context.pageUrl,
-    );
+    const matchedQuestion = bankMatch;
 
     const prompt = buildAnalysisPrompt(context, matchedQuestion);
     const messageContent = buildMessageContent(prompt, context.images);

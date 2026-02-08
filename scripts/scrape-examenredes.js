@@ -1,6 +1,6 @@
 /**
  * ExamenRedes Scraper
- * Extrae preguntas y explicaciones de examenredes.com usando Serper API
+ * Extrae preguntas y explicaciones de examenredes.com usando fetch + cheerio
  *
  * Uso:
  *   node scrape-examenredes.js          # Scrapea todas las URLs
@@ -10,6 +10,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import * as cheerio from "cheerio";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,8 +18,8 @@ const __dirname = path.dirname(__filename);
 // ============================================
 // Configuración
 // ============================================
-const SERPER_API_KEY = "";
-const SERPER_API_URL = "https://scrape.serper.dev";
+const USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 // URLs de ExamenRedes para CCNA 2
 const EXAMENREDES_URLS = [
@@ -112,7 +113,7 @@ const EXAMENREDES_URLS = [
   {
     moduleRange: "mod-13",
     title: "Prueba del Módulo 13 - Configuraciones de WLAN",
-    url: "https://examenredes.com/prueba-del-modulo-13-configuraciones-de-wlan/",
+    url: "https://examenredes.com/prueba-del-modulo-13-configuracion-wlan/",
   },
   {
     moduleRange: "mod-14",
@@ -122,12 +123,12 @@ const EXAMENREDES_URLS = [
   {
     moduleRange: "mod-15",
     title: "Prueba del Módulo 15 - Rutas IP estáticas",
-    url: "https://examenredes.com/prueba-del-modulo-15-rutas-ip-estaticas/",
+    url: "https://examenredes.com/prueba-del-modulo-15-enrutamiento-estatico-ip/",
   },
   {
     moduleRange: "mod-16",
     title: "Prueba del Módulo 16 - Resuelve problemas de rutas",
-    url: "https://examenredes.com/prueba-del-modulo-16-resuelve-problemas-de-rutas/",
+    url: "https://examenredes.com/prueba-del-modulo-16-solucion-de-problemas-de-rutas-estaticas-y-predeterminadas/",
   },
   // Evaluaciones PTSA
   {
@@ -183,100 +184,179 @@ function sleep(ms) {
 }
 
 // ============================================
-// Serper API
+// Scraping con fetch + cheerio
 // ============================================
 
 /**
- * Scrapea una URL usando Serper API
+ * Scrapea una URL usando fetch directo
  */
 async function scrapeUrl(url) {
-  console.log(`  📡 Llamando Serper API...`);
+  console.log(`  📡 Descargando HTML...`);
 
-  const response = await fetch(SERPER_API_URL, {
-    method: "POST",
+  const response = await fetch(url, {
     headers: {
-      "X-API-KEY": SERPER_API_KEY,
-      "Content-Type": "application/json",
+      "User-Agent": USER_AGENT,
     },
-    body: JSON.stringify({
-      url,
-      includeMarkdown: true, // Incluir markdown para detectar imágenes
-    }),
   });
 
   if (!response.ok) {
-    throw new Error(
-      `Serper API error: ${response.status} ${response.statusText}`,
-    );
+    throw new Error(`HTTP error: ${response.status} ${response.statusText}`);
   }
 
-  const text = await response.text();
-  return text;
+  const html = await response.text();
+  return html;
 }
 
 // ============================================
-// Parser de preguntas
+// Parser de preguntas con cheerio
 // ============================================
 
 /**
- * Extrae preguntas del texto scrapeado
+ * Extrae preguntas del HTML usando cheerio
  */
-function parseQuestions(rawText, moduleRange) {
+function parseQuestions(html, moduleRange) {
+  const $ = cheerio.load(html);
   const questions = [];
 
-  // IMPORTANTE: El texto viene con \n como caracteres literales (escapados)
-  // Necesitamos convertirlos a saltos de línea reales
-  let text = rawText
-    .replace(/\\n/g, "\n") // Convertir \n literal a salto de línea real
-    .replace(/\\t/g, "\t") // Convertir \t literal a tab real
-    .replace(/\\"/g, '"'); // Convertir \" a comilla real
+  // Las preguntas están en <p><strong>NÚMERO. Texto?</strong></p>
+  $("p strong").each((index, element) => {
+    const $strong = $(element);
+    const text = $strong.text().trim();
 
-  // Limpiar metadata JSON que viene al final del response de Serper
-  // Buscar patrones como: ","markdown":" o ","metadata":{
-  const metadataIndex = text.search(/","(markdown|metadata)":/);
-  if (metadataIndex > 0) {
-    text = text.substring(0, metadataIndex);
-  }
+    // Verificar si empieza con número y punto
+    const match = text.match(/^(\d+)\.\s+(.+)/);
+    if (!match) return;
 
-  // Dividir el texto por números de pregunta (ej: "1. ", "2. ", etc.)
-  // El patrón busca un salto de línea seguido de número + punto + espacio + texto de pregunta (con ¿ o mayúscula)
-  // Esto evita dividir en listas numeradas dentro de explicaciones (1.-, 2.-, etc.)
-  const questionBlocks = text.split(/\n(?=\d+\.\s+[¿A-Z])/);
+    const questionNumber = parseInt(match[1]);
+    const questionText = match[2];
 
-  let questionNumber = 0;
+    if (!questionText || questionText.length < 10) return;
 
-  for (const block of questionBlocks) {
-    // Verificar que es un bloque de pregunta válido (empieza con número)
-    const questionMatch = block.match(/^(\d+)\.\s+(.+?\?)/s);
-    if (!questionMatch) continue;
+    // Buscar la lista de opciones después de este <p>
+    let $current = $strong.parent(); // El <p>
+    let $ul = null;
 
-    questionNumber++;
-    const questionText = questionMatch[2].replace(/\n/g, " ").trim();
+    // Buscar el siguiente <ul> (puede haber otros elementos en medio)
+    while ($current.length && !$ul) {
+      $current = $current.next();
+      if ($current.is("ul")) {
+        $ul = $current;
+      }
+      // Detener si encontramos otro <p><strong> (siguiente pregunta)
+      if ($current.find("strong").length > 0) {
+        break;
+      }
+    }
 
-    // Extraer opciones (líneas que empiezan con * o -)
-    const optionsMatch = block.match(/(?:^|\n)\s*[\*\-]\s+(.+?)(?=\n|$)/g);
-    const options = optionsMatch
-      ? optionsMatch.map((opt) => opt.replace(/^\s*[\*\-]\s+/, "").trim())
-      : [];
+    // Extraer opciones
+    const options = [];
+    const correctAnswers = [];
+    let $afterOptions; // Elemento después de las opciones (para buscar explicación)
 
-    // Extraer explicación - buscar desde "Explique:" hasta el final del bloque
-    // No cortar en \n\d+\. porque las explicaciones pueden tener listas numeradas
-    const explainMatch = block.match(/Expli(?:que|cación)[:\s]*(.+?)$/is);
-    const explanation = explainMatch
-      ? explainMatch[1].replace(/\n/g, " ").trim()
-      : "";
+    if ($ul) {
+      // === Formato estándar: opciones en <ul><li> ===
+      $ul.find("li").each((i, li) => {
+        const $li = $(li);
+        const optionText = $li.text().trim();
 
-    // Crear ID único
+        if (optionText) {
+          options.push(optionText);
+
+          // Verificar si es la respuesta correcta
+          if ($li.hasClass("correct_answer")) {
+            correctAnswers.push(optionText);
+          }
+        }
+      });
+      $afterOptions = $ul;
+    } else {
+      // === Formato alternativo: opciones en bloques <p> (command-block questions) ===
+      // Cuando no hay <ul>, las opciones están en <p> entre la pregunta y la explicación.
+      // Las respuestas correctas tienen <span class="correct_answer"> dentro del <p>.
+      let $scan = $strong.parent().next();
+
+      while ($scan.length) {
+        // Detener si encontramos la siguiente pregunta
+        if (
+          $scan.is("p") &&
+          $scan.find("strong").length > 0 &&
+          /^\d+\.\s/.test($scan.text().trim())
+        ) {
+          break;
+        }
+
+        // Detener si encontramos la caja de explicación
+        if ($scan.hasClass("box") || $scan.find(".box").length > 0) {
+          break;
+        }
+
+        // Saltar figuras/imágenes
+        if ($scan.is("figure")) {
+          $scan = $scan.next();
+          continue;
+        }
+
+        // Cada <p> con texto es una opción
+        if ($scan.is("p")) {
+          const optionText = $scan.text().trim();
+          if (optionText && optionText.length > 0) {
+            options.push(optionText);
+
+            // Si contiene <span class="correct_answer">, es la respuesta correcta
+            if ($scan.find("span.correct_answer").length > 0) {
+              correctAnswers.push(optionText);
+            }
+          }
+        }
+
+        $afterOptions = $scan;
+        $scan = $scan.next();
+      }
+    }
+
+    // Solo agregar si tiene al menos 2 opciones
+    if (options.length < 2) return;
+
+    // Buscar explicación (siguiente elemento después de las opciones)
+    let explanation = "";
+    let $next = $afterOptions ? $afterOptions.next() : null;
+
+    while ($next && $next.length) {
+      const nextText = $next.text().trim();
+
+      // Detener si encontramos la siguiente pregunta
+      if ($next.find("strong").length > 0 && /^\d+\./.test(nextText)) {
+        break;
+      }
+
+      // Si encontramos "Explique" o "Explicación"
+      if (/Expli(?:que|cación)/i.test(nextText)) {
+        explanation = nextText.replace(/Expli(?:que|cación)[:\s]*/i, "").trim();
+        break;
+      }
+
+      $next = $next.next();
+    }
+
     const id = `${moduleRange}_${String(questionNumber).padStart(3, "0")}`;
 
-    questions.push({
+    const question = {
       id,
       text: questionText,
       textNormalized: normalizeText(questionText),
       options,
       explanation,
-    });
-  }
+    };
+
+    // Agregar correctAnswer(s) solo si se encontraron
+    if (correctAnswers.length === 1) {
+      question.correctAnswer = correctAnswers[0];
+    } else if (correctAnswers.length > 1) {
+      question.correctAnswers = correctAnswers;
+    }
+
+    questions.push(question);
+  });
 
   return questions;
 }
@@ -318,25 +398,25 @@ async function main() {
 
     try {
       // Scrapear la URL
-      const rawText = await scrapeUrl(url);
+      const html = await scrapeUrl(url);
 
-      console.log(`  📄 Texto recibido: ${rawText.length} caracteres`);
+      console.log(`  📄 HTML recibido: ${html.length} caracteres`);
 
-      // Guardar raw text para debug (solo en modo test)
+      // Guardar HTML para debug (solo en modo test)
       if (isTestMode) {
         const debugPath = path.join(
           __dirname,
           "..",
           "data",
-          `debug-${moduleRange}-raw.txt`,
+          `debug-${moduleRange}-raw.html`,
         );
         fs.mkdirSync(path.dirname(debugPath), { recursive: true });
-        fs.writeFileSync(debugPath, rawText, "utf-8");
-        console.log(`  💾 Raw text guardado en: debug-${moduleRange}-raw.txt`);
+        fs.writeFileSync(debugPath, html, "utf-8");
+        console.log(`  💾 HTML guardado en: debug-${moduleRange}-raw.html`);
       }
 
       // Parsear preguntas
-      const questions = parseQuestions(rawText, moduleRange);
+      const questions = parseQuestions(html, moduleRange);
 
       console.log(`  ✅ Preguntas extraídas: ${questions.length}`);
 

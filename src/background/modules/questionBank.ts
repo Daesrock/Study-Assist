@@ -65,6 +65,35 @@ export function calculateSimilarity(text1: string, text2: string): number {
 }
 
 /**
+ * Calculate containment: what % of the SMALLER text's words appear in the LARGER text.
+ * This handles the case where the page includes extra context (routing tables, code, etc.)
+ * before the actual question. Even with 200 extra words, if all 15 bank-question words
+ * are present in the page text, containment = 15/15 = 100%.
+ */
+export function calculateContainment(text1: string, text2: string): number {
+  const words1 = new Set(text1.split(" ").filter((w) => w.length > 2));
+  const words2 = new Set(text2.split(" ").filter((w) => w.length > 2));
+
+  if (words1.size === 0 || words2.size === 0) return 0;
+
+  // Determine which is the smaller set (likely the bank question)
+  const [smaller, larger] = words1.size <= words2.size
+    ? [words1, words2]
+    : [words2, words1];
+
+  let matches = 0;
+  for (const word of smaller) {
+    if (larger.has(word)) matches++;
+  }
+
+  // Require the smaller text to have a minimum number of meaningful words
+  // to avoid false positives with very short questions
+  if (smaller.size < 4) return 0;
+
+  return matches / smaller.size;
+}
+
+/**
  * Check if the page is a NetAcad/Cisco page based on title or URL
  */
 export function isNetAcadPage(pageTitle: string | undefined, pageUrl: string | undefined): boolean {
@@ -138,7 +167,13 @@ export async function findMatchingQuestion(
     if (!module || !module.questions) continue;
 
     for (const question of module.questions) {
-      const similarity = calculateSimilarity(normalizedQuestion, question.textNormalized);
+      // Use the MAX of standard similarity and containment.
+      // Standard similarity works when texts are similar length.
+      // Containment works when the page has extra context (tables, code)
+      // around the actual question.
+      const stdSimilarity = calculateSimilarity(normalizedQuestion, question.textNormalized);
+      const containment = calculateContainment(normalizedQuestion, question.textNormalized);
+      const similarity = Math.max(stdSimilarity, containment);
 
       if (similarity > bestSimilarity && similarity >= SIMILARITY_THRESHOLD) {
         bestSimilarity = similarity;

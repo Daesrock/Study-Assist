@@ -8,7 +8,7 @@ import type { State, Settings } from "../../types/index.js";
 // ============================================
 // Debug Mode
 // ============================================
-export const DEBUG_MODE = false;
+export const DEBUG_MODE = true;
 export const log = (...args: unknown[]): void => {
   if (DEBUG_MODE) {
     console.log(...args);

@@ -5,7 +5,7 @@
 // ============================================
 // Debug Mode
 // ============================================
-export const DEBUG_MODE: boolean = false;
+export const DEBUG_MODE: boolean = true;
 export const log = (...args: unknown[]): void => {
   if (DEBUG_MODE) console.log(...args);
 };
@@ -55,6 +55,8 @@ export interface QuestionBankQuestion {
   textNormalized: string;
   options: string[];
   explanation?: string;
+  correctAnswer?: string;
+  correctAnswers?: string[];
 }
 
 export interface MatchedQuestion extends QuestionBankQuestion {
