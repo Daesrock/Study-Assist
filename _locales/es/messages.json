@@ -1,0 +1,278 @@
+{
+  "extName": {
+    "message": "Study Assist",
+    "description": "Nombre de la extensión"
+  },
+  "extDescription": {
+    "message": "Asistente de estudio con IA para plataformas de aprendizaje en línea",
+    "description": "Descripción de la extensión"
+  },
+  "extensionStatus": {
+    "message": "Estado de la Extensión",
+    "description": "Etiqueta del toggle"
+  },
+  "statusOn": {
+    "message": "ACTIVADO",
+    "description": "Estado cuando está habilitada"
+  },
+  "statusOff": {
+    "message": "DESACTIVADO",
+    "description": "Estado cuando está deshabilitada"
+  },
+  "claudeApiKey": {
+    "message": "Clave API de Claude",
+    "description": "Título de sección Claude"
+  },
+  "enterClaudeKey": {
+    "message": "Ingresa tu clave API de Claude (sk-ant-...)",
+    "description": "Placeholder para input de Claude"
+  },
+  "saveApiKey": {
+    "message": "Guardar Clave API",
+    "description": "Botón para guardar clave"
+  },
+  "claudeModel": {
+    "message": "Modelo de Claude",
+    "description": "Etiqueta del selector de modelo"
+  },
+  "modelHaiku": {
+    "message": "Claude 3 Haiku (Rápido, Económico)",
+    "description": "Opción modelo Haiku"
+  },
+  "modelHaiku35": {
+    "message": "Claude 3.5 Haiku (Más Rápido)",
+    "description": "Opción modelo Haiku 3.5"
+  },
+  "modelSonnet4": {
+    "message": "Claude Sonnet 4 (Equilibrado)",
+    "description": "Opción modelo Sonnet 4"
+  },
+  "modelSonnet45": {
+    "message": "Claude Sonnet 4.5 (Último)",
+    "description": "Opción modelo Sonnet 4.5"
+  },
+  "modelOpus45": {
+    "message": "Claude Opus 4.5 (Más Capaz)",
+    "description": "Opción modelo Opus 4.5"
+  },
+  "useDeepSeek": {
+    "message": "Usar DeepSeek Reasoner",
+    "description": "Etiqueta toggle DeepSeek"
+  },
+  "claudeAsFallback": {
+    "message": "(Claude como respaldo)",
+    "description": "Nota de respaldo DeepSeek"
+  },
+  "deepseekInfo": {
+    "message": "DeepSeek analiza primero. Si la confianza no es ALTA, Claude valida.",
+    "description": "Explicación de DeepSeek"
+  },
+  "deepseekOnly": {
+    "message": "Solo DeepSeek",
+    "description": "Etiqueta modo solo DeepSeek"
+  },
+  "noClaudeFallback": {
+    "message": "(sin respaldo de Claude)",
+    "description": "Nota sin respaldo"
+  },
+  "warnings": {
+    "message": "Advertencias:",
+    "description": "Título de advertencias"
+  },
+  "noImageSupport": {
+    "message": "Sin soporte de imágenes",
+    "description": "Advertencia"
+  },
+  "noImageSupportDesc": {
+    "message": "DeepSeek no puede leer imágenes",
+    "description": "Descripción de advertencia"
+  },
+  "lowerAccuracy": {
+    "message": "Menor precisión",
+    "description": "Advertencia"
+  },
+  "lowerAccuracyDesc": {
+    "message": "Sin validación de Claude para respuestas inciertas",
+    "description": "Descripción de advertencia"
+  },
+  "apiInstability": {
+    "message": "Inestabilidad de API",
+    "description": "Advertencia"
+  },
+  "apiInstabilityDesc": {
+    "message": "La API de DeepSeek puede fallar o expirar",
+    "description": "Descripción de advertencia"
+  },
+  "noFallback": {
+    "message": "Sin respaldo",
+    "description": "Advertencia"
+  },
+  "noFallbackDesc": {
+    "message": "Si DeepSeek falla, no obtienes respuesta",
+    "description": "Descripción de advertencia"
+  },
+  "deepseekOnlyTip": {
+    "message": "Usa solo si no tienes una clave API de Claude",
+    "description": "Consejo para modo solo DeepSeek"
+  },
+  "enterDeepseekKey": {
+    "message": "Ingresa tu clave API de DeepSeek (sk-...)",
+    "description": "Placeholder para input DeepSeek"
+  },
+  "saveDeepseekKey": {
+    "message": "Guardar Clave DeepSeek",
+    "description": "Botón para guardar clave DeepSeek"
+  },
+  "quickActions": {
+    "message": "Acciones Rápidas",
+    "description": "Título de sección"
+  },
+  "analyzePage": {
+    "message": "Analizar Página Actual",
+    "description": "Texto del botón analizar"
+  },
+  "clearResults": {
+    "message": "Limpiar Resultados",
+    "description": "Texto del botón limpiar"
+  },
+  "showErrorLog": {
+    "message": "Mostrar Registro de Errores",
+    "description": "Texto del botón de errores"
+  },
+  "settings": {
+    "message": "Configuración",
+    "description": "Título de sección"
+  },
+  "quickMode": {
+    "message": "Modo Rápido (botón mínimo, muestra solo letra de respuesta)",
+    "description": "Opción modo rápido"
+  },
+  "responseMode": {
+    "message": "Modo de Respuesta",
+    "description": "Etiqueta modo respuesta"
+  },
+  "guidedLearning": {
+    "message": "Aprendizaje Guiado (Explica razonamiento)",
+    "description": "Opción modo guiado"
+  },
+  "directAnswer": {
+    "message": "Respuesta Directa (Con explicación)",
+    "description": "Opción modo directo"
+  },
+  "hintsOnly": {
+    "message": "Solo Pistas",
+    "description": "Opción modo pistas"
+  },
+  "explanationMode": {
+    "message": "Modo Explicación (Educativo profundo)",
+    "description": "Opción modo explicación"
+  },
+  "autoDetect": {
+    "message": "Auto-detectar preguntas al cargar la página",
+    "description": "Opción auto detectar"
+  },
+  "highlightQuestions": {
+    "message": "Resaltar preguntas detectadas",
+    "description": "Opción resaltar"
+  },
+  "sendImages": {
+    "message": "Enviar imágenes con preguntas (usa más tokens)",
+    "description": "Opción enviar imágenes"
+  },
+  "allowedDomains": {
+    "message": "Dominios Permitidos",
+    "description": "Título de sección"
+  },
+  "domainsInfo": {
+    "message": "La extensión solo funciona en estos sitios:",
+    "description": "Texto informativo de dominios"
+  },
+  "addDomain": {
+    "message": "+ Agregar",
+    "description": "Botón agregar dominio"
+  },
+  "howToGetClaudeKey": {
+    "message": "Cómo obtener una clave API de Claude",
+    "description": "Título ayuda Claude"
+  },
+  "claudeStep1": {
+    "message": "Ve a",
+    "description": "Prefijo de paso"
+  },
+  "anthropicConsole": {
+    "message": "Consola de Anthropic",
+    "description": "Texto del enlace Anthropic"
+  },
+  "claudeStep2": {
+    "message": "Inicia sesión o crea una cuenta",
+    "description": "Paso 2"
+  },
+  "claudeStep3": {
+    "message": "Ve a la sección API Keys",
+    "description": "Paso 3"
+  },
+  "claudeStep4": {
+    "message": "Haz clic en \"Create Key\"",
+    "description": "Paso 4"
+  },
+  "claudeStep5": {
+    "message": "Copia la clave (empieza con sk-ant-) y pégala arriba",
+    "description": "Paso 5"
+  },
+  "howToGetDeepseekKey": {
+    "message": "Cómo obtener una clave API de DeepSeek",
+    "description": "Título ayuda DeepSeek"
+  },
+  "deepseekPlatform": {
+    "message": "Plataforma DeepSeek",
+    "description": "Texto del enlace DeepSeek"
+  },
+  "deepseekStep3": {
+    "message": "Ve a \"API Keys\" en el menú izquierdo",
+    "description": "Paso 3"
+  },
+  "deepseekStep4": {
+    "message": "Haz clic en \"Create new secret key\"",
+    "description": "Paso 4"
+  },
+  "deepseekStep5": {
+    "message": "Copia la clave (empieza con sk-) y pégala arriba",
+    "description": "Paso 5"
+  },
+  "deepseekPricing": {
+    "message": "Precios:",
+    "description": "Etiqueta precios"
+  },
+  "deepseekPricingInfo": {
+    "message": "~$0.14/millón tokens entrada, ~$2.19/millón tokens salida (¡mucho más barato que Claude!)",
+    "description": "Detalles de precios"
+  },
+  "disclaimer": {
+    "message": "Esta herramienta está diseñada solo para fines educativos. Úsala para entender conceptos y mejorar tu aprendizaje.",
+    "description": "Texto de descargo"
+  },
+  "madeWithLove": {
+    "message": "Hecho con ❤️ para estudiantes",
+    "description": "Texto del pie"
+  },
+  "errorLog": {
+    "message": "Registro de Errores",
+    "description": "Título del modal de errores"
+  },
+  "close": {
+    "message": "Cerrar",
+    "description": "Botón cerrar"
+  },
+  "apiKeySaved": {
+    "message": "Clave API guardada",
+    "description": "Mensaje de éxito"
+  },
+  "toggleVisibility": {
+    "message": "Alternar visibilidad",
+    "description": "Título del botón toggle"
+  },
+  "disguiseMode": {
+    "message": "Disfrazarse de uBlock Origin (modo sigiloso)",
+    "description": "Etiqueta del checkbox de modo disfraz"
+  }
+}

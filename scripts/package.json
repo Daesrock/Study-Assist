@@ -1,0 +1,10 @@
+{
+  "name": "examenredes-scraper",
+  "version": "1.0.0",
+  "description": "Scraper para extraer preguntas de examenredes.com",
+  "type": "module",
+  "scripts": {
+    "scrape": "node scrape-examenredes.js",
+    "scrape:test": "node scrape-examenredes.js --test"
+  }
+}

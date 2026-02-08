@@ -1,0 +1,982 @@
+/**
+ * Study Assist - Content Overlay Styles
+ * Styles for the overlay, question highlighting, and result display
+ */
+
+/* ============================================
+   Quick Mode Button - Responsive positioning
+   ============================================ */
+#study-assist-quick-container {
+  position: fixed;
+  bottom: 4vh;
+  right: 1.2vw;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  z-index: 1031;
+}
+
+/* Button position variants */
+#study-assist-quick-container[data-position="bottom-left"] {
+  right: auto;
+  left: 1.2vw;
+}
+#study-assist-quick-container[data-position="top-right"] {
+  bottom: auto;
+  top: 4vh;
+}
+#study-assist-quick-container[data-position="top-left"] {
+  bottom: auto;
+  top: 4vh;
+  right: auto;
+  left: 1.2vw;
+}
+
+/* Media queries for different resolutions */
+/* 720p and below */
+@media screen and (max-height: 800px) {
+  #study-assist-quick-container {
+    bottom: 28px;
+    right: 16px;
+  }
+  #study-assist-quick.has-answer.matching-answer {
+    bottom: 28px !important;
+    right: 16px !important;
+  }
+}
+
+/* 1080p */
+@media screen and (min-height: 801px) and (max-height: 1200px) {
+  #study-assist-quick-container {
+    bottom: 30px;
+    right: 19px;
+  }
+  #study-assist-quick.has-answer.matching-answer {
+    bottom: 30px !important;
+    right: 19px !important;
+  }
+}
+
+/* 1440p */
+@media screen and (min-height: 1201px) and (max-height: 1600px) {
+  #study-assist-quick-container {
+    bottom: 40px;
+    right: 24px;
+  }
+  #study-assist-quick.has-answer.matching-answer {
+    bottom: 40px !important;
+    right: 24px !important;
+  }
+}
+
+/* 4K */
+@media screen and (min-height: 1601px) {
+  #study-assist-quick-container {
+    bottom: 60px;
+    right: 32px;
+  }
+  #study-assist-quick.has-answer.matching-answer {
+    bottom: 60px !important;
+    right: 32px !important;
+  }
+}
+
+#study-assist-quick {
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  color: #888;
+  border: none;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Segoe UI", Roboto, Arial, sans-serif !important;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+#study-assist-quick:hover {
+  color: #555;
+  transform: scale(1.05);
+}
+
+#study-assist-quick.loading {
+  cursor: wait;
+}
+
+#study-assist-quick.reloading {
+  animation: reloading-pulse 0.5s ease-in-out;
+}
+
+@keyframes reloading-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+#study-assist-quick.has-answer {
+  color: #888;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* Multiple answers - smaller font to fit */
+#study-assist-quick.has-answer.multi-answer {
+  font-size: 12px;
+  letter-spacing: -0.5px;
+}
+
+#study-assist-quick.has-answer.multi-answer .study-assist-quick-answer {
+  font-size: 12px;
+}
+
+/* 3+ answers - even smaller font */
+#study-assist-quick.has-answer.multi-answer-large {
+  font-size: 12px;
+  letter-spacing: -0.5px;
+}
+
+#study-assist-quick.has-answer.multi-answer-large .study-assist-quick-answer {
+  font-size: 12px;
+}
+
+/* Matching questions - vertical display, grows UPWARD from bottom */
+#study-assist-quick.has-answer.matching-answer {
+  position: fixed !important;
+  bottom: 4vh !important;
+  right: 1.2vw !important;
+  top: auto !important;
+  width: auto !important;
+  height: auto !important;
+  min-width: 50px !important;
+  padding: 6px 10px !important;
+  border-radius: 10px !important;
+  font-size: 11px !important;
+  letter-spacing: 0 !important;
+  white-space: pre-line !important;
+  text-align: left !important;
+  line-height: 1.4 !important;
+}
+
+#study-assist-quick.has-answer.matching-answer .study-assist-matching-answer {
+  font-size: 9px !important;
+  font-weight: 600 !important;
+  white-space: pre-line !important;
+  margin-left: 22px !important;
+  position: relative !important;
+  top: 20px !important;
+}
+
+/* Legend for dropdown matching (shows A=Option1 | B=Option2) */
+.study-assist-matching-legend {
+  display: block !important;
+  font-size: 7px !important;
+  font-weight: 400 !important;
+  color: #666 !important;
+  margin-top: 4px !important;
+  padding-top: 4px !important;
+  border-top: 1px solid rgba(136, 136, 136, 0.3) !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  max-width: 150px !important;
+}
+
+.study-assist-quick-loading {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(136, 136, 136, 0.3);
+  border-top-color: #888;
+  border-radius: 50%;
+  animation: study-assist-spin 0.8s linear infinite;
+}
+
+/* Slow connection indicator (shows after 10s) */
+#study-assist-quick.slow-connection {
+  animation: slow-connection-pulse 1.5s ease-in-out infinite;
+}
+
+.study-assist-slow-indicator {
+  font-size: 14px;
+  animation: slow-indicator-bounce 1s ease-in-out infinite;
+}
+
+@keyframes slow-connection-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes slow-indicator-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+.study-assist-quick-answer {
+  font-size: 16px;
+  font-weight: 600;
+  color: #888;
+}
+
+/* ============================================
+   Question Highlighting (subtle)
+   ============================================ */
+.study-assist-question-highlight {
+  position: relative;
+  background-color: rgba(100, 100, 100, 0.03) !important;
+  border-left: 2px solid rgba(100, 100, 100, 0.3) !important;
+  padding-left: 8px !important;
+  margin: 4px 0 !important;
+  border-radius: 2px !important;
+  transition: all 0.3s ease !important;
+}
+
+.study-assist-question-highlight:hover {
+  background-color: rgba(100, 100, 100, 0.06) !important;
+  box-shadow: none !important;
+}
+
+.study-assist-question-badge {
+  position: absolute;
+  top: -4px;
+  left: -12px;
+  width: 18px;
+  height: 18px;
+  background: #666;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  z-index: 10000;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s ease;
+  font-family: "Segoe UI", Roboto, Arial, sans-serif !important;
+  opacity: 0.7;
+}
+
+.study-assist-question-badge:hover {
+  transform: scale(1.1);
+  opacity: 1;
+}
+
+/* ============================================
+   Main Overlay Container (subtle)
+   ============================================ */
+#study-assist-overlay {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  width: 320px;
+  max-height: 70vh;
+  background: rgba(255, 255, 255, 0.97);
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  z-index: 2147483647;
+  font-family:
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #333;
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+  transition:
+    transform 0.2s ease,
+    opacity 0.2s ease;
+}
+
+#study-assist-overlay.study-assist-visible {
+  display: flex;
+  animation: study-assist-slideIn 0.3s ease;
+}
+
+#study-assist-overlay.study-assist-minimized {
+  height: auto;
+  max-height: 48px;
+  overflow: hidden;
+}
+
+#study-assist-overlay.study-assist-minimized .study-assist-content {
+  display: none;
+}
+
+@keyframes study-assist-slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* ============================================
+   Overlay Header (subtle)
+   ============================================ */
+.study-assist-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: #505050;
+  color: white;
+  cursor: move;
+  user-select: none;
+  border-radius: 8px 8px 0 0;
+}
+
+.study-assist-logo {
+  font-weight: 600;
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+.study-assist-controls {
+  display: flex;
+  gap: 2px;
+}
+
+.study-assist-controls button {
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease;
+}
+
+.study-assist-controls button:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* ============================================
+   Overlay Content
+   ============================================ */
+.study-assist-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  max-height: calc(70vh - 40px);
+}
+
+/* Custom scrollbar */
+.study-assist-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.study-assist-content::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.study-assist-content::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+.study-assist-content::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
+}
+
+/* ============================================
+   Loading State
+   ============================================ */
+.study-assist-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  gap: 12px;
+  color: #666;
+  font-size: 12px;
+}
+
+.study-assist-spinner {
+  width: 28px;
+  height: 28px;
+  border: 2px solid #e0e0e0;
+  border-top-color: #666;
+  border-radius: 50%;
+  animation: study-assist-spin 1s linear infinite;
+}
+
+@keyframes study-assist-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ============================================
+   Summary Section (muted)
+   ============================================ */
+.study-assist-summary {
+  text-align: center;
+  padding: 12px;
+  background: #f5f5f5;
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+
+.study-assist-summary h3 {
+  margin: 0 0 6px 0;
+  font-size: 13px;
+  color: #444;
+}
+
+.study-assist-summary p {
+  margin: 0;
+  font-size: 11px;
+  color: #666;
+}
+
+/* ============================================
+   Question List
+   ============================================ */
+.study-assist-question-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.study-assist-question-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: #fafafa;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.study-assist-question-item:hover {
+  background: #f0f0f0;
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+.study-assist-question-number {
+  min-width: 22px;
+  height: 22px;
+  background: #666;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.study-assist-question-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.study-assist-question-type {
+  font-size: 10px;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.study-assist-question-preview {
+  margin: 3px 0 0 0;
+  font-size: 12px;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.study-assist-analyze-btn {
+  padding: 5px 10px;
+  background: #606060;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  white-space: nowrap;
+}
+
+.study-assist-analyze-btn:hover {
+  background: #505050;
+}
+
+/* ============================================
+   Empty State
+   ============================================ */
+.study-assist-empty {
+  text-align: center;
+  padding: 32px 20px;
+}
+
+.study-assist-empty-icon {
+  font-size: 48px;
+  display: block;
+  margin-bottom: 16px;
+}
+
+.study-assist-empty h3 {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  color: #202124;
+}
+
+.study-assist-empty p {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  color: #5f6368;
+}
+
+.study-assist-tip {
+  background: #fff8e1;
+  padding: 12px;
+  border-radius: 8px;
+  border-left: 3px solid #fbbc04;
+  text-align: left;
+  font-size: 12px !important;
+}
+
+/* ============================================
+   Analysis Result
+   ============================================ */
+.study-assist-analysis {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.study-assist-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  background: #eee;
+  color: #444;
+  border: none;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  width: fit-content;
+}
+
+.study-assist-back-btn:hover {
+  background: #ddd;
+}
+
+.study-assist-question-box {
+  background: #f5f5f5;
+  border-radius: 6px;
+  padding: 12px;
+  border-left: 3px solid #888;
+}
+
+.study-assist-question-box h4 {
+  margin: 0 0 6px 0;
+  font-size: 10px;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.study-assist-question-box p {
+  margin: 0;
+  font-size: 12px;
+  color: #333;
+}
+
+.study-assist-options {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.study-assist-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 12px;
+  background: white;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.study-assist-option-letter {
+  min-width: 20px;
+  height: 20px;
+  background: #e0e0e0;
+  color: #666;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.study-assist-answer-box {
+  background: #f8f8f8;
+  border-radius: 6px;
+  padding: 12px;
+  border-left: 3px solid #666;
+}
+
+/* ============================================
+   Matching Questions
+   ============================================ */
+.study-assist-matching-container {
+  margin-top: 12px;
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+}
+
+.study-assist-matching-section {
+  flex: 1;
+}
+
+.study-assist-matching-section h5 {
+  margin: 0 0 8px 0;
+  font-size: 12px;
+  color: #666;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.study-assist-matching-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.study-assist-matching-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 10px;
+  background: white;
+  border-radius: 4px;
+  font-size: 12px;
+  border: 1px solid #e0e0e0;
+}
+
+.study-assist-matching-item strong {
+  min-width: 16px;
+  color: #666;
+}
+
+.study-assist-answer-box h4 {
+  margin: 0 0 10px 0;
+  font-size: 10px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.study-assist-answer-content {
+  font-size: 12px;
+  color: #333;
+  line-height: 1.5;
+}
+
+.study-assist-answer-content p {
+  margin: 0 0 12px 0;
+}
+
+.study-assist-answer-content p:last-child {
+  margin-bottom: 0;
+}
+
+.study-assist-answer-content strong {
+  color: #444;
+}
+
+.study-assist-disclaimer {
+  font-size: 10px;
+  color: #666;
+  background: #f5f5f5;
+  padding: 8px 10px;
+  border-radius: 4px;
+  border-left: 2px solid #999;
+}
+
+/* ============================================
+   Error State
+   ============================================ */
+.study-assist-error {
+  text-align: center;
+  padding: 24px 16px;
+}
+
+.study-assist-error-icon {
+  font-size: 32px;
+  display: block;
+  margin-bottom: 12px;
+  opacity: 0.6;
+}
+
+.study-assist-error h3 {
+  margin: 0 0 6px 0;
+  font-size: 13px;
+  color: #666;
+}
+
+.study-assist-error p {
+  margin: 0 0 12px 0;
+  font-size: 11px;
+  color: #888;
+}
+
+.study-assist-retry-btn {
+  padding: 8px 16px;
+  background: #606060;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.study-assist-retry-btn:hover {
+  background: #3367d6;
+}
+
+/* ============================================
+   Responsive Adjustments
+   ============================================ */
+@media (max-width: 500px) {
+  #study-assist-overlay {
+    width: calc(100vw - 20px);
+    right: 10px;
+    left: 10px;
+  }
+}
+
+/* ============================================
+   Dark Mode Support
+   ============================================ */
+@media (prefers-color-scheme: dark) {
+  #study-assist-overlay {
+    background: #292a2d;
+    color: #e8eaed;
+  }
+
+  .study-assist-question-item {
+    background: #35363a;
+  }
+
+  .study-assist-question-item:hover {
+    background: #3c4043;
+  }
+
+  .study-assist-question-preview {
+    color: #e8eaed;
+  }
+
+  .study-assist-question-box {
+    background: #35363a;
+  }
+
+  .study-assist-question-box p {
+    color: #e8eaed;
+  }
+
+  .study-assist-option {
+    background: #292a2d;
+  }
+
+  .study-assist-answer-box {
+    background: #1e3a29;
+  }
+
+  .study-assist-answer-content {
+    color: #e8eaed;
+  }
+
+  .study-assist-back-btn {
+    background: #35363a;
+    color: #e8eaed;
+  }
+
+  .study-assist-back-btn:hover {
+    background: #3c4043;
+  }
+
+  .study-assist-summary {
+    background: linear-gradient(135deg, #1a3b5c, #1e3a29);
+  }
+
+  .study-assist-summary h3 {
+    color: #8ab4f8;
+  }
+
+  .study-assist-empty h3 {
+    color: #e8eaed;
+  }
+
+  .study-assist-error h3 {
+    color: #f28b82;
+  }
+}
+
+/* ============================================
+   Single Question Display (new compact view)
+   ============================================ */
+.study-assist-single-question {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.study-assist-single-question .study-assist-question-box {
+  background: #f5f5f5;
+  border-radius: 6px;
+  padding: 12px;
+  border-left: 3px solid #666;
+}
+
+.study-assist-question-label {
+  font-size: 10px;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.study-assist-single-question .study-assist-question-box p {
+  margin: 0;
+  font-size: 12px;
+  color: #333;
+  line-height: 1.4;
+}
+
+.study-assist-single-question .study-assist-options {
+  margin-top: 10px;
+}
+
+.study-assist-option-item {
+  font-size: 11px;
+  color: #555;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.study-assist-option-item:last-child {
+  border-bottom: none;
+}
+
+.study-assist-option-item strong {
+  color: #333;
+}
+
+.study-assist-analyze-btn-large {
+  width: 100%;
+  padding: 10px 16px;
+  background: #505050;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.study-assist-analyze-btn-large:hover {
+  background: #404040;
+}
+
+/* ============================================
+   Print Styles - Hide Overlay
+   ============================================ */
+@media print {
+  #study-assist-overlay,
+  .study-assist-question-badge,
+  .study-assist-question-highlight {
+    display: none !important;
+  }
+}
+
+/* ============================================
+   Streaming Cursor
+   ============================================ */
+.study-assist-stream-cursor {
+  display: inline;
+  animation: study-assist-blink 0.7s infinite;
+  color: #666;
+  font-weight: 100;
+}
+
+@keyframes study-assist-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+/* ============================================
+   Token / Cost Info
+   ============================================ */
+.study-assist-token-info {
+  display: flex;
+  gap: 12px;
+  font-size: 10px;
+  color: #888;
+  padding: 6px 10px;
+  background: #f5f5f5;
+  border-radius: 4px;
+  justify-content: center;
+}
+
+.study-assist-token-info span {
+  cursor: default;
+}

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Study Assist — Panel de Control</title>
+    <link rel="stylesheet" href="dashboard.css" />
+  </head>
+  <body>
+    <div class="dashboard">
+      <!-- Header -->
+      <div class="dash-header">
+        <h1>📊 Study Assist — Panel de Control</h1>
+        <div class="controls">
+          <button class="btn" id="refresh-btn">🔄 Actualizar</button>
+          <button class="btn" id="last-response-btn">
+            🔍 Última Respuesta IA
+          </button>
+          <button class="btn" id="clear-results-btn">
+            🧹 Limpiar Resultados
+          </button>
+          <button class="btn" id="error-log-btn">🪵 Registro de Errores</button>
+        </div>
+      </div>
+
+      <!-- Dynamic content rendered by JS -->
+      <div id="content">
+        <div class="loading-spinner">Cargando...</div>
+      </div>
+    </div>
+
+    <script src="dashboard.js"></script>
+  </body>
+</html>

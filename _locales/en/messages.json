@@ -1,0 +1,278 @@
+{
+  "extName": {
+    "message": "Study Assist",
+    "description": "Extension name"
+  },
+  "extDescription": {
+    "message": "AI-powered study assistant for online learning platforms",
+    "description": "Extension description"
+  },
+  "extensionStatus": {
+    "message": "Extension Status",
+    "description": "Label for extension toggle"
+  },
+  "statusOn": {
+    "message": "ON",
+    "description": "Status when extension is enabled"
+  },
+  "statusOff": {
+    "message": "OFF",
+    "description": "Status when extension is disabled"
+  },
+  "claudeApiKey": {
+    "message": "Claude API Key",
+    "description": "Claude API section title"
+  },
+  "enterClaudeKey": {
+    "message": "Enter your Claude API Key (sk-ant-...)",
+    "description": "Placeholder for Claude API input"
+  },
+  "saveApiKey": {
+    "message": "Save API Key",
+    "description": "Button to save API key"
+  },
+  "claudeModel": {
+    "message": "Claude Model",
+    "description": "Label for model selector"
+  },
+  "modelHaiku": {
+    "message": "Claude 3 Haiku (Fast, Cheap)",
+    "description": "Haiku model option"
+  },
+  "modelHaiku35": {
+    "message": "Claude 3.5 Haiku (Faster)",
+    "description": "Haiku 3.5 model option"
+  },
+  "modelSonnet4": {
+    "message": "Claude Sonnet 4 (Balanced)",
+    "description": "Sonnet 4 model option"
+  },
+  "modelSonnet45": {
+    "message": "Claude Sonnet 4.5 (Latest)",
+    "description": "Sonnet 4.5 model option"
+  },
+  "modelOpus45": {
+    "message": "Claude Opus 4.5 (Most Capable)",
+    "description": "Opus 4.5 model option"
+  },
+  "useDeepSeek": {
+    "message": "Use DeepSeek Reasoner",
+    "description": "DeepSeek toggle label"
+  },
+  "claudeAsFallback": {
+    "message": "(Claude as fallback)",
+    "description": "DeepSeek fallback note"
+  },
+  "deepseekInfo": {
+    "message": "DeepSeek analyzes first. If confidence is not HIGH, Claude validates.",
+    "description": "DeepSeek explanation"
+  },
+  "deepseekOnly": {
+    "message": "DeepSeek Only",
+    "description": "DeepSeek only mode label"
+  },
+  "noClaudeFallback": {
+    "message": "(no Claude fallback)",
+    "description": "No fallback note"
+  },
+  "warnings": {
+    "message": "Warnings:",
+    "description": "Warnings title"
+  },
+  "noImageSupport": {
+    "message": "No image support",
+    "description": "Warning item"
+  },
+  "noImageSupportDesc": {
+    "message": "DeepSeek cannot read images",
+    "description": "Warning description"
+  },
+  "lowerAccuracy": {
+    "message": "Lower accuracy",
+    "description": "Warning item"
+  },
+  "lowerAccuracyDesc": {
+    "message": "No Claude validation for uncertain answers",
+    "description": "Warning description"
+  },
+  "apiInstability": {
+    "message": "API instability",
+    "description": "Warning item"
+  },
+  "apiInstabilityDesc": {
+    "message": "DeepSeek API may fail or timeout",
+    "description": "Warning description"
+  },
+  "noFallback": {
+    "message": "No fallback",
+    "description": "Warning item"
+  },
+  "noFallbackDesc": {
+    "message": "If DeepSeek fails, you get no answer",
+    "description": "Warning description"
+  },
+  "deepseekOnlyTip": {
+    "message": "Only use if you don't have a Claude API key",
+    "description": "Tip for DeepSeek only mode"
+  },
+  "enterDeepseekKey": {
+    "message": "Enter DeepSeek API Key (sk-...)",
+    "description": "Placeholder for DeepSeek API input"
+  },
+  "saveDeepseekKey": {
+    "message": "Save DeepSeek Key",
+    "description": "Button to save DeepSeek key"
+  },
+  "quickActions": {
+    "message": "Quick Actions",
+    "description": "Quick actions section title"
+  },
+  "analyzePage": {
+    "message": "Analyze Current Page",
+    "description": "Analyze button text"
+  },
+  "clearResults": {
+    "message": "Clear Results",
+    "description": "Clear button text"
+  },
+  "showErrorLog": {
+    "message": "Show Error Log",
+    "description": "Error log button text"
+  },
+  "settings": {
+    "message": "Settings",
+    "description": "Settings section title"
+  },
+  "quickMode": {
+    "message": "Quick Mode (minimal button, shows only answer letter)",
+    "description": "Quick mode option"
+  },
+  "responseMode": {
+    "message": "Response Mode",
+    "description": "Response mode label"
+  },
+  "guidedLearning": {
+    "message": "Guided Learning (Explain reasoning)",
+    "description": "Guided mode option"
+  },
+  "directAnswer": {
+    "message": "Direct Answer (With explanation)",
+    "description": "Direct mode option"
+  },
+  "hintsOnly": {
+    "message": "Hints Only",
+    "description": "Hints mode option"
+  },
+  "explanationMode": {
+    "message": "Explanation Mode (Deep educational)",
+    "description": "Explanation mode option"
+  },
+  "autoDetect": {
+    "message": "Auto-detect questions on page load",
+    "description": "Auto detect option"
+  },
+  "highlightQuestions": {
+    "message": "Highlight detected questions",
+    "description": "Highlight option"
+  },
+  "sendImages": {
+    "message": "Send images with questions (uses more tokens)",
+    "description": "Send images option"
+  },
+  "allowedDomains": {
+    "message": "Allowed Domains",
+    "description": "Domains section title"
+  },
+  "domainsInfo": {
+    "message": "Extension only works on these sites:",
+    "description": "Domains info text"
+  },
+  "addDomain": {
+    "message": "+ Add",
+    "description": "Add domain button"
+  },
+  "howToGetClaudeKey": {
+    "message": "How to get a Claude API Key",
+    "description": "Claude help title"
+  },
+  "claudeStep1": {
+    "message": "Go to",
+    "description": "Step prefix"
+  },
+  "anthropicConsole": {
+    "message": "Anthropic Console",
+    "description": "Anthropic link text"
+  },
+  "claudeStep2": {
+    "message": "Sign in or create an account",
+    "description": "Step 2"
+  },
+  "claudeStep3": {
+    "message": "Go to API Keys section",
+    "description": "Step 3"
+  },
+  "claudeStep4": {
+    "message": "Click \"Create Key\"",
+    "description": "Step 4"
+  },
+  "claudeStep5": {
+    "message": "Copy the key (starts with sk-ant-) and paste it above",
+    "description": "Step 5"
+  },
+  "howToGetDeepseekKey": {
+    "message": "How to get a DeepSeek API Key",
+    "description": "DeepSeek help title"
+  },
+  "deepseekPlatform": {
+    "message": "DeepSeek Platform",
+    "description": "DeepSeek link text"
+  },
+  "deepseekStep3": {
+    "message": "Go to \"API Keys\" in the left menu",
+    "description": "Step 3"
+  },
+  "deepseekStep4": {
+    "message": "Click \"Create new secret key\"",
+    "description": "Step 4"
+  },
+  "deepseekStep5": {
+    "message": "Copy the key (starts with sk-) and paste it above",
+    "description": "Step 5"
+  },
+  "deepseekPricing": {
+    "message": "Pricing:",
+    "description": "Pricing label"
+  },
+  "deepseekPricingInfo": {
+    "message": "~$0.14/million input tokens, ~$2.19/million output tokens (much cheaper than Claude!)",
+    "description": "Pricing details"
+  },
+  "disclaimer": {
+    "message": "This tool is designed for educational purposes only. Use it to understand concepts and improve your learning.",
+    "description": "Disclaimer text"
+  },
+  "madeWithLove": {
+    "message": "Made with ❤️ for learners",
+    "description": "Footer text"
+  },
+  "errorLog": {
+    "message": "Error Log",
+    "description": "Error log modal title"
+  },
+  "close": {
+    "message": "Close",
+    "description": "Close button"
+  },
+  "apiKeySaved": {
+    "message": "API Key saved",
+    "description": "Success message"
+  },
+  "toggleVisibility": {
+    "message": "Toggle visibility",
+    "description": "Toggle button title"
+  },
+  "disguiseMode": {
+    "message": "Disguise as uBlock Origin (stealth mode)",
+    "description": "Disguise mode checkbox label"
+  }
+}
