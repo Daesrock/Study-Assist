@@ -184,7 +184,8 @@ function matchSingleAnswerToLetter(
 
   // 1. Exact normalized match
   for (const opt of pageOptions) {
-    if (normalizeForSearch(opt.text) === normalizedCorrect) {
+    const normalizedOpt = normalizeForSearch(opt.text);
+    if (normalizedOpt === normalizedCorrect) {
       return opt.letter;
     }
   }
@@ -197,12 +198,34 @@ function matchSingleAnswerToLetter(
     }
   }
 
-  // 3. High word-overlap similarity (>= 80%)
+  // 3. High word-overlap similarity (>= 70% for code/command options, >= 80% for regular text)
+  let bestMatch: { letter: string; similarity: number } | null = null;
+  
   for (const opt of pageOptions) {
-    const similarity = calculateSimilarity(normalizedCorrect, normalizeForSearch(opt.text));
-    if (similarity >= 0.8) {
+    const normalizedOpt = normalizeForSearch(opt.text);
+    const similarity = calculateSimilarity(normalizedCorrect, normalizedOpt);
+    
+    // Track best match
+    if (!bestMatch || similarity > bestMatch.similarity) {
+      bestMatch = { letter: opt.letter, similarity };
+    }
+    
+    // Accept match based on context
+    const hasCommandText = normalizedCorrect.includes("interface") || 
+                           normalizedCorrect.includes("router") ||
+                           normalizedCorrect.includes("switch") ||
+                           normalizedCorrect.includes("config");
+    const threshold = hasCommandText ? 0.7 : 0.8;
+    
+    if (similarity >= threshold) {
       return opt.letter;
     }
+  }
+
+  // 4. If we have a decent match (>= 60%) and it's the best option, use it
+  if (bestMatch && bestMatch.similarity >= 0.6) {
+    log(`[Study Assist] Using best match with ${(bestMatch.similarity * 100).toFixed(1)}% similarity`);
+    return bestMatch.letter;
   }
 
   return null;
@@ -309,6 +332,7 @@ export async function analyzeQuestion(context: AnalysisContext): Promise<Analysi
     }
 
     const hasImages = context.images && context.images.length > 0;
+    const isMatching = context.questionType === "matching";
     const skipDeepSeek = context.skipDeepSeek === true;
 
     if (skipDeepSeek) {
@@ -325,7 +349,11 @@ export async function analyzeQuestion(context: AnalysisContext): Promise<Analysi
       return { success: false, error: "⚠️ DeepSeek Only mode: Images are not supported. Disable 'DeepSeek Only' to use Claude for image questions." };
     }
 
-    if (useDeepSeek && deepseekApiKey && !hasImages && !skipDeepSeek) {
+    if (isDeepSeekOnlyMode && isMatching) {
+      return { success: false, error: "⚠️ DeepSeek Only mode: Matching questions are not supported. Disable 'DeepSeek Only' to use Claude for matching questions." };
+    }
+
+    if (useDeepSeek && deepseekApiKey && !hasImages && !isMatching && !skipDeepSeek) {
       log("[Study Assist] Using DeepSeek Reasoner...");
 
       let deepseekResult = await analyzeWithDeepSeek(context, deepseekApiKey);
