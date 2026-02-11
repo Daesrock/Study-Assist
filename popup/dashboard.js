@@ -298,25 +298,6 @@ function renderDashboard(stats, history, config, devMode) {
         .join("")
     : '<div class="no-data-msg">Sin datos aún</div>';
 
-  // — Daily chart (only if ≥2 days of data) —
-  const days = Object.entries(stats.byDay || {})
-    .sort(([a], [b]) => a.localeCompare(b))
-    .slice(-14);
-  const maxDayReqs = Math.max(...days.map(([, d]) => d.requests), 1);
-  const showDaily = days.length >= 2;
-  const dailyBars = showDaily
-    ? days
-        .map(
-          ([day, data]) => `
-        <div class="daily-bar-wrapper">
-          <div class="daily-bar" style="height:${(data.requests / maxDayReqs) * 100}%"
-               title="${day}: ${data.requests} pet, $${data.cost.toFixed(4)}"></div>
-          <span class="daily-label">${day.slice(5)}</span>
-        </div>`,
-        )
-        .join("")
-    : "";
-
   // — History rows —
   const historyRows = history
     .map((r, i) => {
@@ -525,16 +506,6 @@ function renderDashboard(stats, history, config, devMode) {
       </div>`
           : ""
       }
-    </div>`;
-  }
-
-  if (showDaily) {
-    html += `
-    <div class="charts-row">
-      <div class="chart-card" style="grid-column: span 2;">
-        <h3>📅 Actividad Diaria (Últimos 14 Días)</h3>
-        <div class="daily-chart">${dailyBars}</div>
-      </div>
     </div>`;
   }
 
