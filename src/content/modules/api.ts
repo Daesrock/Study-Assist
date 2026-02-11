@@ -18,7 +18,7 @@ import type {
   QuickClickCallbacks,
   ImageData,
 } from "../../types/index.js";
-import { log, state } from "./state.js";
+import { log, state, DEBUG_MODE } from "./state.js";
 import {
   detectVisibleQuestion,
   findVisibleQuestionNumber,
@@ -200,6 +200,11 @@ export function startQuestionChangeObserver(): void {
       // Quick check: just find the visible question number without full detection
       const currentNum = findVisibleQuestionNumber();
 
+      // Log current state for debugging
+      if (DEBUG_MODE) {
+        log(`[Observer] lastAnswered: ${state.lastAnsweredQuestionNum}, currentNum: ${currentNum}, pending: ${state.pendingQuestionChange}`);
+      }
+
       // Only reset if we found a DIFFERENT question number (not null)
       // If currentNum is null, we couldn't detect the number - don't reset
       // Also require at least 2 consecutive detections of a different number
@@ -211,6 +216,7 @@ export function startQuestionChangeObserver(): void {
           state.pendingQuestionChange !== currentNum
         ) {
           state.pendingQuestionChange = currentNum;
+          log(`[Observer] Question change detected: ${state.lastAnsweredQuestionNum} → ${currentNum}, waiting for confirmation...`);
           return; // Wait for next interval to confirm
         }
 
@@ -227,10 +233,13 @@ export function startQuestionChangeObserver(): void {
           clearInterval(state.questionChangeInterval);
           state.questionChangeInterval = null;
         }
-      } else {
-        // Same question or null - clear any pending change
+      } else if (currentNum === state.lastAnsweredQuestionNum) {
+        // Same question - clear any pending change
         state.pendingQuestionChange = null;
       }
+      // Note: if currentNum is null, we DON'T clear pendingQuestionChange
+      // This way if we temporarily lose sight of the question number,
+      // we don't reset the pending state
     } catch (e) {
       // Ignore errors during detection
     }
@@ -496,7 +505,7 @@ export async function handleQuickClick(
       // Save current question number to detect question changes
       state.lastAnsweredQuestionNum = question.questionNumber || null;
 
-      // Start observing for question changes to reset the answer
+      // Start observing for question changes to reset the answer (for ALL question types)
       const observerFn =
         callbacks.startQuestionChangeObserver ?? startQuestionChangeObserver;
       observerFn();
@@ -514,8 +523,6 @@ export async function handleQuickClick(
 
         // Mark as valid answer - block new requests until reload
         state.hasValidAnswer = true;
-
-        // No timeout - answer persists until question changes
       } else {
         // Regular multiple choice handling
         const upperResult = result.toUpperCase();
