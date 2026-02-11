@@ -49,6 +49,11 @@ const EXAMENREDES_URLS = [
     title: "Conceptos de enrutamiento y configuración",
     url: "https://examenredes.com/modulos-14-16-conceptos-de-enrutamiento-y-examen-de-configuracion-respuestas/",
   },
+  {
+    moduleRange: "14-16",
+    title: "Conceptos de enrutamiento y configuración",
+    url: "https://examenredes.com/modulos-14-16-conceptos-de-enrutamiento-y-examen-de-configuracion-respuestas/",
+  },
   // Pruebas individuales por módulo
   {
     moduleRange: "mod-1",
@@ -171,7 +176,9 @@ function normalizeText(text) {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "") // Quitar tildes
+    .replace(/[\u200B-\u200D\uFEFF]/g, "") // Zero-width spaces
     .replace(/[¿?¡!.,;:()"\-]/g, "") // Quitar signos de puntuación
+    .replace(/\//g, "") // Quitar slashes (para nombres de interfaces como 0/1)
     .replace(/\s+/g, " ") // Normalizar espacios
     .trim();
 }
@@ -218,35 +225,86 @@ function parseQuestions(html, moduleRange) {
   const $ = cheerio.load(html);
   const questions = [];
 
-  // Las preguntas están en <p><strong>NÚMERO. Texto?</strong></p>
-  $("p strong").each((index, element) => {
-    const $strong = $(element);
-    const text = $strong.text().trim();
+  // Las preguntas están en <p><strong>NÚMERO. Texto?</strong></p> o <p><b>NÚMERO. Texto?</b></p>
+  // IMPORTANTE: Puede haber múltiples <strong>/<b> dentro del mismo <p>
+  // Algunos tienen prefijo _ antes del número (ej: _33. o 174.)
+  const processedQuestions = new Set();
 
-    // Verificar si empieza con número y punto
-    const match = text.match(/^(\d+)\.\s+(.+)/);
+  // Buscar tanto <strong> como <b>
+  $("p strong, p b").each((index, element) => {
+    const $tag = $(element);
+    const firstText = $tag.text().trim();
+
+    // Verificar si este tag tiene número al inicio (con o sin prefijo _)
+    const match = firstText.match(/^_?(\d+)\.\s+/);
     if (!match) return;
 
     const questionNumber = parseInt(match[1]);
-    const questionText = match[2];
+
+    // Evitar procesar la misma pregunta dos veces
+    if (processedQuestions.has(questionNumber)) return;
+    processedQuestions.add(questionNumber);
+
+    // Obtener el <p> padre y extraer TODO el texto de todos los <strong> y <b> dentro
+    const $p = $tag.parent();
+    const allTexts = [];
+
+    $p.find("strong, b").each((i, el) => {
+      const text = $(el).text().trim();
+      if (text) {
+        allTexts.push(text);
+      }
+    });
+
+    // Unir todos los textos de <strong>/<b> y quitar el número inicial (con o sin prefijo _)
+    const fullText = allTexts.join("\n").trim();
+    const questionMatch = fullText.match(/^_?\d+\.\s+(.+)/s);
+    if (!questionMatch) return;
+
+    let questionText = questionMatch[1].trim();
 
     if (!questionText || questionText.length < 10) return;
 
-    // Buscar la lista de opciones después de este <p>
-    let $current = $strong.parent(); // El <p>
+    // Buscar la lista de opciones después de este <p> y capturar contexto adicional
+    let $current = $p;
     let $ul = null;
+    const contextParts = [questionText]; // Iniciar con el texto base de la pregunta
 
-    // Buscar el siguiente <ul> (puede haber otros elementos en medio)
+    // Buscar el siguiente <ul> (puede haber otros elementos en medio con contexto)
     while ($current.length && !$ul) {
       $current = $current.next();
       if ($current.is("ul")) {
         $ul = $current;
-      }
-      // Detener si encontramos otro <p><strong> (siguiente pregunta)
-      if ($current.find("strong").length > 0) {
         break;
       }
+
+      // Capturar contexto adicional de elementos entre la pregunta y las opciones
+      if ($current.is("pre")) {
+        // Capturar código/comandos en <pre>
+        const preText = $current.text().trim();
+        if (preText) {
+          contextParts.push(preText);
+        }
+      } else if ($current.is("p")) {
+        // Capturar texto adicional de <p><strong> o <p><b> sin número de pregunta
+        const $strongOrB = $current.find("strong, b");
+        if ($strongOrB.length > 0) {
+          const pText = $current.text().trim();
+          // Si tiene número al inicio, es una nueva pregunta - detener
+          if (/^_?\d+\./.test(pText)) {
+            break;
+          }
+          // Si no tiene número, es parte de la pregunta actual
+          if (pText) {
+            contextParts.push(pText);
+          }
+        }
+      }
+      // Ignorar otros elementos como <div>, <span>, etc.
     }
+
+    // Unir todas las partes de la pregunta con saltos de línea
+    questionText = contextParts.join("\n").trim();
 
     // Extraer opciones
     const options = [];
@@ -273,14 +331,14 @@ function parseQuestions(html, moduleRange) {
       // === Formato alternativo: opciones en bloques <p> (command-block questions) ===
       // Cuando no hay <ul>, las opciones están en <p> entre la pregunta y la explicación.
       // Las respuestas correctas tienen <span class="correct_answer"> dentro del <p>.
-      let $scan = $strong.parent().next();
+      let $scan = $tag.parent().next();
 
       while ($scan.length) {
-        // Detener si encontramos la siguiente pregunta
+        // Detener si encontramos la siguiente pregunta (strong o b con número)
         if (
           $scan.is("p") &&
-          $scan.find("strong").length > 0 &&
-          /^\d+\.\s/.test($scan.text().trim())
+          ($scan.find("strong").length > 0 || $scan.find("b").length > 0) &&
+          /^_?\d+\.\s/.test($scan.text().trim())
         ) {
           break;
         }
@@ -324,8 +382,11 @@ function parseQuestions(html, moduleRange) {
     while ($next && $next.length) {
       const nextText = $next.text().trim();
 
-      // Detener si encontramos la siguiente pregunta
-      if ($next.find("strong").length > 0 && /^\d+\./.test(nextText)) {
+      // Detener si encontramos la siguiente pregunta (strong o b con número)
+      if (
+        ($next.find("strong").length > 0 || $next.find("b").length > 0) &&
+        /^_?\d+\./.test(nextText)
+      ) {
         break;
       }
 
