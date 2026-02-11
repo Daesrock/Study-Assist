@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generated": "2026-02-08T20:11:34.802Z",
+  "generated": "2026-02-11T04:17:32.076Z",
   "source": "examenredes.com",
   "course": "CCNA 2 - SRWE",
   "modules": {
@@ -798,8 +798,8 @@
         },
         {
           "id": "1-4_065",
-          "text": "Un técnico esta configurando un nuevo switch Cisco 2960 ¿Cuál es el efecto de emitir el comando branchSW(Config-if)#ipv6 address 2001:db8:a2b 4:88::1/64?",
-          "textNormalized": "un tecnico esta configurando un nuevo switch cisco 2960 cual es el efecto de emitir el comando branchswconfigif#ipv6 address 2001db8a2b 4881/64",
+          "text": "Un técnico esta configurando un nuevo switch Cisco 2960 ¿Cuál es el efecto de emitir el comando branchSW(Config-if)#ipv6 address 2001:db8:a2b 4:88::1/64?\nUn técnico esta configurando un nuevo switch Cisco 2960 ¿Cuál es el efecto de emitir el comando branchSW(Config-if)#ipv6 address 2001:db8:a2b4:88::1/64?",
+          "textNormalized": "un tecnico esta configurando un nuevo switch cisco 2960 cual es el efecto de emitir el comando branchswconfigif#ipv6 address 2001db8a2b 4881/64 un tecnico esta configurando un nuevo switch cisco 2960 cual es el efecto de emitir el comando branchswconfigif#ipv6 address 2001db8a2b4881/64",
           "options": [
             "Aplica una dirección IPv6 a la interfaz virtual.",
             "Activa una interfaz de conmutador virtual o físico.",
@@ -2072,7 +2072,7 @@
     "10-13": {
       "url": "https://examenredes.com/modulos-10-13-examen-de-seguridad-l2-y-wlan-respuestas/",
       "title": "Seguridad L2 y WLAN",
-      "questionCount": 71,
+      "questionCount": 72,
       "questions": [
         {
           "id": "10-13_001",
@@ -2182,6 +2182,19 @@
           ],
           "explanation": "La suplantación de mensajes DTP obliga a un conmutador a entrar en modo de enlace troncal como parte de un ataque de salto de VLAN, pero el doble etiquetado de VLAN funciona incluso si los puertos troncales están deshabilitados. Cambiar la VLAN nativa de la predeterminada a una VLAN no utilizada reduce la posibilidad de este tipo de ataque. La suplantación de DHCP y la inanición de DHCP aprovechan las vulnerabilidades en el intercambio de mensajes DHCP.",
           "correctAnswer": "VLAN double-tagging"
+        },
+        {
+          "id": "10-13_010",
+          "text": "Un administrador de red ingresa la siguiente secuencia de comandos en un switch Cisco 1.\nSW1 (config) # Interface range fa0/5 — 10\nSW1 (config-if) # ip dhcp snooping limit rate 6\n¿Cuál es el efecto después de ingresar estos comandos?",
+          "textNormalized": "un administrador de red ingresa la siguiente secuencia de comandos en un switch cisco 1 sw1 config # interface range fa0/5 — 10 sw1 configif # ip dhcp snooping limit rate 6 cual es el efecto despues de ingresar estos comandos",
+          "options": [
+            "Si alguno de los puertos FastEthernet 5 a 10 recibe más de 6 mensajes DHCP por segundo, el puerto se apagará.",
+            "Los puertos FastEthernet 5 a 10 pueden recibir hasta 6 mensajes de descubrimiento DHCP por segundo.",
+            "Los puertos FastEthernet 5 a 10 pueden recibir hasta 6 mensajes DHCP por segundo de cualquier tipo.",
+            "Si alguno de los puertos FastEthernet 5 a 10 recibe más de 6 mensajes DHCP por segundo, el puerto seguirá funcionando y se enviará un mensaje de error al administrador de la red."
+          ],
+          "explanation": "Cuando se configura la inspección DHCP, la cantidad de mensajes de descubrimiento de DHCP que los puertos no confiables pueden recibir por segundo debe tener una velocidad limitada mediante el uso del comando ip dhcp snooping limit rate en la nterface. Cuando un puerto recibe más mensajes de los que permite la velocidad, se eliminarán los mensajes adicionales.",
+          "correctAnswer": "Los puertos FastEthernet 5 a 10 pueden recibir hasta 6 mensajes de descubrimiento DHCP por segundo."
         },
         {
           "id": "10-13_011",
@@ -2438,8 +2451,8 @@
         },
         {
           "id": "10-13_033",
-          "text": "Abra la actividad de PT. Realice las tareas en las instrucciones de la actividad y luego responda la pregunta.",
-          "textNormalized": "abra la actividad de pt realice las tareas en las instrucciones de la actividad y luego responda la pregunta",
+          "text": "Abra la actividad de PT. Realice las tareas en las instrucciones de la actividad y luego responda la pregunta.\n¿Qué evento tendrá lugar si hay una violación de seguridad de puerto en la interfaz Fa0/1 del switch S1?",
+          "textNormalized": "abra la actividad de pt realice las tareas en las instrucciones de la actividad y luego responda la pregunta que evento tendra lugar si hay una violacion de seguridad de puerto en la interfaz fa0/1 del switch s1",
           "options": [
             "Se registra un mensaje de syslog.",
             "La interfaz entra en el estado deshabilitado por error.",
@@ -2912,7 +2925,7 @@
     "14-16": {
       "url": "https://examenredes.com/modulos-14-16-conceptos-de-enrutamiento-y-examen-de-configuracion-respuestas/",
       "title": "Conceptos de enrutamiento y configuración",
-      "questionCount": 49,
+      "questionCount": 53,
       "questions": [
         {
           "id": "14-16_001",
@@ -3022,6 +3035,19 @@
             "Conexión del router perimetral al ISP.",
             "Conexión del router de rutas internas al resto de la red corporativa o de campus."
           ]
+        },
+        {
+          "id": "14-16_010",
+          "text": "Considere el siguiente comando:\nip route 192.168.10.0 255.255.255.0 10.10.10.2 5\n¿Cómo un administrador probaría esta configuración?",
+          "textNormalized": "considere el siguiente comando ip route 192168100 2552552550 1010102 5 como un administrador probaria esta configuracion",
+          "options": [
+            "Haría ping de la red 192.168.10.0 a la dirección 10.10.10.2.",
+            "Apagaría manualmente la interfaz de router que se utiliza como ruta principal.",
+            "Eliminaría la ruta del gateway predeterminado en el router.",
+            "Haría ping a cualquier dirección válida en la red 192.168.10.0/24."
+          ],
+          "explanation": "Una ruta estática flotante es una ruta de respaldo que solo aparece en la tabla de routing cuando la interfaz utilizada con la ruta principal deja de funcionar. Para probar una ruta estática flotante, la ruta debe encontrarse en la tabla de routing. Por lo tanto, desactivar la interfaz utilizada como ruta principal permitirá que la ruta estática flotante aparezca en la tabla de routing.",
+          "correctAnswer": "Apagaría manualmente la interfaz de router que se utiliza como ruta principal."
         },
         {
           "id": "14-16_011",
@@ -3242,13 +3268,16 @@
         },
         {
           "id": "14-16_027",
-          "text": "Abra la actividad de PT. Realice las tareas en las instrucciones de la actividad y luego responda la pregunta.",
-          "textNormalized": "abra la actividad de pt realice las tareas en las instrucciones de la actividad y luego responda la pregunta",
+          "text": "Abra la actividad de PT. Realice las tareas en las instrucciones de la actividad y luego responda la pregunta.\nUn usuario informa que PC0 no puede visitar el servidor web www.server.com . Ejecute el procedimiento de solución de problemas de configuración de red para identificar el problema.",
+          "textNormalized": "abra la actividad de pt realice las tareas en las instrucciones de la actividad y luego responda la pregunta un usuario informa que pc0 no puede visitar el servidor web wwwservercom ejecute el procedimiento de solucion de problemas de configuracion de red para identificar el problema",
           "options": [
-            "Un usuario informa que PC0 no puede visitar el servidor web www.server.com . Ejecute el procedimiento de solución de problemas de configuración de red para identificar el problema.",
-            "¿Cuál es la causa del problema?"
+            "Una interfaz serial en Branch está configurada incorrectamente.",
+            "La frecuencia de reloj en uno de los enlaces seriales está configurada incorrectamente.",
+            "La dirección del servidor DNS en PC0 está configurada incorrectamente.",
+            "El routing entre HQ y Branch está configurado incorrectamente."
           ],
-          "explanation": "A fin de permitir la comunicación con redes remotas, es necesario el routing correcto, ya sea estático o dinámico. Ambos routers deben configurarse con un método de routing."
+          "explanation": "A fin de permitir la comunicación con redes remotas, es necesario el routing correcto, ya sea estático o dinámico. Ambos routers deben configurarse con un método de routing.",
+          "correctAnswer": "El routing entre HQ y Branch está configurado incorrectamente."
         },
         {
           "id": "14-16_028",
@@ -3329,9 +3358,22 @@
           "correctAnswer": "::/0"
         },
         {
+          "id": "14-16_034",
+          "text": "Consulte la ilustración. La tabla de routing para el R2 es la siguiente:\nGateway of last resort is not set\n\n10.0.0.0/30 is subnetted, 2 subnets\nC 10.0.0.0 is directly connected, Serial0/0/0\nC 10.0.0.4 is directly connected, Serial0/0/1\n192.168.10.0/26 is subnetted, 3 subnets\nS 192.168.10.0 is directly connected, Serial0/0/0\nC 192.168.10.64 is directly connected, FastEthernet0/0\nS 192.168.10.128 [1/0] via 10.0.0.6\n¿Qué hará el router R2 con un paquete destinado a 192.168.10.129?",
+          "textNormalized": "consulte la ilustracion la tabla de routing para el r2 es la siguiente gateway of last resort is not set 10000/30 is subnetted 2 subnets c 10000 is directly connected serial0/0/0 c 10004 is directly connected serial0/0/1 192168100/26 is subnetted 3 subnets s 192168100 is directly connected serial0/0/0 c 1921681064 is directly connected fastethernet0/0 s 19216810128 [1/0] via 10006 que hara el router r2 con un paquete destinado a 19216810129",
+          "options": [
+            "enviar el paquete interface Serial0/0/1",
+            "Enviará el paquete por la interfaz FastEthernet0/0.",
+            "enviar el paquete interface Serial0/0/0",
+            "descartará el paquete"
+          ],
+          "explanation": "Cuando se configura una ruta estática con la dirección del próximo salto (como en el caso de la red 192.168.10.128), el resultado del comando show ip route muestra la ruta como «via» una dirección IP en particular. El router tiene que buscar esa dirección IP para determinar por qué interfaz enviar el paquete. Dado que la dirección IP de 10.0.0.6 es parte de la red 10.0.0.4, el router envía el paquete por la interfaz Serial0/0/1.",
+          "correctAnswer": "enviar el paquete interface Serial0/0/1"
+        },
+        {
           "id": "14-16_035",
-          "text": "¿Qué característica completa la siguiente declaración?",
-          "textNormalized": "que caracteristica completa la siguiente declaracion",
+          "text": "¿Qué característica completa la siguiente declaración?\nCuando se configura una ruta estática IPv6, como ruta de respaldo a una ruta estática en la tabla de enrutamiento, el comando “distance” se usa con…",
+          "textNormalized": "que caracteristica completa la siguiente declaracion cuando se configura una ruta estatica ipv6 como ruta de respaldo a una ruta estatica en la tabla de enrutamiento el comando “distance” se usa con…",
           "options": [
             "la dirección del siguiente salto de dos diferentes routers adyacentes.",
             "una distancia administrativa de 2.",
@@ -3356,8 +3398,8 @@
         },
         {
           "id": "14-16_037",
-          "text": "Consulte la exposición. ¿Qué interfaz será la interfaz de salida para reenviar un paquete de datos que tenga la dirección IP de destino 10.3.86.2?",
-          "textNormalized": "consulte la exposicion que interfaz sera la interfaz de salida para reenviar un paquete de datos que tenga la direccion ip de destino 103862",
+          "text": "Consulte la exposición. ¿Qué interfaz será la interfaz de salida para reenviar un paquete de datos que tenga la dirección IP de destino 10.3.86.2?\nGateway of last resort is not set\n10.3.86.0/26 es varias subredes, 7 subredes, 3 máscaras\nO 10.3.86.0/26 [110/10] a través de 10.3.2.1, 00:00:24, Serial0/0/0\nO 10.3.86.64/26 [110/20] a través de 10.3.2.6, 00:00:56, Serie 0/0/1\nO 10.3.86.128/26 [110/10] a través de 10.3.2.1, 00:00:24, Serie 0/0/0\nC 10.3.86.192/27 está conectado directamente, PARTIALURLPLACEHOLDER\nL PARTIALURLPLACEHOLDER está conectado directamente, PARTIALURLPLACEHOLDER\nC PARTIALURLPLACEHOLDER está conectado directamente, PARTIALURLPLACEHOLDER\nL PARTIALURLPLACEHOLDER está conectado directamente, PARTIALURLPLACEHOLDER\nPARTIALURLPLACEHOLDER PARTIALURLPLACEHOLDER es variable subredes, 4 subredes, 2 máscaras\nC 10.3.2.0/30 está conectado directamente, Serial0/0/0\nL 10.3.2.2/32 está conectado directamente, Serial0/0/0\nC 10.3.2.4/30 está conectado directamente, Serial0/0/1\nL 10.3.2.5/32 está conectado directamente, Serial0/0/1\nS 10.3.3.0/26 [1/0 ] via 10.3.2.1, 00:00:24, Serial0/0/0\nR1#",
+          "textNormalized": "consulte la exposicion que interfaz sera la interfaz de salida para reenviar un paquete de datos que tenga la direccion ip de destino 103862 gateway of last resort is not set 103860/26 es varias subredes 7 subredes 3 mascaras o 103860/26 [110/10] a traves de 10321 000024 serial0/0/0 o 1038664/26 [110/20] a traves de 10326 000056 serie 0/0/1 o 10386128/26 [110/10] a traves de 10321 000024 serie 0/0/0 c 10386192/27 esta conectado directamente partialurlplaceholder l partialurlplaceholder esta conectado directamente partialurlplaceholder c partialurlplaceholder esta conectado directamente partialurlplaceholder l partialurlplaceholder esta conectado directamente partialurlplaceholder partialurlplaceholder partialurlplaceholder es variable subredes 4 subredes 2 mascaras c 10320/30 esta conectado directamente serial0/0/0 l 10322/32 esta conectado directamente serial0/0/0 c 10324/30 esta conectado directamente serial0/0/1 l 10325/32 esta conectado directamente serial0/0/1 s 10330/26 [1/0 ] via 10321 000024 serial0/0/0 r1#",
           "options": [
             "Serial0/0/0",
             "GigabitEthernet0/1",
@@ -3415,6 +3457,19 @@
           "correctAnswer": "Parque (config) # ruta ip 0.0.0.0 0.0.0 192.168.14.1\nAlta (config) # ruta ip 10.0.234.0 255.255.0 192.168.14.2\nAlta (config) # ruta ip 0.0.0.0 0.0.0 s0/0/0"
         },
         {
+          "id": "14-16_042",
+          "text": "Considere el siguiente comando:\nip route 192.168.10.0 255.255.255.0 10.10.10.2 5.\n¿Qué ruta debería dejar de funcionar para que la ruta estática aparezca en la tabla de routing?",
+          "textNormalized": "considere el siguiente comando ip route 192168100 2552552550 1010102 5 que ruta deberia dejar de funcionar para que la ruta estatica aparezca en la tabla de routing",
+          "options": [
+            "Una ruta estática a la red 192.168.10.0/24.",
+            "Una ruta aprendida por EIGRP a la red 192.168.10.0/24.",
+            "Una ruta aprendida por OSPF a la red 192.168.10.0/24.",
+            "Una ruta predeterminada."
+          ],
+          "explanation": "La distancia administrativa de 5 añadida al final de la ruta estática crea una situación estática flotante para la ruta estática que deja de funcionar. Las rutas estáticas tienen una distancia administrativa predeterminada de 1. Esta ruta, que tiene una distancia administrativa de 5, no se colocará en la tabla de routing, a menos que no se introduzca la ruta estática anteriormente ingresada en 192.168.10.0/24 o que deje de funcionar. La distancia administrativa de 5 añadida al final de la configuración de la ruta estática crea una ruta estática flotante que se colocará en la tabla de routing cuando la ruta primaria a la misma red de destino deje de funcionar. De forma predeterminada, una ruta estática a la red 192.168.10.0/24 tiene una distancia administrativa de 1. Por lo tanto, la ruta flotante con una distancia administrativa de 5 no se colocará en la tabla de routing, a menos que no se introduzca la ruta estática anteriormente ingresada en 192.168.10.0/24 o que deje de funcionar. Dado que la ruta flotante tiene una distancia administrativa de 5, se prefiere esta ruta a la ruta descubierta por OSPF (con una distancia administrativa de 110) o la ruta descubierta por EIGRP (con una distancia administrativa de 110) a la misma red de destino.",
+          "correctAnswer": "Una ruta estática a la red 192.168.10.0/24."
+        },
+        {
           "id": "14-16_043",
           "text": "Un router usó el protocolo OSPF para descubrir una ruta a la red 172.16.32.0/19. ¿Qué comando implementa una ruta estática flotante de respaldo para esta red?",
           "textNormalized": "un router uso el protocolo ospf para descubrir una ruta a la red 17216320/19 que comando implementa una ruta estatica flotante de respaldo para esta red",
@@ -3429,8 +3484,8 @@
         },
         {
           "id": "14-16_044",
-          "text": "¿Qué característica completa la siguiente declaración?",
-          "textNormalized": "que caracteristica completa la siguiente declaracion",
+          "text": "¿Qué característica completa la siguiente declaración?\nCuando se configura una ruta estática IPv6, la dirección del siguiente salto puede ser…",
+          "textNormalized": "que caracteristica completa la siguiente declaracion cuando se configura una ruta estatica ipv6 la direccion del siguiente salto puede ser…",
           "options": [
             "una dirección de enlace local IPv6 en el router adyacente.",
             "el tipo de interfaz y el numero de interfaz",
@@ -3455,8 +3510,8 @@
         },
         {
           "id": "14-16_046",
-          "text": "Consulte la imagen. ¿Qué interfaz será la interfaz de salida para reenviar un paquete de datos que tenga la dirección IP de destino 172.18.109.152?",
-          "textNormalized": "consulte la imagen que interfaz sera la interfaz de salida para reenviar un paquete de datos que tenga la direccion ip de destino 17218109152",
+          "text": "Consulte la imagen. ¿Qué interfaz será la interfaz de salida para reenviar un paquete de datos que tenga la dirección IP de destino 172.18.109.152?\nGateway of last resort is not set\n172.18.109.0/26 is variously subnetted, 7 subnets, 3 masks\nO 172.18.109.0/26 [110/10] via 172.18.32.1, 00:00:24, Serial0/0/0\nO 172.18.109.64/26 [110/20] via 172.18.32.6, 00:00:56, Serial 0/0/1\nO 172.18.109.128/26 [110/10] via 172.18.32.1, 00:00:24, Serial 0/0/0\nC 172.18.109.192/27 is directly connected, GigabitEthernet0/0\nL 172.18.109.193/27 is directly connected, GigabitEthernet0/0\nC 172.18.109.224/27 is directly connected, GigabitEthernet0/1\nL 172.18.109.225/27 is directly connected, GigabitEthernet0/1\n172.18.32.0/24 is variably subnetted, 4 subnets, 2 masks\nC 172.18.32.0/30 is directly connected, Serial0/0/0\nL 172.18.32.2/32 is directly connected, Serial0/0/0\nC 172.18.32.4/30 is directly connected, Serial0/0/1\nL 172.18.32.5/32 is directly connected, Serial0/0/1\nS 172.18.33.0/26 [1/0] via 172.18.32.1, 00:00:24, Serial0/0/0\nR1#",
+          "textNormalized": "consulte la imagen que interfaz sera la interfaz de salida para reenviar un paquete de datos que tenga la direccion ip de destino 17218109152 gateway of last resort is not set 172181090/26 is variously subnetted 7 subnets 3 masks o 172181090/26 [110/10] via 17218321 000024 serial0/0/0 o 1721810964/26 [110/20] via 17218326 000056 serial 0/0/1 o 17218109128/26 [110/10] via 17218321 000024 serial 0/0/0 c 17218109192/27 is directly connected gigabitethernet0/0 l 17218109193/27 is directly connected gigabitethernet0/0 c 17218109224/27 is directly connected gigabitethernet0/1 l 17218109225/27 is directly connected gigabitethernet0/1 17218320/24 is variably subnetted 4 subnets 2 masks c 17218320/30 is directly connected serial0/0/0 l 17218322/32 is directly connected serial0/0/0 c 17218324/30 is directly connected serial0/0/1 l 17218325/32 is directly connected serial0/0/1 s 17218330/26 [1/0] via 17218321 000024 serial0/0/0 r1#",
           "options": [
             "Serial0/0/0",
             "Serial0/0/1",
@@ -3468,8 +3523,8 @@
         },
         {
           "id": "14-16_047",
-          "text": "Consulte la imagen. ¿Qué interfaz será la interfaz de salida para reenviar un paquete de datos que tenga la dirección IP de destino 192.168.71.52?",
-          "textNormalized": "consulte la imagen que interfaz sera la interfaz de salida para reenviar un paquete de datos que tenga la direccion ip de destino 1921687152",
+          "text": "Consulte la imagen. ¿Qué interfaz será la interfaz de salida para reenviar un paquete de datos que tenga la dirección IP de destino 192.168.71.52?\nGateway of last resort is not set\n192.168.139.0/26 is variously subnetted, 7 subnets, 3 masks\nO 192.168.139.0/26 [110/10] via 192.168.70.1, 00:00:24, Serial0/0/0\nO 192.168.139.64/26 [110/20] via 192.168.70.6, 00:00:56, Serial 0/0/1\nO 192.168.139.128/26 [110/10] via 192.168.70.1, 00:00:24, Serial 0/0/0\nC 192.168.139.192/27 is directly connected, GigabitEthernet0/0\nL 192.168.139.193/27 is directly connected, GigabitEthernet0/0\nC 192.168.139.224/27 is directly connected, GigabitEthernet0/1\nL 192.168.139.225/27 is directly connected, GigabitEthernet0/1\n192.168.70.0/24 is variably subnetted, 4 subnets, 2 masks\nC 192.168.70.0/30 is directly connected, Serial0/0/0\nL 192.168.70.2/32 is directly connected, Serial0/0/0\nC 192.168.70.4/30 is directly connected, Serial0/0/1\nL 192.168.70.5/32 is directly connected, Serial0/0/1\nS 192.168.71.0/26 [1/0] via 192.168.70.1, 00:00:24, Serial0/0/0\nR1#",
+          "textNormalized": "consulte la imagen que interfaz sera la interfaz de salida para reenviar un paquete de datos que tenga la direccion ip de destino 1921687152 gateway of last resort is not set 1921681390/26 is variously subnetted 7 subnets 3 masks o 1921681390/26 [110/10] via 192168701 000024 serial0/0/0 o 19216813964/26 [110/20] via 192168706 000056 serial 0/0/1 o 192168139128/26 [110/10] via 192168701 000024 serial 0/0/0 c 192168139192/27 is directly connected gigabitethernet0/0 l 192168139193/27 is directly connected gigabitethernet0/0 c 192168139224/27 is directly connected gigabitethernet0/1 l 192168139225/27 is directly connected gigabitethernet0/1 192168700/24 is variably subnetted 4 subnets 2 masks c 192168700/30 is directly connected serial0/0/0 l 192168702/32 is directly connected serial0/0/0 c 192168704/30 is directly connected serial0/0/1 l 192168705/32 is directly connected serial0/0/1 s 192168710/26 [1/0] via 192168701 000024 serial0/0/0 r1#",
           "options": [
             "Serial0/0/0",
             "El paquete tomará la puerta de entrada de último recurso.",
@@ -3481,8 +3536,8 @@
         },
         {
           "id": "14-16_048",
-          "text": "¿Qué característica completa la siguiente declaración?",
-          "textNormalized": "que caracteristica completa la siguiente declaracion",
+          "text": "¿Qué característica completa la siguiente declaración?\nCuando se configura una ruta estática IPv6, la instalación de la ruta se puede verificar con…",
+          "textNormalized": "que caracteristica completa la siguiente declaracion cuando se configura una ruta estatica ipv6 la instalacion de la ruta se puede verificar con…",
           "options": [
             "una distancia administrativa de 2.",
             "el comando “show ipv6 route static”.",
@@ -3493,9 +3548,22 @@
           "correctAnswer": "el comando “show ipv6 route static”."
         },
         {
+          "id": "14-16_049",
+          "text": "Considere el siguiente comando:\nip route 192.168.10.0 255.255.255.0 10.10.10.2 5\n¿Qué significa el 5 al final del comando?",
+          "textNormalized": "considere el siguiente comando ip route 192168100 2552552550 1010102 5 que significa el 5 al final del comando",
+          "options": [
+            "métrica",
+            "distancia administrativa",
+            "Interfaz de salida",
+            "número máximo de saltos a la red 192.168.10.0/24"
+          ],
+          "explanation": "El 5 al final del comando significa distancia administrativa. Este valor se agrega a rutas estáticas flotantes o rutas que solo aparecen en la tabla de enrutamiento cuando la ruta preferida ha caído. El 5 al final del comando indica la distancia administrativa configurada para la ruta estática. Este valor indica que la ruta estática flotante aparecerá en la tabla de enrutamiento cuando la ruta preferida (con una distancia administrativa inferior a 5) esté inactiva.",
+          "correctAnswer": "distancia administrativa"
+        },
+        {
           "id": "14-16_050",
-          "text": "Consulte la imagen. ¿Cual interfaz será la interfaz de salida para reenviar un paquete de datos que tenga la dirección IP de destino 10.55.99.78?",
-          "textNormalized": "consulte la imagen cual interfaz sera la interfaz de salida para reenviar un paquete de datos que tenga la direccion ip de destino 10559978",
+          "text": "Consulte la imagen. ¿Cual interfaz será la interfaz de salida para reenviar un paquete de datos que tenga la dirección IP de destino 10.55.99.78?\nGateway of last resort is not set\n10.55.99.0/26 is variously subnetted, 7 subnets, 3 masks\nO 10.55.99.0/26 [110/10] via 10.55.18.1, 00:00:24, Serial0/0/0\nO 10.55.99.64/26 [110/20] via 10.55.18.6, 00:00:56, Serial 0/0/1\nO 10.55.99.128/26 [110/10] via 10.55.18.1, 00:00:24, Serial 0/0/0\nC 10.55.99.192/27 is directly connected, GigabitEthernet0/0\nL 10.55.99.193/27 is directly connected, GigabitEthernet0/0\nC 10.55.99.224/27 is directly connected, GigabitEthernet0/1\nL 10.55.99.225/27 is directly connected, GigabitEthernet0/1\n10.55.18.0/24 is variably subnetted, 4 subnets, 2 masks\nC 10.55.18.0/30 is directly connected, Serial0/0/0\nL 10.55.18.2/32 is directly connected, Serial0/0/0\nC 10.55.18.4/30 is directly connected, Serial0/0/1\nL 10.55.18.5/32 is directly connected, Serial0/0/1\nS 10.55.19.0/26 [1/0] via 10.55.18.1, 00:00:24, Serial0/0/0\nR1#",
+          "textNormalized": "consulte la imagen cual interfaz sera la interfaz de salida para reenviar un paquete de datos que tenga la direccion ip de destino 10559978 gateway of last resort is not set 1055990/26 is variously subnetted 7 subnets 3 masks o 1055990/26 [110/10] via 1055181 000024 serial0/0/0 o 10559964/26 [110/20] via 1055186 000056 serial 0/0/1 o 105599128/26 [110/10] via 1055181 000024 serial 0/0/0 c 105599192/27 is directly connected gigabitethernet0/0 l 105599193/27 is directly connected gigabitethernet0/0 c 105599224/27 is directly connected gigabitethernet0/1 l 105599225/27 is directly connected gigabitethernet0/1 1055180/24 is variably subnetted 4 subnets 2 masks c 1055180/30 is directly connected serial0/0/0 l 1055182/32 is directly connected serial0/0/0 c 1055184/30 is directly connected serial0/0/1 l 1055185/32 is directly connected serial0/0/1 s 1055190/26 [1/0] via 1055181 000024 serial0/0/0 r1#",
           "options": [
             "GigabitEthernet0/0",
             "Serial0/0/0",
@@ -3507,8 +3575,8 @@
         },
         {
           "id": "14-16_051",
-          "text": "¿Qué característica completa la siguiente declaración?",
-          "textNormalized": "que caracteristica completa la siguiente declaracion",
+          "text": "¿Qué característica completa la siguiente declaración?\nCuando se configura una ruta estática IPv6, primero es necesario configurar…",
+          "textNormalized": "que caracteristica completa la siguiente declaracion cuando se configura una ruta estatica ipv6 primero es necesario configurar…",
           "options": [
             "una distancia administrativa de 2.",
             "una dirección de enlace local IPv6 en el router adyacente.",
@@ -3520,8 +3588,8 @@
         },
         {
           "id": "14-16_052",
-          "text": "¿Qué característica completa la siguiente declaración?",
-          "textNormalized": "que caracteristica completa la siguiente declaracion",
+          "text": "¿Qué característica completa la siguiente declaración?\nCuando se configura una ruta estática IPv6, es posible que se use la misma dirección local de enlace IPv6 para…",
+          "textNormalized": "que caracteristica completa la siguiente declaracion cuando se configura una ruta estatica ipv6 es posible que se use la misma direccion local de enlace ipv6 para…",
           "options": [
             "el comando “ipv6 unicast-routing”.",
             "una distancia administrativa de 2.",
@@ -3533,8 +3601,8 @@
         },
         {
           "id": "14-16_053",
-          "text": "Consulte la exposición. ¿Qué interfaz será la interfaz de salida para reenviar un paquete de datos que tenga la dirección IP de destino 172.25.128.244?",
-          "textNormalized": "consulte la exposicion que interfaz sera la interfaz de salida para reenviar un paquete de datos que tenga la direccion ip de destino 17225128244",
+          "text": "Consulte la exposición. ¿Qué interfaz será la interfaz de salida para reenviar un paquete de datos que tenga la dirección IP de destino 172.25.128.244?\nGateway of last resort is not set\n172.25.128.0/26 es varias subredes, 7 subredes, 3 máscaras\nO 172.25.128.0/26 [110/10] a través de 172.25.56.1, 00:00:24, Serial0/0/0\nO 172.25.128.64/26 [110/20] a través de 172.25.56.6, 00:00:56, Serie 0/0/1\nO 172.25.128.128/26 [110/10] a través de 172.25.56.1, 00:24, serie 0/0/0\nC PARTIALURLPLACEHOLDER está conectado directamente, PARTIALURLPLACEHOLDER\nL PARTIALURLPLACEHOLDER está conectado directamente, PARTIALURLPLACEHOLDER\nC PARTIALURLPLACEHOLDER está conectado directamente, PARTIALURLPLACEHOLDER\nL PARTIALURLPLACEHOLDER está conectado directamente, PARTIALURLPLACEHOLDER\n172.25.56.0/24 variablemente subredes, 4 subredes, 2 máscaras\nC 172.25.56.0/30 está conectado directamente, Serial0/0/0\nL 172.25.56.2/32 está conectado directamente, Serial0/0/0\nC 172.25.56.4/30 está conectado directamente, Serial0/0/1\nL 172.25.56.5/32 está directamente conectado conectado, Serial0/0/1\nS 172.25.57.0/26 [1/0] vía 172.25.56.1, 00:00:24, Serial0/0/0\nR1#",
+          "textNormalized": "consulte la exposicion que interfaz sera la interfaz de salida para reenviar un paquete de datos que tenga la direccion ip de destino 17225128244 gateway of last resort is not set 172251280/26 es varias subredes 7 subredes 3 mascaras o 172251280/26 [110/10] a traves de 17225561 000024 serial0/0/0 o 1722512864/26 [110/20] a traves de 17225566 000056 serie 0/0/1 o 17225128128/26 [110/10] a traves de 17225561 0024 serie 0/0/0 c partialurlplaceholder esta conectado directamente partialurlplaceholder l partialurlplaceholder esta conectado directamente partialurlplaceholder c partialurlplaceholder esta conectado directamente partialurlplaceholder l partialurlplaceholder esta conectado directamente partialurlplaceholder 17225560/24 variablemente subredes 4 subredes 2 mascaras c 17225560/30 esta conectado directamente serial0/0/0 l 17225562/32 esta conectado directamente serial0/0/0 c 17225564/30 esta conectado directamente serial0/0/1 l 17225565/32 esta directamente conectado conectado serial0/0/1 s 17225570/26 [1/0] via 17225561 000024 serial0/0/0 r1#",
           "options": [
             "Serial0/0/1",
             "GigabitEthernet0/0",
@@ -3546,8 +3614,8 @@
         },
         {
           "id": "14-16_054",
-          "text": "Consulte la imgen. ¿Qué interfaz será la interfaz de salida para reenviar un paquete de datos que tenga la dirección IP de destino 192.168.139.244?",
-          "textNormalized": "consulte la imgen que interfaz sera la interfaz de salida para reenviar un paquete de datos que tenga la direccion ip de destino 192168139244",
+          "text": "Consulte la imgen. ¿Qué interfaz será la interfaz de salida para reenviar un paquete de datos que tenga la dirección IP de destino 192.168.139.244?\nGateway of last resort is not set\n192.168.139.0/26 is variously subnetted, 7 subnets, 3 masks\nO 192.168.139.0/26 [110/10] via 192.168.70.1, 00:00:24, Serial0/0/0\nO 192.168.139.64/26 [110/20] via 192.168.70.6, 00:00:56, Serial 0/0/1\nO 192.168.139.128/26 [110/10] via 192.168.70.1, 00:00:24, Serial 0/0/0\nC 192.168.139.192/27 is directly connected, GigabitEthernet0/0\nL 192.168.139.193/27 is directly connected, GigabitEthernet0/0\nC 192.168.139.224/27 is directly connected, GigabitEthernet0/1\nL 192.168.139.225/27 is directly connected, GigabitEthernet0/1\n192.168.70.0/24 is variably subnetted, 4 subnets, 2 masks\nC 192.168.70.0/30 is directly connected, Serial0/0/0\nL 192.168.70.2/32 is directly connected, Serial0/0/0\nC 192.168.70.4/30 is directly connected, Serial0/0/1\nL 192.168.70.5/32 is directly connected, Serial0/0/1\nS 192.168.71.0/26 [1/0] via 192.168.70.1, 00:00:24, Serial0/0/0\nR1#",
+          "textNormalized": "consulte la imgen que interfaz sera la interfaz de salida para reenviar un paquete de datos que tenga la direccion ip de destino 192168139244 gateway of last resort is not set 1921681390/26 is variously subnetted 7 subnets 3 masks o 1921681390/26 [110/10] via 192168701 000024 serial0/0/0 o 19216813964/26 [110/20] via 192168706 000056 serial 0/0/1 o 192168139128/26 [110/10] via 192168701 000024 serial 0/0/0 c 192168139192/27 is directly connected gigabitethernet0/0 l 192168139193/27 is directly connected gigabitethernet0/0 c 192168139224/27 is directly connected gigabitethernet0/1 l 192168139225/27 is directly connected gigabitethernet0/1 192168700/24 is variably subnetted 4 subnets 2 masks c 192168700/30 is directly connected serial0/0/0 l 192168702/32 is directly connected serial0/0/0 c 192168704/30 is directly connected serial0/0/1 l 192168705/32 is directly connected serial0/0/1 s 192168710/26 [1/0] via 192168701 000024 serial0/0/0 r1#",
           "options": [
             "Serial0/0/0",
             "GigabitEthernet0/0",
@@ -4223,8 +4291,8 @@
         },
         {
           "id": "mod-4_010",
-          "text": "Un administrador de red ingresa la siguiente secuencia de comandos en un switch Cisco 3560. ¿Cuál es el objetivo de estos comandos?",
-          "textNormalized": "un administrador de red ingresa la siguiente secuencia de comandos en un switch cisco 3560 cual es el objetivo de estos comandos",
+          "text": "Un administrador de red ingresa la siguiente secuencia de comandos en un switch Cisco 3560. ¿Cuál es el objetivo de estos comandos?\nSwitch(config)# interface gigabitethernet 0/1\nSwitch(config-if)# no switchport",
+          "textNormalized": "un administrador de red ingresa la siguiente secuencia de comandos en un switch cisco 3560 cual es el objetivo de estos comandos switchconfig# interface gigabitethernet 0/1 switchconfigif# no switchport",
           "options": [
             "para deshabilitar el puerto Gi0 / 1",
             "para habilitar el puerto Gi0/1 como una interfaz virtual de switch",
@@ -4704,7 +4772,7 @@
     "mod-7": {
       "url": "https://examenredes.com/prueba-del-modulo-7-dhcpv4/",
       "title": "Prueba del Módulo 7 - DHCPv4",
-      "questionCount": 14,
+      "questionCount": 15,
       "questions": [
         {
           "id": "mod-7_001",
@@ -4719,6 +4787,19 @@
           ],
           "explanation": "Todos los mensajes DHCP entre un cliente habilitado para DHCP y un servidor DHCP utilizan mensajes de difusión hasta después del mensaje DHCPACK. Los mensajes DHCPDISCOVER y DHCPREQUEST son los únicos mensajes enviados por un cliente habilitado para DHCP. Todos los mensajes DHCP entre un cliente habilitado para DHCP y un servidor DHCP utilizan mensajes de difusión cuando el cliente obtiene una concesión por primera vez.",
           "correctAnswers": ["DHCPDISCOVER", "DHCPREQUEST"]
+        },
+        {
+          "id": "mod-7_002",
+          "text": "Un administrador emite los comandos:\nRouter(config)# interface g0/1\nRouter(config-if)# ip address dhcp\n¿Qué está tratando de lograr el administrador?",
+          "textNormalized": "un administrador emite los comandos routerconfig# interface g0/1 routerconfigif# ip address dhcp que esta tratando de lograr el administrador",
+          "options": [
+            "configurar el router para obtener parámetros IP de un servidor DHCPv4",
+            "configurar el router para que actúe como un servidor DHCPv4",
+            "configurar el router para resolver conflictos de direcciones IP",
+            "configurar el router para que simule un agente de retransmisión"
+          ],
+          "explanation": "El ip address dhcp comando activa el cliente DHCPv4 en una interfaz dada. Al hacer esto, el router obtendrá los parámetros IP de un servidor DHCPv4.",
+          "correctAnswer": "configurar el router para obtener parámetros IP de un servidor DHCPv4"
         },
         {
           "id": "mod-7_003",
@@ -4837,8 +4918,8 @@
         },
         {
           "id": "mod-7_013",
-          "text": "¿Qué dirección IPv4 de destino utiliza un cliente DHCPv4 para enviar el paquete DHCP Discover inicial cu",
-          "textNormalized": "que direccion ipv4 de destino utiliza un cliente dhcpv4 para enviar el paquete dhcp discover inicial cu",
+          "text": "¿Qué dirección IPv4 de destino utiliza un cliente DHCPv4 para enviar el paquete DHCP Discover inicial cu\nando el cliente está buscando un servidor DHCP?",
+          "textNormalized": "que direccion ipv4 de destino utiliza un cliente dhcpv4 para enviar el paquete dhcp discover inicial cu ando el cliente esta buscando un servidor dhcp",
           "options": [
             "224.0.0.1",
             "255.255.255.255",
@@ -4953,8 +5034,8 @@
         },
         {
           "id": "mod-8_006",
-          "text": "¿Qué mensaje informa a las in",
-          "textNormalized": "que mensaje informa a las in",
+          "text": "¿Qué mensaje informa a las in\nterfaces habilitadas para IPv6 que utilicen DHCPv6 stateful para obtener una dirección IPv6?",
+          "textNormalized": "que mensaje informa a las in terfaces habilitadas para ipv6 que utilicen dhcpv6 stateful para obtener una direccion ipv6",
           "options": [
             "ICMPv6 Router Solicitation",
             "DHCPv6 Reply message",
@@ -5916,7 +5997,7 @@
     "mod-14": {
       "url": "https://examenredes.com/prueba-del-modulo-14-conceptos-de-routers/",
       "title": "Prueba del Módulo 14 - Conceptos de routers",
-      "questionCount": 14,
+      "questionCount": 15,
       "questions": [
         {
           "id": "mod-14_001",
@@ -6056,6 +6137,19 @@
           "options": ["S", "L", "D", "C", "O"],
           "explanation": "Las redes locales y conectadas directamente se crean de manera automática cada vez que se configura una interfaz con una dirección IP y se activa.",
           "correctAnswers": ["L", "C"]
+        },
+        {
+          "id": "mod-14_011",
+          "text": "El resultado del show ip route comando contiene la siguiente entrada:\nS 10.2.0.0 [1/0] via 172.16.2.2.\n¿Qué valor indica el 1 en la parte [1/0] de la salida?",
+          "textNormalized": "el resultado del show ip route comando contiene la siguiente entrada s 10200 [1/0] via 1721622 que valor indica el 1 en la parte [1/0] de la salida",
+          "options": [
+            "ID de interfaz a través del cual se puede llegar a la red",
+            "Métrica",
+            "número de saltos",
+            "Distancia administrativa"
+          ],
+          "explanation": "En la entrada de la tabla de enrutamiento, S 10.2.0.0 [1/0] a 172.16.2.2, los números dentro del corchete indican la distancia administrativa y la métrica respectivamente.",
+          "correctAnswer": "Distancia administrativa"
         },
         {
           "id": "mod-14_012",
@@ -6266,8 +6360,8 @@
         },
         {
           "id": "mod-15_012",
-          "text": "¿Qué comando, o conjunto de comandos, se usaría para determinar si la siguiente configuración en el router HQ funciona según lo diseñado?",
-          "textNormalized": "que comando o conjunto de comandos se usaria para determinar si la siguiente configuracion en el router hq funciona segun lo disenado",
+          "text": "¿Qué comando, o conjunto de comandos, se usaría para determinar si la siguiente configuración en el router HQ funciona según lo diseñado?\nip route 0.0.0.0 0.0.0.0 serial 0/0/0 10\nip route 0.0.0.0 0.0.0.0 serial 0/1/0",
+          "textNormalized": "que comando o conjunto de comandos se usaria para determinar si la siguiente configuracion en el router hq funciona segun lo disenado ip route 0000 0000 serial 0/0/0 10 ip route 0000 0000 serial 0/1/0",
           "options": [
             "HQ# show ip route",
             "HQ# ping 128.107.0.99\nHQ# ping 64.100.0.5",
@@ -6322,7 +6416,7 @@
     "mod-16": {
       "url": "https://examenredes.com/prueba-del-modulo-16-solucion-de-problemas-de-rutas-estaticas-y-predeterminadas/",
       "title": "Prueba del Módulo 16 - Resuelve problemas de rutas",
-      "questionCount": 9,
+      "questionCount": 10,
       "questions": [
         {
           "id": "mod-16_001",
@@ -6420,6 +6514,19 @@
           "correctAnswers": ["show ip interface brief", "ping"]
         },
         {
+          "id": "mod-16_008",
+          "text": "Un administrador de red ha introducido el siguiente comando:\nip route 192.168.10.64 255.255.255.192 serial0/0/1\nCuando el administrador de red ingresa el comando show ip route, la ruta no está en la tabla de enrutamiento. ¿Qué debe hacer después el administrador?",
+          "textNormalized": "un administrador de red ha introducido el siguiente comando ip route 1921681064 255255255192 serial0/0/1 cuando el administrador de red ingresa el comando show ip route la ruta no esta en la tabla de enrutamiento que debe hacer despues el administrador",
+          "options": [
+            "Volver a introducir el comando utilizando la máscara correcta.",
+            "Comprobar que la interfaz Serial 0/0/1 esté activa y disponible.",
+            "Comprobar que la red 192.168.10.64 esté activa en la infraestructura de red.",
+            "Volver a introducir el comando con un número de red en lugar de una dirección IP utilizable."
+          ],
+          "explanation": "la razón por la que una red estática correctamente escrita no entraría en la tabla de enrutamiento es si la interfaz de salida no está disponible. El número 192.168.10.64 es un número de red válido y esa ruta no tiene que estar «up and up» para configurar una ruta estática en un router remoto.",
+          "correctAnswer": "Comprobar que la interfaz Serial 0/0/1 esté activa y disponible."
+        },
+        {
           "id": "mod-16_009",
           "text": "¿Qué hará un router si no tiene configurado una ruta predeterminada y es necesario reenviar un paquete a una red de destino que no aparece en la tabla de enrutamiento?",
           "textNormalized": "que hara un router si no tiene configurado una ruta predeterminada y es necesario reenviar un paquete a una red de destino que no aparece en la tabla de enrutamiento",
@@ -6461,7 +6568,7 @@
     "final-practice": {
       "url": "https://examenredes.com/examen-final-de-practica-srwe-preguntas-y-respuestas/",
       "title": "Examen final de práctica SRWE",
-      "questionCount": 37,
+      "questionCount": 48,
       "questions": [
         {
           "id": "final-practice_001",
@@ -6488,6 +6595,19 @@
           ],
           "explanation": "Todos los puertos del switch Cisco están asignados a la VLAN 1 de forma predeterminada. Para la implementación de VLAN, los puertos Fa0/1 y Fa0/2 deben asignarse a VLAN 10 y VLAN 20, respectivamente. Los comandos que faltan en S1 son los siguientes: switchport access vlan 10 y switchport access vlan 20.",
           "correctAnswer": "Configuración de VLAN"
+        },
+        {
+          "id": "final-practice_003",
+          "text": "Consulte la exhibición. La comunicación entre redes VLAN entre VLAN 10, VLAN 20 y VLAN 30 no es correcta. ¿Cuál es el problema?",
+          "textNormalized": "consulte la exhibicion la comunicacion entre redes vlan entre vlan 10 vlan 20 y vlan 30 no es correcta cual es el problema",
+          "options": [
+            "La interfaz de switch FastEthernet0/1 está configurada para no negociar y debería estar configurada para negociar.",
+            "Las interfaces de acceso no tienen direcciones IP, y cada una debería estar configurada con una dirección IP.",
+            "La interfaz de switch FastEthernet0/1 está configurada como interfaz de acceso y se debe configurar como interfaz de enlace troncal.",
+            "Las interfaces de switch FastEthernet0/2, FastEthernet0/3 y FastEthernet0/4 están configuradas para no negociar y deberían estar configuradas para negociar."
+          ],
+          "explanation": "Para reenviar todas las VLAN al enrutador, la interfaz del conmutador Fa0/1 debe configurarse como una interfaz troncal con el comando troncal del modo switchport.",
+          "correctAnswer": "La interfaz de switch FastEthernet0/1 está configurada como interfaz de acceso y se debe configurar como interfaz de enlace troncal."
         },
         {
           "id": "final-practice_004",
@@ -6543,8 +6663,8 @@
         },
         {
           "id": "final-practice_009",
-          "text": "Consulte la imagen. ¿Qué interfaz será la interfaz de salida para reenviar un paquete de datos que tenga la dirección IP de destino 172.18.109.152?",
-          "textNormalized": "consulte la imagen que interfaz sera la interfaz de salida para reenviar un paquete de datos que tenga la direccion ip de destino 17218109152",
+          "text": "Consulte la imagen. ¿Qué interfaz será la interfaz de salida para reenviar un paquete de datos que tenga la dirección IP de destino 172.18.109.152?\nGateway of last resort is not set\n172.18.109.0/26 is variously subnetted, 7 subnets, 3 masks\nO 172.18.109.0/26 [110/10] via 172.18.32.1, 00:00:24, Serial0/0/0\nO 172.18.109.64/26 [110/20] via 172.18.32.6, 00:00:56, Serial 0/0/1\nO 172.18.109.128/26 [110/10] via 172.18.32.1, 00:00:24, Serial 0/0/0\nC 172.18.109.192/27 is directly connected, GigabitEthernet0/0\nL 172.18.109.193/27 is directly connected, GigabitEthernet0/0\nC 172.18.109.224/27 is directly connected, GigabitEthernet0/1\nL 172.18.109.225/27 is directly connected, GigabitEthernet0/1\n172.18.32.0/24 is variably subnetted, 4 subnets, 2 masks\nC 172.18.32.0/30 is directly connected, Serial0/0/0\nL 172.18.32.2/32 is directly connected, Serial0/0/0\nC 172.18.32.4/30 is directly connected, Serial0/0/1\nL 172.18.32.5/32 is directly connected, Serial0/0/1\nS 172.18.33.0/26 [1/0] via 172.18.32.1, 00:00:24, Serial0/0/0\nR1#",
+          "textNormalized": "consulte la imagen que interfaz sera la interfaz de salida para reenviar un paquete de datos que tenga la direccion ip de destino 17218109152 gateway of last resort is not set 172181090/26 is variously subnetted 7 subnets 3 masks o 172181090/26 [110/10] via 17218321 000024 serial0/0/0 o 1721810964/26 [110/20] via 17218326 000056 serial 0/0/1 o 17218109128/26 [110/10] via 17218321 000024 serial 0/0/0 c 17218109192/27 is directly connected gigabitethernet0/0 l 17218109193/27 is directly connected gigabitethernet0/0 c 17218109224/27 is directly connected gigabitethernet0/1 l 17218109225/27 is directly connected gigabitethernet0/1 17218320/24 is variably subnetted 4 subnets 2 masks c 17218320/30 is directly connected serial0/0/0 l 17218322/32 is directly connected serial0/0/0 c 17218324/30 is directly connected serial0/0/1 l 17218325/32 is directly connected serial0/0/1 s 17218330/26 [1/0] via 17218321 000024 serial0/0/0 r1#",
           "options": [
             "GigabitEthernet0/0",
             "Serial0/0/0",
@@ -6607,6 +6727,19 @@
           "correctAnswer": "Segmentar la LAN en LAN más pequeñas y realizar un routing entre ellas."
         },
         {
+          "id": "final-practice_015",
+          "text": "Consulte la exhibición. ¿Cómo se reenvía una trama desde la PCA hacia la PCC si la tabla de direcciones MAC en el switch SW1 está vacía?",
+          "textNormalized": "consulte la exhibicion como se reenvia una trama desde la pca hacia la pcc si la tabla de direcciones mac en el switch sw1 esta vacia",
+          "options": [
+            "SW1 satura todos los puertos en SW1 con la trama, a excepción del puerto a través del cual la trama ingresó al switch.",
+            "SW1 satura todos los puertos en el switch con la trama, a excepción del puerto interconectado al switch SW2 y el puerto a través del cual la trama ingresó al switch.",
+            "SW1 reenvía la trama directamente a SW2. SW2 satura todos los puertos conectados a SW2 con la trama, a excepción del puerto a través del cual la trama ingresó al switch.",
+            "SW1 descarta la trama porque no conoce el destino de la dirección MAC."
+          ],
+          "explanation": "Cuando se enciende un interruptor, la tabla de direcciones MAC está vacía. El conmutador crea la tabla de direcciones MAC examinando la dirección MAC de origen de las tramas entrantes. El conmutador reenvía según la dirección MAC de destino que se encuentra en el encabezado de la trama. Si un conmutador no tiene entradas en la tabla de direcciones MAC o si la dirección MAC de destino no está en la tabla de conmutadores, el conmutador reenviará la trama a todos los puertos excepto al puerto que trajo la trama al conmutador.",
+          "correctAnswer": "SW1 satura todos los puertos en SW1 con la trama, a excepción del puerto a través del cual la trama ingresó al switch."
+        },
+        {
           "id": "final-practice_016",
           "text": "¿Cuáles son las dos características del switch que podrían ayudar a aliviar la congestión de la red? (Escoja dos opciones).",
           "textNormalized": "cuales son las dos caracteristicas del switch que podrian ayudar a aliviar la congestion de la red escoja dos opciones",
@@ -6648,6 +6781,25 @@
           ],
           "explanation": "En un entorno SOHO, un enrutador inalámbrico se conecta a un ISP a través de un módem DSL o por cable. La dirección IP entre el enrutador inalámbrico y el sitio del ISP generalmente la asigna el ISP a través de DHCP. El módem DSL no administra la asignación de direcciones IP.",
           "correctAnswer": "Establezca la conexión WAN en el router inalámbrico como cliente DHCP."
+        },
+        {
+          "id": "final-practice_023",
+          "text": "¿Qué combinan tres componentes para formar un ID de puente?",
+          "textNormalized": "que combinan tres componentes para formar un id de puente",
+          "options": [
+            "dirección IP",
+            "prioridad del puente",
+            "costo",
+            "ID de sistema extendido",
+            "dirección MAC",
+            "ID de puerto"
+          ],
+          "explanation": "Los tres componentes que se combinan para formar un ID de puente son prioridad de puente, ID de sistema extendido y dirección MAC.",
+          "correctAnswers": [
+            "prioridad del puente",
+            "ID de sistema extendido",
+            "dirección MAC"
+          ]
         },
         {
           "id": "final-practice_024",
@@ -6716,6 +6868,19 @@
           "correctAnswer": "ipv6 route ::/0 2001:db8:acad:2::a"
         },
         {
+          "id": "final-practice_029",
+          "text": "Consulte la ilustración. La tabla de routing para el R2 es la siguiente:\nGateway of last resort is not set\n\n10.0.0.0/30 is subnetted, 2 subnets\nC 10.0.0.0 is directly connected, Serial0/0/0\nC 10.0.0.4 is directly connected, Serial0/0/1\n192.168.10.0/26 is subnetted, 3 subnets\nS 192.168.10.0 is directly connected, Serial0/0/0\nC 192.168.10.64 is directly connected, FastEthernet0/0\nS 192.168.10.128 [1/0] via 10.0.0.6\n¿Qué hará el router R2 con un paquete destinado a 192.168.10.129?",
+          "textNormalized": "consulte la ilustracion la tabla de routing para el r2 es la siguiente gateway of last resort is not set 10000/30 is subnetted 2 subnets c 10000 is directly connected serial0/0/0 c 10004 is directly connected serial0/0/1 192168100/26 is subnetted 3 subnets s 192168100 is directly connected serial0/0/0 c 1921681064 is directly connected fastethernet0/0 s 19216810128 [1/0] via 10006 que hara el router r2 con un paquete destinado a 19216810129",
+          "options": [
+            "enviar el paquete interface Serial0/0/0",
+            "enviar el paquete interface Serial0/0/1",
+            "Enviará el paquete por la interfaz FastEthernet0/0.",
+            "descartará el paquete"
+          ],
+          "explanation": "Cuando se configura una ruta estática con la dirección del siguiente salto (como en el caso de la red 192.168.10.128), la salida del comando show ip route enumera la ruta como “via” una dirección IP en particular. El enrutador tiene que buscar esa dirección IP para determinar qué interfaz enviar el paquete. Debido a que la dirección IP de 10.0.0.6 es parte de la red 10.0.0.4, el enrutador envía el paquete a la interfaz Serial0/0/1.",
+          "correctAnswer": "enviar el paquete interface Serial0/0/1"
+        },
+        {
           "id": "final-practice_030",
           "text": "Consulte la exhibición. El router R1 tiene una relación de vecino OSPF con el router ISP a través de la red 192.168.0.32. El enlace de red 192.168.0.36 debe funcionar como respaldo cuando deja de funcionar el enlace OSPF. Se emitió el comando de ruta estática flotante ip route 0.0.0.0 0.0.0.0 S0/0/1 100 en el R1, y ahora el tráfico usa el enlace de respaldo, aun cuando el enlace OSPF está activo y en funcionamiento. ¿Qué modificaciones se deben realizar al comando de ruta estática a fin de que el tráfico use solo el enlace OSPF cuando este se encuentre activo?",
           "textNormalized": "consulte la exhibicion el router r1 tiene una relacion de vecino ospf con el router isp a traves de la red 192168032 el enlace de red 192168036 debe funcionar como respaldo cuando deja de funcionar el enlace ospf se emitio el comando de ruta estatica flotante ip route 0000 0000 s0/0/1 100 en el r1 y ahora el trafico usa el enlace de respaldo aun cuando el enlace ospf esta activo y en funcionamiento que modificaciones se deben realizar al comando de ruta estatica a fin de que el trafico use solo el enlace ospf cuando este se encuentre activo",
@@ -6738,8 +6903,38 @@
             "Cree una ruta estática flotante a esa red.",
             "Compruebe la configuración en la ruta estática flotante y ajuste la AD."
           ],
-          "explanation": "Conceptos básicos de enrutamiento y conmutación\n1.1.1 Funciones del enrutador\n1.2.2 Determinación de la ruta\nUn enrutador buscará en la tabla de enrutamiento una red de destino y localizará una interfaz de salida para reenviar un paquete a un destino. Una vez determinada la interfaz de salida, el enrutador encapsulará un paquete en el tipo de trama correcto.\n(PPP) es un protocolo de enlace de datos (capa 2) que se utiliza para establecer una conexión directa entre dos nodos. (de wikipedia)",
+          "explanation": "",
           "correctAnswer": "Compruebe la configuración de la interfaz de salida en la nueva ruta estática."
+        },
+        {
+          "id": "final-practice_032",
+          "text": "Consulte la ilustración. Cuando un paquete llega a la interfaz Serial0/0/0 en el R1, con una dirección IP de destino de la PC1, ¿qué dos eventos ocurren? Elija dos opciones.",
+          "textNormalized": "consulte la ilustracion cuando un paquete llega a la interfaz serial0/0/0 en el r1 con una direccion ip de destino de la pc1 que dos eventos ocurren elija dos opciones",
+          "options": [
+            "El router R1 desencapsula el paquete y lo encapsula en una trama de Ethernet.",
+            "El router R1 reenvia el paquete por S0/0/0.",
+            "El router R1 reenviará el paquete fuera de Gig0/1.",
+            "El router R1 reenviará el paquete fuera de Gig0/0.",
+            "El router R1 desencapsula el paquete y lo encapsula en una trama PPP."
+          ],
+          "explanation": "Conceptos básicos de enrutamiento y conmutación\n1.1.1 Funciones del enrutador\n1.2.2 Determinación de la ruta\nUn enrutador buscará en la tabla de enrutamiento una red de destino y localizará una interfaz de salida para reenviar un paquete a un destino. Una vez determinada la interfaz de salida, el enrutador encapsulará un paquete en el tipo de trama correcto.\n(PPP) es un protocolo de enlace de datos (capa 2) que se utiliza para establecer una conexión directa entre dos nodos. (de wikipedia)",
+          "correctAnswers": [
+            "El router R1 desencapsula el paquete y lo encapsula en una trama de Ethernet.",
+            "El router R1 reenviará el paquete fuera de Gig0/1."
+          ]
+        },
+        {
+          "id": "final-practice_033",
+          "text": "Consulte la ilustración. ¿Cómo se instaló la ruta 2001:DB8:CAFE:4::1/128 del host en la tabla de routing?",
+          "textNormalized": "consulte la ilustracion como se instalo la ruta 2001db8cafe41/128 del host en la tabla de routing",
+          "options": [
+            "El router R1 creó de forma dinámica la ruta.",
+            "La ruta se aprendió de forma dinámica de otro router.",
+            "Un administrador introdujo la ruta de forma manual.",
+            "La ruta se instaló automáticamente cuando se configuró una dirección IP en una interfaz activa."
+          ],
+          "explanation": "Una ruta de host es una ruta IPv6 con una máscara de 128 bits. Se puede instalar una ruta de host en una tabla de enrutamiento automáticamente cuando se configura una dirección IP en la interfaz de un enrutador o manualmente si se crea una ruta estática.",
+          "correctAnswer": "Un administrador introdujo la ruta de forma manual."
         },
         {
           "id": "final-practice_034",
@@ -6768,6 +6963,19 @@
           "correctAnswer": "EtherChannel es funcional y está en uso según lo indicado por los indicadores P y SU en la salida de comando."
         },
         {
+          "id": "final-practice_036",
+          "text": "Consulte la exhibición. El switch DLS1 está conectado a otro switch, DLS2, mediante un enlace troncal. Un host que está conectado a DLS1 no puede comunicarse con un host conectado a DLS2, a pesar de que ambos están en la VLAN 99. ¿Qué comando se debe agregar a Fa0/1 en DLS1 para corregir el problema?",
+          "textNormalized": "consulte la exhibicion el switch dls1 esta conectado a otro switch dls2 mediante un enlace troncal un host que esta conectado a dls1 no puede comunicarse con un host conectado a dls2 a pesar de que ambos estan en la vlan 99 que comando se debe agregar a fa0/1 en dls1 para corregir el problema",
+          "options": [
+            "switchport mode dynamic auto",
+            "switchport nonegotiate",
+            "switchport trunk allowed vlan add 99",
+            "switchport trunk native vlan 66"
+          ],
+          "explanation": "Al configurar enlaces troncales 802.1Q, la VLAN nativa debe coincidir en ambos lados del enlace, de lo contrario se generarán mensajes de error de CDP y el tráfico que proviene o se dirige a la VLAN nativa no se manejará correctamente.",
+          "correctAnswer": "switchport trunk native vlan 66"
+        },
+        {
           "id": "final-practice_037",
           "text": "¿Qué tipo de tráfico está diseñado para una VLAN nativa?",
           "textNormalized": "que tipo de trafico esta disenado para una vlan nativa",
@@ -6779,6 +6987,19 @@
           ],
           "explanation": "Una VLAN nativa transporta tráfico sin etiquetar, que es tráfico que no proviene de una VLAN. Una VLAN de datos transporta tráfico generado por el usuario. Una VLAN de administración transporta tráfico de administración.",
           "correctAnswer": "Sin etiquetar"
+        },
+        {
+          "id": "final-practice_038",
+          "text": "Consulte la exhibición. La PC-A y la PC-B se encuentran en la VLAN 60. La PC-A no se puede comunicar con la PC-B. ¿Cuál es el problema?",
+          "textNormalized": "consulte la exhibicion la pca y la pcb se encuentran en la vlan 60 la pca no se puede comunicar con la pcb cual es el problema",
+          "options": [
+            "La VLAN que usa la PC-A no está en la lista de VLAN permitidas en el enlace troncal.",
+            "El enlace troncal se configuró con el comando switchport nonegotiate .",
+            "La VLAN nativa debe ser la VLAN 60.",
+            "Se está eliminando la VLAN nativa del enlace."
+          ],
+          "explanation": "Debido a que la PC-A y la PC-B están conectadas a diferentes conmutadores, el tráfico entre ellos debe fluir a través del enlace troncal. Los troncales se pueden configurar para que solo permitan que el tráfico de determinadas VLAN crucen el enlace. En este escenario, la VLAN 60, la VLAN que está asociada con la PC-A y la PC-B, no se ha permitido a través del enlace, como se muestra en el resultado de show interfaces trunk.",
+          "correctAnswer": "La VLAN que usa la PC-A no está en la lista de VLAN permitidas en el enlace troncal."
         },
         {
           "id": "final-practice_040",
@@ -6818,6 +7039,19 @@
           ],
           "explanation": "En la configuración DHCPv6 con estado, que se indica al establecer el indicador M como 1 (a través del comando de interfaz ipv6 nd managed-config-flag), las asignaciones de direcciones IPv6 dinámicas son administradas por el servidor DHCPv6. Los clientes deben obtener toda la información de configuración de un servidor DHCPv6.",
           "correctAnswer": "Los clientes deben usar toda la información de configuración que proporciona un servidor de DHCPv6."
+        },
+        {
+          "id": "final-practice_043",
+          "text": "Consulte la ilustración. Un administrador de red está solucionando un problema con EtherChannel. ¿Qué comando se utilizó para producir la salida expuesta?",
+          "textNormalized": "consulte la ilustracion un administrador de red esta solucionando un problema con etherchannel que comando se utilizo para producir la salida expuesta",
+          "options": [
+            "show etherchannel Port-channel",
+            "show etherchannel summary",
+            "show interfaces fastethernet 0/11 etherchannel",
+            "show interfaces Port-Channel11"
+          ],
+          "explanation": "El comando show interfaces fastethernet 0/11 etherchannel mostrará la información de EtherChannel para la interfaz FastEthernet 0/11. La información mostrada incluye el canal de puerto al que pertenece, el modo actual y el grupo de canales, entre otra información.",
+          "correctAnswer": "show interfaces fastethernet 0/11 etherchannel"
         },
         {
           "id": "final-practice_044",
@@ -6947,6 +7181,32 @@
           ],
           "explanation": "Los ataques de salto de VLAN dependen de que el atacante pueda crear un enlace troncal con un conmutador. La desactivación de DTP y la configuración de puertos orientados al usuario como puertos de acceso estáticos pueden ayudar a prevenir este tipo de ataques. La desactivación del Protocolo de árbol de expansión (STP) no eliminará los ataques de salto de VLAN.",
           "correctAnswer": "Deshabilite la negociación troncal para puertos troncales y ajuste de forma estática los puertos no troncales como puertos de acceso."
+        },
+        {
+          "id": "final-practice_054",
+          "text": "Un administrador configuró un router de retransmisión de DHCPv4 y emitió estos comandos:\nRouter(config)# interface g0/0\nRouter(config-if)# ip address 10.0.1.1 255.255.255.0\nRouter(config-if)# no shutdown\nRouter(config-if)# exit\nRouter(config)# ip dhcp pool RELAY\nRouter(dhcp-config)# end\nLos clientes no reciben parámetros IP del servidor de DHCPv4. ¿Cuál es la causa posible?",
+          "textNormalized": "un administrador configuro un router de retransmision de dhcpv4 y emitio estos comandos routerconfig# interface g0/0 routerconfigif# ip address 10011 2552552550 routerconfigif# no shutdown routerconfigif# exit routerconfig# ip dhcp pool relay routerdhcpconfig# end los clientes no reciben parametros ip del servidor de dhcpv4 cual es la causa posible",
+          "options": [
+            "El router está configurado como un cliente DHCPv4.",
+            "El pool no puede ser nombrado “RELAY”.",
+            "La dirección IP es incorrecta para la máscara de subred que se utiliza.",
+            "Falta el comando ip helper-address ."
+          ],
+          "explanation": "Este enrutador debe configurarse con el comando ip helper-address, seguido de la dirección IP del servidor DHCPv4, porque el enrutador está diseñado para usarse como un agente de retransmisión. El comando ip dhcp pool RELAY solo nombra el grupo DHCPv4 y no habilita la función de retransmisión.",
+          "correctAnswer": "Falta el comando ip helper-address ."
+        },
+        {
+          "id": "final-practice_055",
+          "text": "Considere el siguiente comando:\nip route 192.168.10.0 255.255.255.0 10.10.10.2 5\n¿Qué significa el 5 al final del comando?",
+          "textNormalized": "considere el siguiente comando ip route 192168100 2552552550 1010102 5 que significa el 5 al final del comando",
+          "options": [
+            "distancia administrativa",
+            "número máximo de saltos a la red 192.168.10.0/24",
+            "Interfaz de salida",
+            "métrica"
+          ],
+          "explanation": "El 5 al final del comando significa distancia administrativa. Este valor se agrega a las rutas estáticas flotantes o a las rutas que solo aparecen en la tabla de enrutamiento cuando la ruta preferida se ha reducido. El 5 al final del comando significa la distancia administrativa configurada para la ruta estática. Este valor indica que la ruta estática flotante aparecerá en la tabla de enrutamiento cuando la ruta preferida (con una distancia administrativa inferior a 5) esté inactiva.",
+          "correctAnswer": "distancia administrativa"
         }
       ]
     },
@@ -6959,7 +7219,7 @@
     "final-exam": {
       "url": "https://examenredes.com/ccna-2-v7-examen-final-de-srwe-preguntas-y-respuestas/",
       "title": "Examen final de SRWE",
-      "questionCount": 137,
+      "questionCount": 154,
       "questions": [
         {
           "id": "final-exam_001",
@@ -7093,8 +7353,8 @@
         },
         {
           "id": "final-exam_011",
-          "text": "Consulte la ilustración. Un administrador de redes agregó una nueva subred a la red y necesita que los hosts de dicha subred reciban direcciones IPv4 del servidor DHCPv4.",
-          "textNormalized": "consulte la ilustracion un administrador de redes agrego una nueva subred a la red y necesita que los hosts de dicha subred reciban direcciones ipv4 del servidor dhcpv4",
+          "text": "Consulte la ilustración. Un administrador de redes agregó una nueva subred a la red y necesita que los hosts de dicha subred reciban direcciones IPv4 del servidor DHCPv4.\n¿Qué dos comandos permiten que los hosts de la nueva subred reciban las direcciones del servidor DHCP4? (Elija dos opciones.)",
+          "textNormalized": "consulte la ilustracion un administrador de redes agrego una nueva subred a la red y necesita que los hosts de dicha subred reciban direcciones ipv4 del servidor dhcpv4 que dos comandos permiten que los hosts de la nueva subred reciban las direcciones del servidor dhcp4 elija dos opciones",
           "options": [
             "R1(config-if)# ip helper-address 10.1.0.254",
             "R2(config)# interface G0/0",
@@ -7546,6 +7806,19 @@
             "Desactivar el DTP.",
             "Configurar la VLAN nativa en una VLAN sin usar."
           ]
+        },
+        {
+          "id": "final-exam_046",
+          "text": "Consulte la exhibición. Además de las rutas estáticas que direccionan el tráfico a las redes 10.10.0.0/16 y 10.20.0.0/16, el router HQ también está configurado con el siguiente comando:\nip route 0.0.0.0 0.0.0.0 serial 0/1/1\n¿Cuál es el propósito de este comando?",
+          "textNormalized": "consulte la exhibicion ademas de las rutas estaticas que direccionan el trafico a las redes 101000/16 y 102000/16 el router hq tambien esta configurado con el siguiente comando ip route 0000 0000 serial 0/1/1 cual es el proposito de este comando",
+          "options": [
+            "Los paquetes de la red 10.10.0.0/16 serán reenviados a la red 10.20.0.0/16 y los paquetes de la red 10.20.0.0/16 serán reenviados a la red 10.10.0.0/16.",
+            "Los paquetes con una red de destino que no sea 10.10.0.0/16 ni 10.20.0.0/16 ni una red conectada directamente serán reenviados a Internet.",
+            "Los paquetes que se reciben de Internet serán reenviados a una de las LAN conectadas al R1 o al R2.",
+            "Los paquetes destinados a las redes que no están en la tabla de routing del HQ serán descartados."
+          ],
+          "explanation": "",
+          "correctAnswer": "Los paquetes con una red de destino que no sea 10.10.0.0/16 ni 10.20.0.0/16 ni una red conectada directamente serán reenviados a Internet."
         },
         {
           "id": "final-exam_047",
@@ -8281,6 +8554,19 @@
           "correctAnswer": "Asegúrese de que la antigua ruta predeterminada se haya eliminado de los routers perimetrales de la empresa."
         },
         {
+          "id": "final-exam_106",
+          "text": "¿Cuál es el efecto de ingresar el comando show ip dhcp snooping binding configuration en un switch?",
+          "textNormalized": "cual es el efecto de ingresar el comando show ip dhcp snooping binding configuration en un switch",
+          "options": [
+            "Comprueba la dirección de origen L2 en el encabezado de Ethernet contra la dirección del remitente L2 en el cuerpo ARP.",
+            "Restringe el número de mensajes de detección, por segundo, que se recibirán en la interfaz.",
+            "Muestra las asociaciones de direcciones IP a Mac para interfaces de switch.",
+            "Cambia un puerto troncal al modo de acceso."
+          ],
+          "explanation": "",
+          "correctAnswer": "Muestra las asociaciones de direcciones IP a Mac para interfaces de switch."
+        },
+        {
           "id": "final-exam_107",
           "text": "¿Qué comando inicia el proceso para agrupar dos interfaces físicas para crear un grupo EtherChannel mediante el LACP?",
           "textNormalized": "que comando inicia el proceso para agrupar dos interfaces fisicas para crear un grupo etherchannel mediante el lacp",
@@ -8740,8 +9026,111 @@
             "Cree rutas estáticas a todas las redes internas y una ruta predeterminada a Internet.",
             "Cree una ruta estática flotante a esa red."
           ],
-          "explanation": "_Un ataque de desbordamiento de tabla de direcciones MAC (CAM), desbordamiento de búfer y suplantación de direcciones MAC se pueden mitigar configurando la seguridad del puerto. Un administrador de red normalmente no querría deshabilitar STP porque evita los bucles de Capa 2. DTP está deshabilitado para evitar saltos de VLAN. Colocar puertos no utilizados en una VLAN no utilizada evita la conectividad por cable no autorizada.",
+          "explanation": "",
           "correctAnswer": "Cree rutas estáticas a todas las redes internas y una ruta predeterminada a Internet."
+        },
+        {
+          "id": "final-exam_145",
+          "text": "Un administrador de red está configurando una WLAN. ¿Por qué el administrador deshabilitaría la función de transmisión para el SSID?",
+          "textNormalized": "un administrador de red esta configurando una wlan por que el administrador deshabilitaria la funcion de transmision para el ssid",
+          "options": [
+            "para eliminar a los forasteros que buscan SSID disponibles en el área",
+            "para centralizar la administración de múltiples WLAN",
+            "para facilitar la configuración grupal y la administración de múltiples WLAN a través de un WLC",
+            "para proporcionar un servicio prioritario para aplicaciones urgentes"
+          ],
+          "explanation": "",
+          "correctAnswer": "para eliminar a los forasteros que buscan SSID disponibles en el área"
+        },
+        {
+          "id": "final-exam_155",
+          "text": "Un administrador de red está configurando una WLAN. ¿Por qué el administrador cambiaría las direcciones DHCP IPv4 predeterminadas en un AP?",
+          "textNormalized": "un administrador de red esta configurando una wlan por que el administrador cambiaria las direcciones dhcp ipv4 predeterminadas en un ap",
+          "options": [
+            "para eliminar a los forasteros que buscan SSID disponibles en el área",
+            "para reducir el riesgo de que se agreguen puntos de acceso no autorizados a la red",
+            "para reducir que personas externas intercepten datos o accedan a la red inalámbrica mediante el uso de un rango de direcciones conocido",
+            "para reducir el riesgo de interferencia de dispositivos externos como hornos microondas"
+          ],
+          "explanation": "",
+          "correctAnswer": "para reducir que personas externas intercepten datos o accedan a la red inalámbrica mediante el uso de un rango de direcciones conocido"
+        },
+        {
+          "id": "final-exam_158",
+          "text": "¿Qué dirección y longitud de prefijo se utiliza al configurar una ruta estática predeterminada IPv6?",
+          "textNormalized": "que direccion y longitud de prefijo se utiliza al configurar una ruta estatica predeterminada ipv6",
+          "options": ["::/0", "FF02::1/8", "0.0.0.0/0", "::1/128"],
+          "explanation": "La dirección IPv6 y el prefijo de una ruta estática predeterminada es: :/0. Esto representa todos los ceros de la dirección y una longitud de prefijo de cero.",
+          "correctAnswer": "::/0"
+        },
+        {
+          "id": "final-exam_159",
+          "text": "¿Cuáles son dos características de Cisco Express Forwarding (CEF)? (Elija dos opciones.)",
+          "textNormalized": "cuales son dos caracteristicas de cisco express forwarding cef elija dos opciones",
+          "options": [
+            "Cuando un paquete llega a la interfaz de un enrutador, se reenvía al plano de control donde la CPU hace coincidir la dirección de destino con una entrada de la tabla de enrutamiento correspondiente.",
+            "Este es el mecanismo de reenvío más rápido en los enrutadores y conmutadores multicapa de Cisco.",
+            "Con este método de conmutación, la información de flujo de un paquete se almacena en la caché de conmutación rápida para reenviar paquetes futuros al mismo destino sin la intervención de la CPU.",
+            "Los paquetes se reenvían según la información de la FIB y una tabla de adyacencia.",
+            "Cuando un paquete llega a la interfaz de un enrutador, se reenvía al plano de control donde la CPU busca una coincidencia en la caché de conmutación rápida."
+          ],
+          "explanation": "",
+          "correctAnswers": [
+            "Este es el mecanismo de reenvío más rápido en los enrutadores y conmutadores multicapa de Cisco.",
+            "Los paquetes se reenvían según la información de la FIB y una tabla de adyacencia."
+          ]
+        },
+        {
+          "id": "final-exam_160",
+          "text": "¿Qué término describe la función de un switch Cisco en el control de acceso basado en puertos 802.1X?",
+          "textNormalized": "que termino describe la funcion de un switch cisco en el control de acceso basado en puertos 8021x",
+          "options": [
+            "agente",
+            "suplicante",
+            "autenticador",
+            "servidor de autenticación"
+          ],
+          "explanation": "",
+          "correctAnswer": "autenticador"
+        },
+        {
+          "id": "final-exam_161",
+          "text": "¿Qué solución de Cisco ayuda a prevenir la suplantación de ARP y los ataques de envenenamiento de ARP?",
+          "textNormalized": "que solucion de cisco ayuda a prevenir la suplantacion de arp y los ataques de envenenamiento de arp",
+          "options": [
+            "Inspección dinámica de ARP",
+            "IP Source Guard",
+            "Inspección de DHCP",
+            "Seguridad del puerto"
+          ],
+          "explanation": "",
+          "correctAnswer": "Inspección dinámica de ARP"
+        },
+        {
+          "id": "final-exam_162",
+          "text": "¿Cuál es una ventaja de PVST +?",
+          "textNormalized": "cual es una ventaja de pvst +",
+          "options": [
+            "PVST + optimiza el rendimiento en la red mediante la selección automática del puente raíz.",
+            "PVST + reduce el consumo de ancho de banda en comparación con las implementaciones tradicionales de STP que utilizan CST.",
+            "PVST + requiere menos ciclos de CPU para todos los conmutadores de la red.",
+            "PVST + optimiza el rendimiento en la red mediante el uso compartido de la carga."
+          ],
+          "explanation": "_PVST + da como resultado un equilibrio de carga óptimo. Sin embargo, esto se logra mediante la configuración manual de los conmutadores para que se elijan como puentes raíz para diferentes VLAN en la red. Los puentes raíz no se seleccionan automáticamente. Además, tener instancias de árbol de expansión para cada VLAN en realidad consume más ancho de banda y aumenta los ciclos de CPU para todos los conmutadores de la red.",
+          "correctAnswer": "PVST + optimiza el rendimiento en la red mediante el uso compartido de la carga."
+        },
+        {
+          "id": "final-exam_166",
+          "text": "Una pequeña empresa editorial tiene un diseño de red tal que cuando se envía una transmisión en la LAN, 200 dispositivos reciben la transmisión transmitida. ¿Cómo puede el administrador de red reducir la cantidad de dispositivos que reciben tráfico de transmisión?",
+          "textNormalized": "una pequena empresa editorial tiene un diseno de red tal que cuando se envia una transmision en la lan 200 dispositivos reciben la transmision transmitida como puede el administrador de red reducir la cantidad de dispositivos que reciben trafico de transmision",
+          "options": [
+            "Agregue más conmutadores para que haya menos dispositivos en un switch en particular.",
+            "Reemplace los conmutadores con conmutadores que tengan más puertos por conmutador. Esto permitirá que haya más dispositivos en un switch en particular.",
+            "Segmente la LAN en LAN más pequeñas y enrute entre ellas. *",
+            "Reemplace al menos la mitad de los conmutadores con concentradores para reducir el tamaño del dominio de transmisión."
+          ],
+          "explanation": "_Al dividir la red grande en dos redes más pequeñas, el administrador de la red ha creado dos dominios de difusión más pequeños. Cuando se envía una transmisión en la red ahora, la transmisión solo se enviará a los dispositivos en la misma LAN Ethernet. La otra LAN no recibirá la transmisión.",
+          "correctAnswer": "Segmente la LAN en LAN más pequeñas y enrute entre ellas. *"
         },
         {
           "id": "final-exam_167",
@@ -8755,6 +9144,95 @@
           ],
           "explanation": "Una ruta de host es una dirección IPv4 con una máscara de 32 bits o una dirección IPv6 con una máscara de 128 bits. Cuando una interfaz activa en un router se configura con una dirección IPv4 o IPv6, se agrega automáticamente una ruta de host local a la tabla de enrutamiento. Una ruta de host está marcada con L en la salida de la tabla de enrutamiento. Para rutas estáticas IPv6, la dirección del siguiente salto puede ser la dirección link-local del router adyacente. En este caso, debe especificar el tipo de interfaz y el número de interfaz del router local.",
           "correctAnswer": "Una configuración de ruta de host estática IPv4 utiliza una dirección IP de destino de un dispositivo específico y una máscara de subred /32."
+        },
+        {
+          "id": "final-exam_168",
+          "text": "¿Qué más se requiere al configurar una ruta estática IPv6 usando una dirección local de enlace de siguiente salto?",
+          "textNormalized": "que mas se requiere al configurar una ruta estatica ipv6 usando una direccion local de enlace de siguiente salto",
+          "options": [
+            "distancia administrativa",
+            "dirección IP del router vecino",
+            "número de red y máscara de subred en la interfaz del router vecino",
+            "número y tipo de interfaz"
+          ],
+          "explanation": "",
+          "correctAnswer": "número y tipo de interfaz"
+        },
+        {
+          "id": "final-exam_169",
+          "text": "Un técnico está configurando una red inalámbrica para una pequeña empresa utilizando un enrutador inalámbrico SOHO. ¿Qué dos métodos de autenticación se utilizan si el enrutador está configurado con WPA2? (Elija dos opciones.)",
+          "textNormalized": "un tecnico esta configurando una red inalambrica para una pequena empresa utilizando un enrutador inalambrico soho que dos metodos de autenticacion se utilizan si el enrutador esta configurado con wpa2 elija dos opciones",
+          "options": ["personal", "AES", "TKIP", "WEP", "empresa"],
+          "explanation": "",
+          "correctAnswers": ["personal", "empresa"]
+        },
+        {
+          "id": "final-exam_170",
+          "text": "¿Qué técnica de mitigación evitaría que los servidores no autorizados proporcionen parámetros de configuración de IPv6 falsos a los clientes?",
+          "textNormalized": "que tecnica de mitigacion evitaria que los servidores no autorizados proporcionen parametros de configuracion de ipv6 falsos a los clientes",
+          "options": [
+            "habilitando DHCPv6 Guard",
+            "habilitar RA Guard",
+            "implementación de seguridad de puertos en puertos de borde",
+            "deshabilitar CDP en los puertos de borde"
+          ],
+          "explanation": "_DHCPv6 Guard es una función diseñada para garantizar que los servidores DHCPv6 no autorizados no puedan distribuir direcciones a los clientes, redirigir el tráfico de los clientes o dejar sin servicio al servidor DHCPv6 y provocar un ataque DoS. DHCPv6 Guard requiere que se configure una política en el modo de configuración de DHCP Guard, y DHCPv6 Guard está habilitado interfaz por interfaz.",
+          "correctAnswer": "habilitando DHCPv6 Guard"
+        },
+        {
+          "id": "final-exam_171",
+          "text": "Una PC ha enviado un mensaje RS a un enrutador IPv6 conectado a la misma red. ¿Qué dos datos enviará el enrutador al cliente? (Elija dos opciones.)",
+          "textNormalized": "una pc ha enviado un mensaje rs a un enrutador ipv6 conectado a la misma red que dos datos enviara el enrutador al cliente elija dos opciones",
+          "options": [
+            "longitud del prefijo",
+            "máscara de subred en notación decimal con puntos",
+            "nombre de dominio",
+            "distancia administrativa",
+            "prefijo",
+            "dirección IP del servidor DNS"
+          ],
+          "explanation": "_El enrutador es parte del grupo de todos los enrutadores IPv6 y recibió el mensaje RS. Genera un RA que contiene el prefijo de la red local y la longitud del prefijo (por ejemplo, 2001:db8:acad: 1::/64)",
+          "correctAnswers": ["longitud del prefijo", "prefijo"]
+        },
+        {
+          "id": "final-exam_172",
+          "text": "Mientras asisten a una conferencia, los participantes utilizan computadoras portátiles para conectarse a la red. Cuando un orador invitado intenta conectarse a la red, la computadora portátil no muestra ninguna red inalámbrica disponible. ¿El punto de acceso debe estar funcionando en qué modo?",
+          "textNormalized": "mientras asisten a una conferencia los participantes utilizan computadoras portatiles para conectarse a la red cuando un orador invitado intenta conectarse a la red la computadora portatil no muestra ninguna red inalambrica disponible el punto de acceso debe estar funcionando en que modo",
+          "options": ["mixto", "pasivo", "activo", "abierto"],
+          "explanation": "_Active es un modo utilizado para configurar un punto de acceso de modo que los clientes deben conocer el SSID para conectarse al punto de acceso. Los puntos de acceso y los enrutadores inalámbricos pueden funcionar en un modo mixto, lo que significa que se admiten varios estándares inalámbricos. Abierto es un modo de autenticación para un punto de acceso que no tiene ningún impacto en la lista de redes inalámbricas disponibles para un cliente. Cuando un punto de acceso se configura en modo pasivo, el SSID se transmite para que el nombre de la red inalámbrica aparezca en la lista de redes disponibles para los clientes.",
+          "correctAnswer": "activo"
+        },
+        {
+          "id": "final-exam_173",
+          "text": "¿Qué tres componentes se combinan para formar un ID de puente?",
+          "textNormalized": "que tres componentes se combinan para formar un id de puente",
+          "options": [
+            "ID de sistema extendido",
+            "costo",
+            "dirección IP",
+            "prioridad de puente",
+            "dirección MAC",
+            "ID de puerto"
+          ],
+          "explanation": "_Los tres componentes que se combinan para formar un ID de puente son prioridad de puente, ID de sistema extendido y dirección MAC.",
+          "correctAnswers": [
+            "ID de sistema extendido",
+            "prioridad de puente",
+            "dirección MAC"
+          ]
+        },
+        {
+          "id": "final-exam_174",
+          "text": "¿Cuál es el efecto de ingresar el comando de configuración de spanning-tree portfast en un switch?",
+          "textNormalized": "cual es el efecto de ingresar el comando de configuracion de spanningtree portfast en un switch",
+          "options": [
+            "Deshabilita un puerto no utilizado.",
+            "Deshabilita todos los puertos troncales.",
+            "Habilita portfast en una interfaz de conmutador específica.",
+            "Compara la dirección L2 de origen en el encabezado de Ethernet con la dirección L2 del remitente en el cuerpo de ARP."
+          ],
+          "explanation": "",
+          "correctAnswer": "Habilita portfast en una interfaz de conmutador específica."
         }
       ]
     }
