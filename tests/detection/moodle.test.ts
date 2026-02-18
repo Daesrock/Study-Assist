@@ -191,9 +191,41 @@ describe("Moodle Question Detection", () => {
       expect(q.type).toBe("true-false");
       expect(q.text).toContain("Layer 2");
       expect(q.options).toHaveLength(2);
+      expect(q.options[0].letter).toBe("V");
+      expect(q.options[1].letter).toBe("F");
       expect(q.options[0].text).toBe("True");
       expect(q.options[1].text).toBe("False");
       expect(q.questionNumber).toBe(3);
+    });
+
+    it("should detect Moodle true/false format with label-only options", async () => {
+      document.body.innerHTML = `
+        <div class="que truefalse">
+          <span class="qno">14</span>
+          <div class="qtext">Entrada o insumo o impulso (input) no es la fuerza de arranque del sistema.</div>
+          <div class="answer">
+            <div class="r0">
+              <input type="radio" name="q14_answer" value="1" id="q14_answertrue">
+              <label for="q14_answertrue" class="ms-1">Verdadero</label>
+            </div>
+            <div class="r1">
+              <input type="radio" name="q14_answer" value="0" id="q14_answerfalse">
+              <label for="q14_answerfalse" class="ms-1">Falso</label>
+            </div>
+          </div>
+        </div>
+      `;
+
+      await detectMoodleQuestions();
+
+      expect(state.detectedQuestions).toHaveLength(1);
+      const q = state.detectedQuestions[0];
+      expect(q.type).toBe("true-false");
+      expect(q.options).toHaveLength(2);
+      expect(q.options[0].letter).toBe("V");
+      expect(q.options[0].text).toBe("Verdadero");
+      expect(q.options[1].letter).toBe("F");
+      expect(q.options[1].text).toBe("Falso");
     });
   });
 

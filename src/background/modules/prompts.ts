@@ -147,6 +147,10 @@ RESPONSE FORMAT (exactly as shown):
 ANSWER: [letters separated by commas, e.g., A,C]
 CONFIDENCE: [LOW/MEDIUM/HIGH]`;
   } else {
+    const answerFormatHint = questionType === "true-false"
+      ? "[V or F]"
+      : "[single letter, e.g., A]";
+
     prompt += `
 INSTRUCTIONS:
 1. Analyze the question thoroughly
@@ -158,7 +162,7 @@ INSTRUCTIONS:
    - LOW: You are uncertain (<70%) or guessing
 
 RESPONSE FORMAT (exactly as shown):
-ANSWER: [single letter, e.g., A]
+ANSWER: ${answerFormatHint}
 CONFIDENCE: [LOW/MEDIUM/HIGH]`;
   }
 
@@ -264,6 +268,10 @@ ${deepseekAnalysis.reasoning}
 `;
   }
 
+  const validationAnswerHint = context.questionType === "true-false"
+    ? "[correct answer - V or F]"
+    : "[correct answer - single letter or comma-separated letters]";
+
   prompt += `
 === END DEEPSEEK ANALYSIS ===
 
@@ -277,7 +285,7 @@ Since DeepSeek had ${deepseekAnalysis.confidence} confidence, please:
 If you agree with DeepSeek's answer, confirm it. If you disagree, explain why briefly and give the correct answer.
 
 RESPONSE FORMAT (use exactly this format):
-ANSWER: [correct answer - single letter or comma-separated letters]`;
+ANSWER: ${validationAnswerHint}`;
 
   return prompt;
 }
@@ -355,13 +363,17 @@ Think step-by-step:${imageAnalysisStep}
 
 After your analysis, write ANSWER: ${exampleFormat} on the last line.`;
     } else {
+      const quickAnswerHint = questionType === "true-false"
+        ? "After your analysis, write ANSWER: V or ANSWER: F on the last line."
+        : "After your analysis, write ANSWER: X on the last line (where X is the letter).";
+
       quickPrompt += `
 Think step-by-step:${imageAnalysisStep}
 1. What is the question asking?
 2. Evaluate each option against the image/question
 3. Determine the correct answer
 
-After your analysis, write ANSWER: X on the last line (where X is the letter).`;
+${quickAnswerHint}`;
     }
 
     return quickPrompt;
@@ -373,7 +385,7 @@ After your analysis, write ANSWER: X on the last line (where X is the letter).`;
   }
 
   // Non-quick mode: educational format
-  let prompt = `You are an educational AI tutor helping a student understand a question.
+  let prompt = `You are an educational AI tutor helping a student understand a question.${academicContext}
 ${referenceSection}
 Context:
 - From: "${pageTitle}"

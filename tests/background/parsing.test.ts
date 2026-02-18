@@ -43,6 +43,21 @@ function matchingContext(): AnalysisContext {
   };
 }
 
+function trueFalseContext(overrides: Partial<AnalysisContext> = {}): AnalysisContext {
+  return {
+    questionText: "La entropía es la progresiva desorganización de los sistemas.",
+    questionType: "true-false",
+    options: [
+      { letter: "V", text: "Verdadero" },
+      { letter: "F", text: "Falso" },
+    ],
+    pageTitle: "Sistemas Operativos",
+    pageUrl: "https://www.educa-t.unach.mx/mod/quiz",
+    responseMode: "quick",
+    ...overrides,
+  };
+}
+
 // ============================================
 // DeepSeek Response Parsing
 // ============================================
@@ -109,6 +124,26 @@ describe("parseDeepSeekResponse", () => {
 
       expect(result.deepseekReasoning).toBe(reasoning);
       expect(result.deepseekAnalysis).toBe(response);
+    });
+  });
+
+  describe("True/False", () => {
+    it("should parse V/F format for true-false", () => {
+      const response = "ANSWER: V\nCONFIDENCE: HIGH";
+      const result = parseDeepSeekResponse(response, trueFalseContext());
+
+      expect(result.success).toBe(true);
+      expect(result.result).toBe("V");
+      expect(result.confidence).toBe("HIGH");
+    });
+
+    it("should parse VERDADERO/FALSO format for true-false", () => {
+      const response = "ANSWER: FALSO\nCONFIDENCE: MEDIUM";
+      const result = parseDeepSeekResponse(response, trueFalseContext());
+
+      expect(result.success).toBe(true);
+      expect(result.result).toBe("F");
+      expect(result.confidence).toBe("MEDIUM");
     });
   });
 
@@ -187,6 +222,14 @@ describe("extractClaudeQuickAnswer", () => {
 
 ANSWER: C`;
     expect(extractClaudeQuickAnswer(text)).toBe("C");
+  });
+
+  it("should extract true/false answer as V", () => {
+    expect(extractClaudeQuickAnswer("Análisis...\nANSWER: VERDADERO")).toBe("V");
+  });
+
+  it("should extract true/false answer as F from last line", () => {
+    expect(extractClaudeQuickAnswer("Análisis breve\nFALSO")).toBe("F");
   });
 });
 

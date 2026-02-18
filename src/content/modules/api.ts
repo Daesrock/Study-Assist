@@ -36,6 +36,32 @@ import {
   displayError,
 } from "./ui.js";
 
+function mapTrueFalseAnswer(result: string, options: { letter: string; text: string }[] = []): string {
+  const normalized = result
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .trim();
+
+  if (/\b(V|TRUE|VERDADERO)\b/.test(normalized)) return "V";
+  if (/\b(F|FALSE|FALSO)\b/.test(normalized)) return "F";
+
+  const singleLetter = normalized.match(/\b([A-J])\b/)?.[1];
+  if (singleLetter) {
+    const byLetter = options.find((opt) => opt.letter.toUpperCase() === singleLetter);
+    if (byLetter) {
+      const optText = byLetter.text
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toUpperCase();
+      if (/\b(TRUE|VERDADERO)\b/.test(optText)) return "V";
+      if (/\b(FALSE|FALSO)\b/.test(optText)) return "F";
+    }
+  }
+
+  return "?";
+}
+
 // ============================================
 // Request Cancellation
 // ============================================
@@ -447,7 +473,7 @@ export async function handleQuickClick(
       // Regular multiple choice context
       context = {
         questionText: question.text,
-        questionType: "multiple-choice",
+        questionType: question.type === "true-false" ? "true-false" : "multiple-choice",
         options: question.options,
         images: images,
         pageTitle: document.title,
@@ -526,6 +552,17 @@ export async function handleQuickClick(
       } else {
         // Regular multiple choice handling
         const upperResult = result.toUpperCase();
+
+        if (question.type === "true-false") {
+          const answer = mapTrueFalseAnswer(result, question.options || []);
+          quickBtn.innerHTML = `<span class="study-assist-quick-answer">${answer}</span>`;
+          quickBtn.classList.add("has-answer");
+
+          if (answer !== "?") {
+            state.hasValidAnswer = true;
+          }
+          return;
+        }
 
         // Check for multiple answers (e.g., "A,D" or "A, D" or "B,C,E" or "A,E,G")
         // Support letters A-J (up to 10 options)
@@ -669,7 +706,7 @@ export async function analyzeQuestion(
     // Regular multiple choice context
     context = {
       questionText: question.text,
-      questionType: "multiple-choice",
+      questionType: question.type === "true-false" ? "true-false" : "multiple-choice",
       options: question.options,
       images: images,
       pageTitle: document.title,

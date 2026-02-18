@@ -79,6 +79,11 @@ async function createZipFile() {
   console.log("\n📦 Creating ZIP file...");
 
   const zipPath = join(ROOT, "dist.zip");
+  const isWindows = process.platform === "win32";
+
+  const escapeForPowerShell = (value) => value.replace(/'/g, "''");
+  const escapedDist = escapeForPowerShell(DIST);
+  const escapedZip = escapeForPowerShell(zipPath);
 
   // Remove old zip if exists
   try {
@@ -89,22 +94,32 @@ async function createZipFile() {
 
   const methods = [
     {
+      name: "PowerShell",
+      cmd: `powershell -NoProfile -Command "Import-Module Microsoft.PowerShell.Archive -ErrorAction Stop; Compress-Archive -LiteralPath '${escapedDist}' -DestinationPath '${escapedZip}' -Force"`,
+      options: { stdio: "pipe" },
+      enabled: isWindows,
+    },
+    {
       name: "tar",
-      cmd: `tar -a -cf "${zipPath}" -C "${DIST}" .`,
+      cmd: `tar -a -cf "${zipPath}" -C "${ROOT}" dist`,
+      options: { stdio: "pipe" },
+      enabled: true,
     },
     {
       name: "zip",
-      cmd: `cd "${ROOT}" && zip -r dist.zip dist`,
-    },
-    {
-      name: "PowerShell",
-      cmd: `powershell -NoProfile -Command "Import-Module Microsoft.PowerShell.Archive -ErrorAction Stop; Compress-Archive -Path '${DIST}\\*' -DestinationPath '${zipPath}' -Force"`,
+      cmd: `zip -r "${zipPath}" dist`,
+      options: { cwd: ROOT, stdio: "pipe" },
+      enabled: true,
     },
   ];
 
   for (const method of methods) {
+    if (!method.enabled) {
+      continue;
+    }
+
     try {
-      execSync(method.cmd, { stdio: "pipe" });
+      execSync(method.cmd, method.options);
       console.log(`✅ Created: dist.zip (using ${method.name})`);
       return;
     } catch {

@@ -273,6 +273,18 @@ describe("Claude Analysis Prompt", () => {
       expect(prompt).toContain("EXACTLY 2 answers");
       expect(prompt).toContain("A,C");
     });
+
+    it("should request V/F output for true-false quick questions", () => {
+      const prompt = buildAnalysisPrompt(createMCQContext({
+        questionType: "true-false",
+        options: [
+          { letter: "V", text: "Verdadero" },
+          { letter: "F", text: "Falso" },
+        ],
+      }));
+
+      expect(prompt).toContain("ANSWER: V or ANSWER: F");
+    });
   });
 
   describe("Educational Modes", () => {
@@ -282,6 +294,16 @@ describe("Claude Analysis Prompt", () => {
       expect(prompt).toContain("educational AI tutor");
       expect(prompt).toContain("Do NOT give the answer directly");
       expect(prompt).toContain("Guide them to understand WHY");
+    });
+
+    it("should include course name context in non-quick prompts", () => {
+      const ctx = createMCQContext({
+        responseMode: "guided",
+        courseName: "Sistemas Operativos",
+      });
+      const prompt = buildAnalysisPrompt(ctx);
+      expect(prompt).toContain("ACADEMIC CONTEXT");
+      expect(prompt).toContain("Course: Sistemas Operativos");
     });
 
     it("should build direct mode prompt", () => {

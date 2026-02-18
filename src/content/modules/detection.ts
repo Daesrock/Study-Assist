@@ -1336,6 +1336,7 @@ function extractMoodleCourseName(): string | undefined {
 export async function extractMoodleQuestionData(questionEl: Element): Promise<DetectedQuestion | null> {
   // Extract course name from page title
   const courseName = extractMoodleCourseName();
+  const isTrueFalse = questionEl.classList.contains("truefalse");
   
   // Get question number from span.qno
   const qnoEl = questionEl.querySelector(".qno");
@@ -1463,8 +1464,43 @@ export async function extractMoodleQuestionData(questionEl: Element): Promise<De
         }
       }
 
+      // Moodle true/false often uses <label> (without .answernumber / .flex-fill)
+      if (!optionText) {
+        const labelEl = optDiv.querySelector("label");
+        if (labelEl) {
+          optionText = labelEl.textContent?.trim() || "";
+        }
+      }
+
+      // Last-resort text extraction from option container
+      if (!optionText) {
+        optionText = optDiv.textContent?.trim() || "";
+        if (letterEl && letterEl.textContent) {
+          optionText = optionText.replace(letterEl.textContent, "").trim();
+        }
+      }
+
+      // For true/false, normalize option letters to V/F for quick mode UX
+      if (isTrueFalse) {
+        const normalized = optionText
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase();
+
+        if (/(^|\b)(true|verdadero)(\b|$)/i.test(normalized)) {
+          letter = "V";
+        } else if (/(^|\b)(false|falso)(\b|$)/i.test(normalized)) {
+          letter = "F";
+        }
+      }
+
+      // Fallback letter for non true/false options that don't expose answernumber
+      if (!letter) {
+        letter = String.fromCharCode(65 + options.length); // A, B, C...
+      }
+
       // Accept option if it has text OR an image
-      if (letter && (optionText || optionImage)) {
+      if (optionText || optionImage) {
         options.push({
           letter: letter,
           text: optionText || `[Image: ${optionImage?.alt || "option"}]`,
@@ -1479,9 +1515,6 @@ export async function extractMoodleQuestionData(questionEl: Element): Promise<De
   if (!hasContent || options.length < 2) {
     return null;
   }
-
-  // Determine question type from element class
-  const isTrueFalse = questionEl.classList.contains("truefalse");
 
   return {
     id: `moodle-q-${questionNumber}`,

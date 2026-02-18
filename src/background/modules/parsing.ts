@@ -20,6 +20,7 @@ export function parseDeepSeekResponse(
   reasoningContent: string | null = null
 ): DeepSeekAnalysisResult {
   const isMatching = context.questionType === "matching";
+  const isTrueFalse = context.questionType === "true-false";
 
   // Extract CONFIDENCE level
   const confidenceMatch = response.match(/CONFIDENCE:\s*(HIGH|MEDIUM|LOW)/i);
@@ -47,6 +48,20 @@ export function parseDeepSeekResponse(
         if (pairs && pairs.length >= 2) {
           answer = pairs.join(", ").toUpperCase();
         }
+      }
+    }
+  } else if (isTrueFalse) {
+    const tfMatch = response.match(/ANSWER:\s*(V|F|TRUE|FALSE|VERDADERO|FALSO)\b/i);
+    if (tfMatch) {
+      const value = tfMatch[1].toUpperCase();
+      answer = value.startsWith("V") || value === "TRUE" ? "V" : "F";
+    }
+
+    if (!answer) {
+      const fallbackTf = response.match(/\b(TRUE|FALSE|VERDADERO|FALSO|V|F)\b/i);
+      if (fallbackTf) {
+        const value = fallbackTf[1].toUpperCase();
+        answer = value.startsWith("V") || value === "TRUE" ? "V" : "F";
       }
     }
   } else {
@@ -78,6 +93,12 @@ export function parseDeepSeekResponse(
  * Extract the answer from Claude's response for quick mode
  */
 export function extractClaudeQuickAnswer(result: string): string {
+  const tfAnswerMatch = result.match(/ANSWER:\s*(V|F|TRUE|FALSE|VERDADERO|FALSO)\b/i);
+  if (tfAnswerMatch) {
+    const value = tfAnswerMatch[1].toUpperCase();
+    return value.startsWith("V") || value === "TRUE" ? "V" : "F";
+  }
+
   const answerMatch = result.match(/ANSWER:\s*([A-J](?:\s*,\s*[A-J])*)/i);
   if (answerMatch) {
     return answerMatch[1].toUpperCase().replace(/\s/g, "");
@@ -86,6 +107,12 @@ export function extractClaudeQuickAnswer(result: string): string {
   // Fallback: check last line
   const lines = result.trim().split("\n");
   const lastLine = lines[lines.length - 1].trim();
+  const tfLastLine = lastLine.match(/^(V|F|TRUE|FALSE|VERDADERO|FALSO)$/i);
+  if (tfLastLine) {
+    const value = tfLastLine[1].toUpperCase();
+    return value.startsWith("V") || value === "TRUE" ? "V" : "F";
+  }
+
   const letterMatch = lastLine.match(/^([A-J](?:\s*,\s*[A-J])*)$/i);
   if (letterMatch) {
     return letterMatch[1].toUpperCase().replace(/\s/g, "");
