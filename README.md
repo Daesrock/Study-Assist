@@ -67,6 +67,23 @@ npm run build
 3. Si hay imágenes y DeepSeek no las soporta → Claude directo
 4. Para NetAcad: primero busca en el banco de preguntas local (respuesta instantánea)
 
+### QA Manual (sin entrar a un quiz real)
+
+Desde el **Panel de Control (Dashboard)** ahora existe un menú **🧪 QA Manual** para pruebas rápidas:
+
+1. Abre cualquier página web normal (no `chrome://`)
+2. En el Dashboard selecciona un escenario:
+   - Moodle MCQ
+   - Moodle V/F
+   - NetAcad MCQ
+   - NetAcad Matching
+3. Verifica en la página:
+   - Detección de pregunta(s)
+   - Quick mode con `SHIFT`
+   - En verdadero/falso, quick mode debe mostrar `V` o `F`
+   - Non-quick al hacer clic en el badge
+4. Usa `ALT+W` para re-detección y **Limpiar QA** para retirar el escenario
+
 ## Arquitectura
 
 ```

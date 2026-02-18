@@ -109,6 +109,7 @@ export interface AnalysisContext {
   responseMode: string;
   skipDeepSeek?: boolean;
   courseName?: string; // Academic course name for better context
+  qaMode?: boolean;
 }
 
 export interface AnalysisResponse {

@@ -45,6 +45,8 @@ import { trackUsage, calculateCost } from "./usageTracker.js";
 import { checkRateLimit, recordRequest } from "./rateLimiter.js";
 import { streamClaudeResponse } from "./streaming.js";
 
+const QA_CLAUDE_MODEL = "claude-3-haiku-20240307";
+
 // ============================================
 // Platform Detection
 // ============================================
@@ -325,6 +327,7 @@ export async function analyzeQuestion(context: AnalysisContext): Promise<Analysi
     const claudeApiKey = await getDecryptedApiKey("claudeApiKey");
     const deepseekApiKey = await getDecryptedApiKey("deepseekApiKey");
     const { claudeModel, useDeepSeek, deepseekOnly } = storageResult;
+    const selectedClaudeModel = context.qaMode ? QA_CLAUDE_MODEL : (claudeModel || DEFAULT_MODEL);
     const isDeepSeekOnlyMode = useDeepSeek && deepseekOnly && deepseekApiKey;
 
     if (!claudeApiKey && !isDeepSeekOnlyMode) {
@@ -443,7 +446,7 @@ export async function analyzeQuestion(context: AnalysisContext): Promise<Analysi
     // When falling back to Claude after DeepSeek attempt, let Claude track its own latency.
     // Only pass original startTime if Claude is the primary (no DeepSeek attempt was made).
     const claudeStartTime = deepseekAnalysisForClaude ? Date.now() : startTime;
-    return await analyzeWithClaude(context, claudeApiKey!, claudeModel || DEFAULT_MODEL, deepseekAnalysisForClaude, claudeStartTime, claudeFallbackReason);
+    return await analyzeWithClaude(context, claudeApiKey!, selectedClaudeModel, deepseekAnalysisForClaude, claudeStartTime, claudeFallbackReason);
   } catch (error) {
     await logError({ type: "analyzeQuestion_exception", error: (error as Error).message, stack: (error as Error).stack });
 
@@ -751,7 +754,7 @@ export async function analyzeQuestionStreaming(
       const answerLetter = matchCorrectAnswerToLetter(bankMatch, context.options);
       if (answerLetter) {
         const displayAnswer = bankMatch.correctAnswers ? bankMatch.correctAnswers.join(' | ') : bankMatch.correctAnswer || '';
-        log(`[Study Assist] ✅ INSTANT ANSWER (streaming) from question bank (${bankMatch.similarity}% match): ${answerLetter}`);
+        log(`[Study Assist] INSTANT ANSWER (streaming) from question bank (${bankMatch.similarity}% match): ${answerLetter}`);
         await trackUsage({
           timestamp: Date.now(),
           questionText: context.questionText.substring(0, 200),
@@ -786,7 +789,7 @@ export async function analyzeQuestionStreaming(
 
     const claudeApiKey = await getDecryptedApiKey("claudeApiKey");
     const storageResult = await chrome.storage.local.get(["claudeModel"]) as StorageData;
-    const model = storageResult.claudeModel || DEFAULT_MODEL;
+    const model = context.qaMode ? QA_CLAUDE_MODEL : (storageResult.claudeModel || DEFAULT_MODEL);
 
     if (!claudeApiKey) {
       port.postMessage({ type: "STREAM_ERROR", error: "Claude API key not configured." });

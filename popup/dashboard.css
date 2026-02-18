@@ -684,6 +684,41 @@ body {
 }
 
 /* ============================================
+   QA Manual Menu
+   ============================================ */
+.qa-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow);
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 12px;
+}
+
+.qa-guide h3 {
+  font-size: 13px;
+  margin-bottom: 6px;
+  color: var(--text);
+}
+
+.qa-guide ul {
+  margin-left: 18px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.qa-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-content: flex-start;
+}
+
+/* ============================================
    Responsive
    ============================================ */
 @media (max-width: 900px) {
@@ -694,6 +729,9 @@ body {
     grid-template-columns: 1fr;
   }
   .detail-grid {
+    grid-template-columns: 1fr;
+  }
+  .qa-card {
     grid-template-columns: 1fr;
   }
 }

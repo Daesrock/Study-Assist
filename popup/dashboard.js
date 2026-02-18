@@ -560,6 +560,28 @@ function renderDashboard(stats, history, config, devMode) {
       </div>
     </div>`;
 
+  // — Manual QA Menu —
+  html += `
+    <div class="section-title">🧪 QA Manual</div>
+    <div class="qa-card">
+      <div class="qa-guide">
+        <h3>Validación rápida sin entrar a un quiz real</h3>
+        <ul>
+          <li>Inyecta un escenario en la pestaña activa.</li>
+          <li>Usa <strong>SHIFT</strong> para quick mode o clic en badge para análisis completo.</li>
+          <li>Usa <strong>ALT+W</strong> para re-detectar y repetir pruebas.</li>
+        </ul>
+      </div>
+      <div class="qa-actions">
+        <button class="btn" id="qa-moodle-mcq-btn">Moodle MCQ</button>
+        <button class="btn" id="qa-moodle-tf-btn">Moodle V/F</button>
+        <button class="btn" id="qa-netacad-mcq-btn">NetAcad MCQ</button>
+        <button class="btn" id="qa-netacad-matching-btn">NetAcad Matching</button>
+        <button class="btn" id="qa-clear-btn">Limpiar QA</button>
+        <button class="btn btn-primary" id="qa-guide-btn">Ver guía completa</button>
+      </div>
+    </div>`;
+
   // — Action Buttons —
   html += `
     <div class="section-title">⚙️ Acciones</div>
@@ -687,6 +709,132 @@ function bindDynamicEvents(history, devMode) {
     });
   });
 
+  // Manual QA menu
+  const isRestrictedTabUrl = (url) => {
+    const value = (url || "").toLowerCase();
+    return (
+      value.startsWith("chrome://") ||
+      value.startsWith("chrome-extension://") ||
+      value.startsWith("edge://") ||
+      value.startsWith("about:") ||
+      value.startsWith("view-source:")
+    );
+  };
+
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  const sendQAMessageWithRetry = async (tabId, message) => {
+    let lastError = null;
+    for (let attempt = 1; attempt <= 8; attempt++) {
+      try {
+        await chrome.tabs.sendMessage(tabId, message);
+        return true;
+      } catch (error) {
+        lastError = error;
+        await sleep(350);
+      }
+    }
+    throw lastError || new Error("No se pudo comunicar con la pestaña de QA");
+  };
+
+  const getUsableQATabId = async () => {
+    const [activeTab] = await chrome.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
+
+    if (activeTab?.id && !isRestrictedTabUrl(activeTab.url)) {
+      return activeTab.id;
+    }
+
+    const qaTab = await chrome.tabs.create({
+      url: "https://example.com",
+      active: true,
+    });
+
+    if (!qaTab?.id) {
+      throw new Error("No se pudo crear pestaña QA");
+    }
+
+    // Esperar a que cargue para que el content script esté disponible
+    await sleep(1200);
+    return qaTab.id;
+  };
+
+  const runQAScenario = async (scenario) => {
+    try {
+      const tabId = await getUsableQATabId();
+      await sendQAMessageWithRetry(tabId, {
+        type: "QA_INJECT_SCENARIO",
+        scenario,
+      });
+
+      alert(
+        "✅ Escenario QA cargado.\n\nSiguiente paso:\n1) SHIFT para quick mode\n2) Clic en badge para non-quick\n3) ALT+W para re-detección",
+      );
+    } catch (e) {
+      alert(
+        "No se pudo ejecutar QA automáticamente. Verifica permisos de la extensión y vuelve a intentar desde una pestaña web normal.",
+      );
+    }
+  };
+
+  const clearQAScenario = async () => {
+    try {
+      const [tab] = await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
+      if (!tab?.id || isRestrictedTabUrl(tab.url)) {
+        alert("Abre una pestaña web normal para limpiar el escenario QA.");
+        return;
+      }
+
+      await sendQAMessageWithRetry(tab.id, { type: "QA_CLEAR_SCENARIO" });
+      alert("✅ Escenario QA limpiado.");
+    } catch (_) {
+      alert("No se pudo limpiar QA en la pestaña activa.");
+    }
+  };
+
+  const qaGuideBtn = document.getElementById("qa-guide-btn");
+  if (qaGuideBtn) {
+    qaGuideBtn.addEventListener("click", showQAGuideModal);
+  }
+
+  const qaMoodleMcqBtn = document.getElementById("qa-moodle-mcq-btn");
+  if (qaMoodleMcqBtn) {
+    qaMoodleMcqBtn.addEventListener("click", () => runQAScenario("moodle-mcq"));
+  }
+
+  const qaMoodleTfBtn = document.getElementById("qa-moodle-tf-btn");
+  if (qaMoodleTfBtn) {
+    qaMoodleTfBtn.addEventListener("click", () =>
+      runQAScenario("moodle-truefalse"),
+    );
+  }
+
+  const qaNetacadMcqBtn = document.getElementById("qa-netacad-mcq-btn");
+  if (qaNetacadMcqBtn) {
+    qaNetacadMcqBtn.addEventListener("click", () =>
+      runQAScenario("netacad-mcq"),
+    );
+  }
+
+  const qaNetacadMatchingBtn = document.getElementById(
+    "qa-netacad-matching-btn",
+  );
+  if (qaNetacadMatchingBtn) {
+    qaNetacadMatchingBtn.addEventListener("click", () =>
+      runQAScenario("netacad-matching"),
+    );
+  }
+
+  const qaClearBtn = document.getElementById("qa-clear-btn");
+  if (qaClearBtn) {
+    qaClearBtn.addEventListener("click", clearQAScenario);
+  }
+
   // Force AI State Reset (clears processing locks, NOT history/stats)
   const forceResetBtn = document.getElementById("force-reset-btn");
   if (forceResetBtn) {
@@ -802,6 +950,42 @@ function bindDynamicEvents(history, devMode) {
       }
     });
   }
+}
+
+function showQAGuideModal() {
+  const detailHtml = `
+    <div class="modal-detail-grid">
+      <span class="label">Objetivo:</span>
+      <span class="value">Validar detección y respuesta de la extensión sin entrar a una plataforma real.</span>
+
+      <span class="label">Quick mode:</span>
+      <span class="value">SHIFT para analizar. En V/F debe mostrar <strong>V</strong> o <strong>F</strong>.</span>
+
+      <span class="label">Non-quick:</span>
+      <span class="value">Clic en badge para abrir overlay y verificar análisis completo.</span>
+
+      <span class="label">Re-detección:</span>
+      <span class="value">ALT+W para reiniciar detección del escenario actual.</span>
+    </div>
+    <h4 style="margin: 12px 0 6px;">Checklist sugerido</h4>
+    <pre>
+1) Activar extensión y configurar API keys.
+2) Abrir cualquier página web normal.
+3) Desde este panel, ejecutar:
+   - Moodle MCQ
+   - Moodle V/F
+   - NetAcad MCQ
+   - NetAcad Matching
+4) Verificar:
+   - Se detecta al menos 1 pregunta
+   - Quick mode responde correctamente
+   - En Moodle V/F quick mode muestra V o F
+   - Non-quick muestra análisis sin errores
+5) Limpiar QA al terminar.
+    </pre>
+  `;
+
+  showModal("🧪 Guía QA Manual", detailHtml);
 }
 
 // ============================================

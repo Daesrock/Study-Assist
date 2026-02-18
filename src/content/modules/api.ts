@@ -36,6 +36,10 @@ import {
   displayError,
 } from "./ui.js";
 
+function isQASandboxActive(): boolean {
+  return document.getElementById("study-assist-qa-sandbox") !== null;
+}
+
 function mapTrueFalseAnswer(result: string, options: { letter: string; text: string }[] = []): string {
   const normalized = result
     .normalize("NFD")
@@ -468,6 +472,7 @@ export async function handleQuickClick(
         responseMode: "quick",
         skipDeepSeek: state.skipDeepSeek,
         courseName: question.courseName, // Academic course for context
+        qaMode: isQASandboxActive(),
       };
     } else {
       // Regular multiple choice context
@@ -481,6 +486,7 @@ export async function handleQuickClick(
         responseMode: "quick",
         skipDeepSeek: state.skipDeepSeek,
         courseName: question.courseName, // Academic course for context
+        qaMode: isQASandboxActive(),
       };
     }
 
@@ -701,6 +707,7 @@ export async function analyzeQuestion(
       pageUrl: window.location.href,
       responseMode: state.settings.responseMode,
       courseName: question.courseName, // Academic course for context
+      qaMode: isQASandboxActive(),
     };
   } else {
     // Regular multiple choice context
@@ -713,6 +720,7 @@ export async function analyzeQuestion(
       pageUrl: window.location.href,
       responseMode: state.settings.responseMode,
       courseName: question.courseName, // Academic course for context
+      qaMode: isQASandboxActive(),
     };
   }
 
