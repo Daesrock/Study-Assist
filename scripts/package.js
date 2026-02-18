@@ -76,7 +76,7 @@ async function copyRecursive(src, dest) {
  * Tries multiple methods: tar (Win10+), zip (unix), PowerShell fallback
  */
 async function createZipFile() {
-  console.log("\n📦 Creating ZIP file...");
+  console.log("\nCreating ZIP file...");
 
   const zipPath = join(ROOT, "dist.zip");
   const isWindows = process.platform === "win32";
@@ -120,17 +120,15 @@ async function createZipFile() {
 
     try {
       execSync(method.cmd, method.options);
-      console.log(`✅ Created: dist.zip (using ${method.name})`);
+      console.log(`Created: dist.zip (using ${method.name})`);
       return;
     } catch {
       // Try next method
     }
   }
 
-  console.error(
-    "❌ Failed to create ZIP file (no compression tool available).",
-  );
-  console.log("\n💡 You can manually compress the 'dist' folder:");
+  console.error("Failed to create ZIP file (no compression tool available).");
+  console.log("\nYou can manually compress the 'dist' folder:");
   console.log(
     "   - Right-click the 'dist' folder → 'Send to' → 'Compressed (zipped) folder'",
   );
@@ -140,10 +138,10 @@ async function createZipFile() {
  * Main packaging function
  */
 async function packageExtension() {
-  console.log("📦 Packaging Study Assist Extension\n");
+  console.log("Packaging Study Assist Extension\n");
 
   // Step 1: Clean dist folder
-  console.log("🧹 Cleaning dist folder...");
+  console.log("Cleaning dist folder...");
   try {
     await fs.rm(DIST, { recursive: true, force: true });
   } catch (error) {
@@ -152,16 +150,16 @@ async function packageExtension() {
   await fs.mkdir(DIST, { recursive: true });
 
   // Step 2: Build the extension
-  console.log("🔨 Building extension...");
+  console.log("Building extension...");
   try {
     execSync("node scripts/build.js", { cwd: ROOT, stdio: "inherit" });
   } catch (error) {
-    console.error("❌ Build failed!");
+    console.error("Build failed!");
     process.exit(1);
   }
 
   // Step 3: Copy distribution files
-  console.log("\n📋 Copying files to dist/...");
+  console.log("\nCopying files to dist/...");
   for (const item of INCLUDE_ITEMS) {
     const srcPath = join(ROOT, item);
     const destPath = join(DIST, item);
@@ -169,9 +167,9 @@ async function packageExtension() {
     try {
       await fs.access(srcPath);
       await copyRecursive(srcPath, destPath);
-      console.log(`   ✓ ${item}`);
+      console.log(`   OK ${item}`);
     } catch (error) {
-      console.log(`   ⚠ ${item} (not found, skipping)`);
+      console.log(`   WARN ${item} (not found, skipping)`);
     }
   }
 
@@ -270,7 +268,7 @@ Click the extension icon then "Dashboard" to view:
 `;
 
   await fs.writeFile(join(DIST, "INSTALLATION.md"), instructions);
-  console.log("   ✓ INSTALLATION.md");
+  console.log("   OK INSTALLATION.md");
 
   // Step 5: Create ZIP if requested
   if (createZip) {
@@ -278,17 +276,17 @@ Click the extension icon then "Dashboard" to view:
   }
 
   // Step 6: Summary
-  console.log("\n✅ Package complete!");
-  console.log(`\n📁 Distribution folder: dist/`);
+  console.log("\nPackage complete!");
+  console.log(`\nDistribution folder: dist/`);
 
   const folderSize = await getFolderSize(DIST);
-  console.log(`📊 Size: ${folderSize}`);
+  console.log(`Size: ${folderSize}`);
 
   if (createZip) {
-    console.log(`📦 ZIP file: dist.zip`);
+    console.log(`ZIP file: dist.zip`);
   }
 
-  console.log("\n📤 To share with others:");
+  console.log("\nTo share with others:");
   console.log("   1. Compress the 'dist' folder into a ZIP file (if not done)");
   console.log("   2. Share the ZIP file");
   console.log("   3. Recipients should extract and follow INSTALLATION.md");
@@ -339,6 +337,6 @@ async function getFolderSize(dir) {
 
 // Run packaging
 packageExtension().catch((error) => {
-  console.error("❌ Packaging failed:", error);
+  console.error("Packaging failed:", error);
   process.exit(1);
 });

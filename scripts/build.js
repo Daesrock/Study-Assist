@@ -38,7 +38,7 @@ const builds = [
 ];
 
 async function build() {
-  console.log("🔨 Building Study Assist...\n");
+  console.log("Building Study Assist...\n");
 
   try {
     if (isWatch) {
@@ -48,7 +48,7 @@ async function build() {
       );
 
       await Promise.all(contexts.map((ctx) => ctx.watch()));
-      console.log("👀 Watching for changes...\n");
+      console.log("Watching for changes...\n");
 
       // Copy static files initially
       copyStaticFiles();
@@ -56,10 +56,10 @@ async function build() {
       // Production build
       await Promise.all(builds.map((config) => esbuild.build(config)));
       copyStaticFiles();
-      console.log("✅ Build complete!\n");
+      console.log("Build complete!\n");
     }
   } catch (error) {
-    console.error("❌ Build failed:", error);
+    console.error("Build failed:", error);
     process.exit(1);
   }
 }
@@ -70,7 +70,7 @@ function copyStaticFiles() {
   const cssDest = join(ROOT, "content/overlay.css");
   if (existsSync(cssSource)) {
     copyFileSync(cssSource, cssDest);
-    console.log("📄 Copied overlay.css");
+    console.log("Copied overlay.css");
   }
   console.log("");
 }

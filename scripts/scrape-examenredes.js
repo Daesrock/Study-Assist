@@ -198,7 +198,7 @@ function sleep(ms) {
  * Scrapea una URL usando fetch directo
  */
 async function scrapeUrl(url) {
-  console.log(`  📡 Descargando HTML...`);
+  console.log(`  Descargando HTML...`);
 
   const response = await fetch(url, {
     headers: {
@@ -438,7 +438,7 @@ async function main() {
   const urlsToProcess = isTestMode ? [EXAMENREDES_URLS[0]] : EXAMENREDES_URLS;
 
   if (isTestMode) {
-    console.log("🧪 MODO TEST: Solo se procesará la primera URL\n");
+    console.log("MODO TEST: Solo se procesará la primera URL\n");
   }
 
   const questionsBank = {
@@ -455,13 +455,13 @@ async function main() {
     const { moduleRange, title, url } = urlsToProcess[i];
 
     console.log(`[${i + 1}/${urlsToProcess.length}] Procesando: ${title}`);
-    console.log(`  📎 URL: ${url}`);
+    console.log(`  URL: ${url}`);
 
     try {
       // Scrapear la URL
       const html = await scrapeUrl(url);
 
-      console.log(`  📄 HTML recibido: ${html.length} caracteres`);
+      console.log(`  HTML recibido: ${html.length} caracteres`);
 
       // Guardar HTML para debug (solo en modo test)
       if (isTestMode) {
@@ -473,13 +473,13 @@ async function main() {
         );
         fs.mkdirSync(path.dirname(debugPath), { recursive: true });
         fs.writeFileSync(debugPath, html, "utf-8");
-        console.log(`  💾 HTML guardado en: debug-${moduleRange}-raw.html`);
+        console.log(`  HTML guardado en: debug-${moduleRange}-raw.html`);
       }
 
       // Parsear preguntas
       const questions = parseQuestions(html, moduleRange);
 
-      console.log(`  ✅ Preguntas extraídas: ${questions.length}`);
+      console.log(`  Preguntas extraídas: ${questions.length}`);
 
       // Agregar al banco
       questionsBank.modules[moduleRange] = {
@@ -493,11 +493,11 @@ async function main() {
 
       // Esperar entre requests para no saturar la API
       if (i < urlsToProcess.length - 1) {
-        console.log(`  ⏳ Esperando 2 segundos...\n`);
+        console.log(`  Esperando 2 segundos...\n`);
         await sleep(2000);
       }
     } catch (error) {
-      console.log(`  ❌ Error: ${error.message}`);
+      console.log(`  Error: ${error.message}`);
       questionsBank.modules[moduleRange] = {
         url,
         title,
@@ -514,17 +514,17 @@ async function main() {
   fs.writeFileSync(outputPath, JSON.stringify(questionsBank, null, 2), "utf-8");
 
   console.log("\n════════════════════════════════════════════════════════");
-  console.log(`✅ Banco de preguntas generado: data/questions-bank.json`);
-  console.log(`📊 Total de preguntas: ${totalQuestions}`);
+  console.log(`Banco de preguntas generado: data/questions-bank.json`);
+  console.log(`Total de preguntas: ${totalQuestions}`);
   console.log(
-    `📦 Módulos procesados: ${Object.keys(questionsBank.modules).length}`,
+    `Módulos procesados: ${Object.keys(questionsBank.modules).length}`,
   );
   console.log("════════════════════════════════════════════════════════\n");
 
   // Mostrar resumen por módulo
   console.log("Resumen por módulo:");
   for (const [range, module] of Object.entries(questionsBank.modules)) {
-    const status = module.error ? "❌" : "✅";
+    const status = module.error ? "ERR" : "OK";
     console.log(
       `  ${status} ${range}: ${module.questionCount} preguntas - ${module.title}`,
     );
