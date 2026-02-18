@@ -567,7 +567,7 @@ function renderDashboard(stats, history, config, devMode) {
       <div class="qa-guide">
         <h3>Validación rápida sin entrar a un quiz real</h3>
         <ul>
-          <li>Inyecta un escenario en la pestaña activa.</li>
+          <li>Inyecta un escenario en <strong>example.com</strong>.</li>
           <li>Usa <strong>SHIFT</strong> para quick mode o clic en badge para análisis completo.</li>
           <li>Usa <strong>ALT+W</strong> para re-detectar y repetir pruebas.</li>
         </ul>
@@ -577,7 +577,6 @@ function renderDashboard(stats, history, config, devMode) {
         <button class="btn" id="qa-moodle-tf-btn">Moodle V/F</button>
         <button class="btn" id="qa-netacad-mcq-btn">NetAcad MCQ</button>
         <button class="btn" id="qa-netacad-matching-btn">NetAcad Matching</button>
-        <button class="btn" id="qa-clear-btn">Limpiar QA</button>
         <button class="btn btn-primary" id="qa-guide-btn">Ver guía completa</button>
       </div>
     </div>`;
@@ -710,16 +709,7 @@ function bindDynamicEvents(history, devMode) {
   });
 
   // Manual QA menu
-  const isRestrictedTabUrl = (url) => {
-    const value = (url || "").toLowerCase();
-    return (
-      value.startsWith("chrome://") ||
-      value.startsWith("chrome-extension://") ||
-      value.startsWith("edge://") ||
-      value.startsWith("about:") ||
-      value.startsWith("view-source:")
-    );
-  };
+  const QA_TEST_URL = "https://example.com";
 
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -738,17 +728,18 @@ function bindDynamicEvents(history, devMode) {
   };
 
   const getUsableQATabId = async () => {
-    const [activeTab] = await chrome.tabs.query({
-      active: true,
+    const existingTabs = await chrome.tabs.query({
+      url: ["https://example.com/*"],
       currentWindow: true,
     });
 
-    if (activeTab?.id && !isRestrictedTabUrl(activeTab.url)) {
-      return activeTab.id;
+    if (existingTabs.length > 0 && existingTabs[0]?.id) {
+      await chrome.tabs.update(existingTabs[0].id, { active: true });
+      return existingTabs[0].id;
     }
 
     const qaTab = await chrome.tabs.create({
-      url: "https://example.com",
+      url: QA_TEST_URL,
       active: true,
     });
 
@@ -770,30 +761,12 @@ function bindDynamicEvents(history, devMode) {
       });
 
       alert(
-        "✅ Escenario QA cargado.\n\nSiguiente paso:\n1) SHIFT para quick mode\n2) Clic en badge para non-quick\n3) ALT+W para re-detección",
+        "Escenario QA cargado.\n\nSiguiente paso:\n1) SHIFT para quick mode\n2) Clic en badge para non-quick\n3) ALT+W para re-detección",
       );
     } catch (e) {
       alert(
         "No se pudo ejecutar QA automáticamente. Verifica permisos de la extensión y vuelve a intentar desde una pestaña web normal.",
       );
-    }
-  };
-
-  const clearQAScenario = async () => {
-    try {
-      const [tab] = await chrome.tabs.query({
-        active: true,
-        currentWindow: true,
-      });
-      if (!tab?.id || isRestrictedTabUrl(tab.url)) {
-        alert("Abre una pestaña web normal para limpiar el escenario QA.");
-        return;
-      }
-
-      await sendQAMessageWithRetry(tab.id, { type: "QA_CLEAR_SCENARIO" });
-      alert("✅ Escenario QA limpiado.");
-    } catch (_) {
-      alert("No se pudo limpiar QA en la pestaña activa.");
     }
   };
 
@@ -830,11 +803,6 @@ function bindDynamicEvents(history, devMode) {
     );
   }
 
-  const qaClearBtn = document.getElementById("qa-clear-btn");
-  if (qaClearBtn) {
-    qaClearBtn.addEventListener("click", clearQAScenario);
-  }
-
   // Force AI State Reset (clears processing locks, NOT history/stats)
   const forceResetBtn = document.getElementById("force-reset-btn");
   if (forceResetBtn) {
@@ -860,9 +828,7 @@ function bindDynamicEvents(history, devMode) {
             .sendMessage(tab.id, { type: "FORCE_STATE_RESET" })
             .catch(() => {});
         }
-        alert(
-          "✅ AI state reset complete. Extension is ready for new requests.",
-        );
+        alert("AI state reset complete. Extension is ready for new requests.");
       } catch (e) {
         alert("Error: " + e.message);
       }
@@ -894,7 +860,7 @@ function bindDynamicEvents(history, devMode) {
     fullReset.addEventListener("click", async () => {
       if (
         !confirm(
-          "⚠️ ¿Borrar TODOS los datos? Esto incluye historial, estadísticas, logs y caché. No se puede deshacer.",
+          "¿Borrar TODOS los datos? Esto incluye historial, estadísticas, logs y caché. No se puede deshacer.",
         )
       )
         return;
@@ -970,7 +936,7 @@ function showQAGuideModal() {
     <h4 style="margin: 12px 0 6px;">Checklist sugerido</h4>
     <pre>
 1) Activar extensión y configurar API keys.
-2) Abrir cualquier página web normal.
+2) Desde este panel ejecutar un escenario (se abrirá/reutilizará example.com).
 3) Desde este panel, ejecutar:
    - Moodle MCQ
    - Moodle V/F
@@ -981,7 +947,7 @@ function showQAGuideModal() {
    - Quick mode responde correctamente
    - En Moodle V/F quick mode muestra V o F
    - Non-quick muestra análisis sin errores
-5) Limpiar QA al terminar.
+5) Para terminar, puedes cerrar la pestaña de example.com.
     </pre>
   `;
 
