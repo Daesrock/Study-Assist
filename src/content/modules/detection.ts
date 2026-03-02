@@ -1539,6 +1539,7 @@ export function buildQuestionMap(): QuestionMap {
   const questionMap: QuestionMap = {};
   const viewportCenterY = window.innerHeight / 2;
   const viewportCenterX = window.innerWidth / 2;
+  let syntheticQuestionNum = 1000000;
 
   // Collect all mcq-views
   const mcqViews = querySelectorAllDeep("mcq-view");
@@ -1588,8 +1589,11 @@ export function buildQuestionMap(): QuestionMap {
     if (!hasSize) continue;
 
     // Find the question number associated with this matching-view
-    const questionNum = findQuestionNumberForElement(matchingView);
-    if (questionNum === null) continue;
+    const detectedQuestionNum = findQuestionNumberForElement(matchingView);
+    const questionNum =
+      detectedQuestionNum !== null
+        ? detectedQuestionNum
+        : syntheticQuestionNum++;
 
     // Calculate visibility score
     const centerDist = Math.sqrt(
@@ -1620,8 +1624,11 @@ export function buildQuestionMap(): QuestionMap {
     if (!hasSize) continue;
 
     // Find the question number associated with this matching-view
-    const questionNum = findQuestionNumberForElement(matchingView);
-    if (questionNum === null) continue;
+    const detectedQuestionNum = findQuestionNumberForElement(matchingView);
+    const questionNum =
+      detectedQuestionNum !== null
+        ? detectedQuestionNum
+        : syntheticQuestionNum++;
 
     // Calculate visibility score
     const centerDist = Math.sqrt(
