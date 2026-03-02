@@ -1,29 +1,29 @@
 # Study Assist
 
-Extensión de navegador Chromium que usa IA (Claude y DeepSeek) para analizar preguntas de exámenes en plataformas educativas y proporcionar explicaciones detalladas.
+Study Assist is a Chromium browser extension that uses AI (Claude + DeepSeek) to detect and analyze quiz questions on learning platforms.
 
-## Plataformas Soportadas
+## Supported Platforms
 
-- **NetAcad** (Cisco Networking Academy) — Detección completa via Shadow DOM, soporte para MCQ, matching, drag-and-drop
-- **Moodle** — Detección de preguntas multichoice, true/false, con extracción de contexto del curso
+- **NetAcad (Cisco Networking Academy)** — Deep Shadow DOM detection, including MCQ and matching (drag-and-drop style and dropdown-style matching views)
+- **Moodle** — Multichoice and true/false detection, with automatic course context extraction
 
-## Características
+## Current Features
 
-- **Pipeline dual de IA** — DeepSeek Reasoner (económico, razonamiento) como primario + Claude (Anthropic) como fallback/validación
-- **Banco de preguntas** — Base de datos local de preguntas NetAcad para respuestas instantáneas sin consumir API
-- **Quick Mode** — Análisis con una sola tecla (SHIFT), respuesta inline en el botón SA
-- **Full Mode** — Análisis detallado con overlay, streaming de respuesta
-- **Tres modos de respuesta**: Guided Learning, Direct Answer, Hints Only
-- **Detección de imágenes** — Envío de imágenes de preguntas a la API (URLs públicas preferidas sobre base64)
-- **Dashboard** — Estadísticas de uso, costos, latencia, historial de requests
-- **Contexto académico** — Extracción automática del nombre del curso en Moodle para mejorar prompts
-- **Disguise Mode** — Apariencia de uBlock Origin para stealth
-- **i18n** — Interfaz en inglés y español
-- **Domain Allowlist** — Solo funciona en dominios que el usuario agrega manualmente
+- **Hybrid AI pipeline** — DeepSeek Reasoner first, Claude fallback/validation when needed
+- **Question bank lookup** — Local NetAcad-style question bank for instant matches
+- **Quick mode** — Trigger analysis with `SHIFT` and show compact answer directly on the SA button
+- **Detailed mode** — Overlay-based full explanation flow
+- **Response modes** — `guided`, `direct`, `hints`, and `explanation`
+- **Image-aware analysis** — Sends image context when enabled (public URL preferred over base64)
+- **Dashboard** — Usage metrics, latency/cost trends, history, and last-response inspector
+- **Manual QA scenarios** — Inject test scenarios from dashboard without opening a real quiz
+- **Disguise mode** — Optional uBlock-like visual disguise
+- **i18n support** — Locales available in English and Spanish
+- **Domain allowlist** — Extension logic only runs on user-allowed domains
 
-## Instalación
+## Installation
 
-### 1. Clonar y construir
+### 1) Clone and build
 
 ```bash
 git clone <repo-url>
@@ -32,131 +32,89 @@ npm install
 npm run build
 ```
 
-### 2. Cargar en el navegador
+### 2) Load unpacked extension
 
-1. Ir a `chrome://extensions/` (o `edge://extensions/`, `brave://extensions/`)
-2. Activar **Developer Mode**
-3. Click **Load unpacked** → seleccionar la carpeta raíz del proyecto
-4. Pin de la extensión desde el ícono de puzzle
+1. Open `chrome://extensions/` (or `edge://extensions/` / `brave://extensions/`)
+2. Enable **Developer mode**
+3. Click **Load unpacked** and select the project root folder
 
-### 3. Configurar
+### 3) Configure
 
-1. Click en el ícono de Study Assist
-2. Ingresar **Claude API Key** (de [console.anthropic.com](https://console.anthropic.com))
-3. Ingresar **DeepSeek API Key** (de [platform.deepseek.com](https://platform.deepseek.com))
-4. Agregar dominios permitidos (ej. `netacad.com`, tu dominio Moodle)
-5. Activar el toggle ON
+1. Open the extension popup
+2. Add your **Claude API key** (Anthropic)
+3. (Optional) Add your **DeepSeek API key**
+4. Add allowed domains (for example: `netacad.com`, your Moodle domain)
+5. Enable extension toggle
 
-## Uso
+## Keyboard Shortcuts
 
-### Atajos de Teclado
+| Shortcut     | Action                                      |
+| ------------ | ------------------------------------------- |
+| `SHIFT`      | Analyze visible question (quick mode)       |
+| `CTRL+SHIFT` | Skip DeepSeek and force Claude              |
+| `ALT+W`      | Re-detect current question                  |
+| `ALT+Q`      | Toggle SA button visibility                 |
+| `ALT+X`      | Cancel in-flight request                    |
+| Hold `CTRL`  | Temporarily hide/show Webex floating button |
 
-| Atajo               | Acción                                  |
-| ------------------- | --------------------------------------- |
-| **SHIFT**           | Analizar pregunta visible (Quick Mode)  |
-| **CTRL+SHIFT**      | Forzar Claude directo (saltar DeepSeek) |
-| **ALT+W**           | Recargar detección de preguntas         |
-| **ALT+Q**           | Toggle visibilidad del botón SA         |
-| **ALT+X**           | Cancelar request actual                 |
-| **CTRL (mantener)** | Mostrar/ocultar overlay de respuesta    |
+## Manual QA (Dashboard)
 
-### Flujo de análisis
+The dashboard includes a **QA Manual** section to inject test scenarios into `https://example.com`:
 
-1. DeepSeek Reasoner analiza la pregunta (barato, con razonamiento)
-2. Si DeepSeek falla o tiene baja confianza → fallback a Claude
-3. Si hay imágenes y DeepSeek no las soporta → Claude directo
-4. Para NetAcad: primero busca en el banco de preguntas local (respuesta instantánea)
+- Moodle MCQ
+- Moodle True/False
+- NetAcad MCQ
+- NetAcad Matching
 
-### QA Manual (sin entrar a un quiz real)
+This is useful to validate detection, quick mode, and UI behavior without requiring a live assessment page.
 
-Desde el **Panel de Control (Dashboard)** ahora existe un menú **🧪 QA Manual** para pruebas rápidas:
+## Project Structure
 
-1. Abre cualquier página web normal (no `chrome://`)
-2. En el Dashboard selecciona un escenario:
-   - Moodle MCQ
-   - Moodle V/F
-   - NetAcad MCQ
-   - NetAcad Matching
-3. Verifica en la página:
-   - Detección de pregunta(s)
-   - Quick mode con `SHIFT`
-   - En verdadero/falso, quick mode debe mostrar `V` o `F`
-   - Non-quick al hacer clic en el badge
-4. Usa `ALT+W` para re-detección y **Limpiar QA** para retirar el escenario
-
-## Arquitectura
-
-```
+```text
 study-assist-extension/
-├── manifest.json              # Manifest V3
+├── manifest.json
 ├── src/
-│   ├── background/            # Service worker (TypeScript)
-│   │   ├── background.ts      # Routing de mensajes, lifecycle
+│   ├── background/
+│   │   ├── background.ts
 │   │   └── modules/
-│   │       ├── api.ts          # Orquestación (DeepSeek → Claude fallback)
-│   │       ├── prompts.ts      # Construcción de prompts para cada modelo
-│   │       ├── streaming.ts    # Streaming SSE para Claude
-│   │       ├── parsing.ts      # Parseo de respuestas API
-│   │       ├── questionBank.ts # Banco de preguntas local
-│   │       ├── rateLimiter.ts  # Rate limiting
-│   │       ├── usageTracker.ts # Tracking de uso/costos
-│   │       ├── fetchUtils.ts   # Fetch con retry y timeout
-│   │       ├── crypto.ts       # Encriptación de API keys
-│   │       ├── extensionState.ts # Toggle, disguise mode
-│   │       └── constants.ts    # Constantes, tipos compartidos
-│   ├── content/               # Content scripts (TypeScript)
-│   │   ├── content.ts         # Entry point, domain check, init
+│   ├── content/
+│   │   ├── content.ts
 │   │   └── modules/
-│   │       ├── detection.ts   # Detección NetAcad + Moodle (Shadow DOM, HTML)
-│   │       ├── api.ts         # Comunicación con background (quick/full mode)
-│   │       ├── ui.ts          # Overlay, botón SA, highlights
-│   │       ├── keyboard.ts    # Atajos de teclado
-│   │       ├── images.ts      # Extracción y optimización de imágenes
-│   │       ├── state.ts       # Estado centralizado
-│   │       └── utils.ts       # Utilidades DOM
 │   └── types/
-│       └── index.ts           # Definiciones de tipos compartidos
-├── popup/                     # UI del popup
-│   ├── popup.html/css/js      # Settings, API keys, domains
-│   └── dashboard.html/css/js  # Estadísticas de uso
-├── background/                # JS compilado (service worker)
-├── content/                   # JS compilado (content scripts)
-├── _locales/                  # i18n (en, es)
-├── icons/                     # Íconos (+ ublock para disguise)
-├── data/                      # Banco de preguntas
-├── tests/                     # Test suite (Vitest)
-└── scripts/                   # Build, package, scraping
+├── popup/
+├── background/      # built JS
+├── content/         # built JS
+├── data/
+├── tests/
+└── scripts/
 ```
 
-## Desarrollo
+## Development
 
 ```bash
-npm install          # Instalar dependencias
-npm run build        # Compilar TypeScript → JS
-npm run watch        # Watch mode (desarrollo)
-npm test             # Ejecutar tests (Vitest)
-npm run test:watch   # Tests en watch mode
-npm run package      # Construir carpeta dist/
-npm run package:zip  # Construir dist.zip
+npm install
+npm run build
+npm run watch
+npm test
+npm run test:smoke
+npm run test:watch
+npm run package
+npm run package:zip
 ```
 
-### Tests
+### Test Commands
 
-204 tests cubriendo:
+- `npm test` — full Vitest suite
+- `npm run test:smoke` — fast critical subset (`netacad`, `moodle`, `parsing`)
 
-- Detección de preguntas NetAcad (Shadow DOM, MCQ, matching)
-- Detección de preguntas Moodle (multichoice, true/false, course name)
-- Parseo de respuestas API (Claude, DeepSeek)
-- Construcción de prompts
-- Banco de preguntas (búsqueda, matching, scoring)
-- Extracción de imágenes
+## Notes on Consistency
 
-## Pendiente
+This README is aligned with the current codebase state:
 
-- [ ] Moodle: soporte para más tipos de preguntas (matching, drag-and-drop, fill-in-the-blank)
-- [ ] Análisis de títulos de cuestionarios para filtrado inteligente (Opción A — curso + título cuando sea informativo)
-- [ ] Mejora de prompts con datos reales de títulos de cuestionarios
+- Matching detection includes fallback behavior when question numbers are missing
+- Navigation tests cover `MCQ -> matching -> MCQ` flows (including dropdown matching)
+- Smoke test script is available in `package.json`
 
-## Privacidad
+## Privacy
 
-Todo se almacena localmente. La extensión solo se comunica con las APIs de Anthropic y DeepSeek usando las claves del usuario, únicamente cuando se activa manualmente el análisis. Sin telemetría, sin servidores remotos.
+Data is stored locally in browser storage. The extension only sends question context to Anthropic/DeepSeek APIs using user-provided keys, when analysis is explicitly triggered. No external telemetry server is used.
