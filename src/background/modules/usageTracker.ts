@@ -11,14 +11,14 @@ import { log } from "./constants.js";
 const PRICING: Record<string, { input: number; output: number }> = {
   // Claude Haiku
   "claude-3-haiku-20240307": { input: 0.25, output: 1.25 },
-  "claude-3-5-haiku-20241022": { input: 1.0, output: 5.0 },
+  "claude-haiku-4-5-20251001": { input: 1.0, output: 5.0 },
 
   // Claude Sonnet
   "claude-sonnet-4-20250514": { input: 3.0, output: 15.0 },
-  "claude-sonnet-4-5-20250929": { input: 3.0, output: 15.0 },
+  "claude-sonnet-4-6": { input: 3.0, output: 15.0 },
 
   // Claude Opus
-  "claude-opus-4-5-20251101": { input: 15.0, output: 75.0 },
+  "claude-opus-4-6": { input: 15.0, output: 75.0 },
 
   // DeepSeek (thinking)
   "deepseek-reasoner": { input: 0.28, output: 0.42 },
@@ -128,6 +128,9 @@ export async function trackUsage(
 
     // Also save as lastAiResponse for the inspector
     await chrome.storage.local.set({ lastAiResponse: fullRecord });
+
+    // Update storage badge asynchronously (non-blocking)
+    updateStorageBadge().catch(() => {});
 
     log(
       "[Study Assist] Usage tracked:",
@@ -245,4 +248,69 @@ export async function getRecentHistory(limit: number = 20): Promise<UsageRecord[
 export async function clearUsageData(): Promise<void> {
   await chrome.storage.local.set({ [STORAGE_KEY]: [] });
   await chrome.storage.local.remove(["lastAiResponse"]);
+  await updateStorageBadge();
+}
+
+// ============================================
+// Storage Limit Management
+// ============================================
+
+const STORAGE_LIMIT_BYTES = 5 * 1024 * 1024; // 5 MB
+const STORAGE_WARN_THRESHOLD = 0.70;          // 70% → warning badge
+const STORAGE_CRIT_THRESHOLD = 0.90;          // 90% → critical badge
+
+export interface StorageInfo {
+  bytesUsed: number;
+  bytesTotal: number;
+  percent: number;
+  level: "ok" | "warning" | "critical";
+}
+
+export async function getStorageInfo(): Promise<StorageInfo> {
+  const bytesUsed = await chrome.storage.local.getBytesInUse(null);
+  const percent = bytesUsed / STORAGE_LIMIT_BYTES;
+  const level: StorageInfo["level"] =
+    percent >= STORAGE_CRIT_THRESHOLD ? "critical"
+    : percent >= STORAGE_WARN_THRESHOLD ? "warning"
+    : "ok";
+  return { bytesUsed, bytesTotal: STORAGE_LIMIT_BYTES, percent, level };
+}
+
+export async function updateStorageBadge(): Promise<void> {
+  try {
+    const info = await getStorageInfo();
+    if (info.level === "critical") {
+      await chrome.action.setBadgeText({ text: "!" });
+      await chrome.action.setBadgeBackgroundColor({ color: "#e53935" });
+    } else if (info.level === "warning") {
+      await chrome.action.setBadgeText({ text: "!" });
+      await chrome.action.setBadgeBackgroundColor({ color: "#FF9800" });
+    } else {
+      await chrome.action.setBadgeText({ text: "" });
+    }
+  } catch (_) {
+    // Badge update failed silently (e.g. service worker context issue)
+  }
+}
+
+export async function trimHistory(options: { keepLast?: number; keepDays?: number }): Promise<number> {
+  const result = await chrome.storage.local.get([STORAGE_KEY]);
+  const records: UsageRecord[] = result[STORAGE_KEY] || [];
+  const originalLength = records.length;
+
+  let filtered = [...records];
+
+  if (options.keepDays !== undefined) {
+    const cutoff = Date.now() - options.keepDays * 24 * 60 * 60 * 1000;
+    filtered = filtered.filter(r => r.timestamp >= cutoff);
+  }
+
+  if (options.keepLast !== undefined && filtered.length > options.keepLast) {
+    // records are oldest-first; keep the last N (most recent)
+    filtered = filtered.slice(filtered.length - options.keepLast);
+  }
+
+  await chrome.storage.local.set({ [STORAGE_KEY]: filtered });
+  await updateStorageBadge();
+  return originalLength - filtered.length;
 }
