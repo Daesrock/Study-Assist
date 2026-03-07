@@ -9,7 +9,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 // Mock state and images modules before importing detection
 vi.mock("../../src/content/modules/state", () => ({
-  DEBUG_MODE: false,
+  DEBUG_MODE: true,
   log: vi.fn(),
   state: {
     isActive: true,
