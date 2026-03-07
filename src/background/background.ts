@@ -9,7 +9,7 @@ import type { AnalysisResponse } from "../types/index.js";
 import { analyzeQuestion, analyzeQuestionStreaming, testApiKey, testDeepSeekApiKey } from "./modules/api.js";
 import { handleToggleExtension, handleDisguiseMode, restoreDisguiseMode } from "./modules/extensionState.js";
 import { encryptAndSaveKey } from "./modules/crypto.js";
-import { getUsageStats, getRecentHistory, clearUsageData } from "./modules/usageTracker.js";
+import { getUsageStats, getRecentHistory, clearUsageData, getStorageInfo, trimHistory, updateStorageBadge } from "./modules/usageTracker.js";
 
 // ============================================
 // Message Handler
@@ -77,6 +77,22 @@ async function handleMessage(
         return { success: false, error: (error as Error).message };
       }
 
+    case "GET_STORAGE_INFO":
+      try {
+        const storageInfo = await getStorageInfo();
+        return { success: true, storageInfo } as MessageResponse & { storageInfo: unknown };
+      } catch (error) {
+        return { success: false, error: (error as Error).message };
+      }
+
+    case "TRIM_HISTORY":
+      try {
+        const deleted = await trimHistory({ keepLast: message.keepLast, keepDays: message.keepDays });
+        return { success: true, deleted } as MessageResponse & { deleted: unknown };
+      } catch (error) {
+        return { success: false, error: (error as Error).message };
+      }
+
     default:
       return { success: false, error: "Unknown message type" };
   }
@@ -133,10 +149,12 @@ chrome.runtime.onInstalled.addListener(async (details: chrome.runtime.InstalledD
     await chrome.action.setBadgeText({ text: "" });
   }
   await restoreDisguiseMode();
+  await updateStorageBadge();
 });
 
 chrome.runtime.onStartup.addListener(async () => {
   await restoreDisguiseMode();
+  await updateStorageBadge();
 });
 
 // ============================================
