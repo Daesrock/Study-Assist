@@ -69,6 +69,9 @@ function detectPlatform(pageUrl?: string): string {
   
   // Other platforms
   if (url.includes("contenidosdigitales")) return "contenidosdigitales";
+
+  // QA Manual sandbox
+  if (url.includes("example.com")) return "qa-manual";
   
   return "other";
 }
