@@ -214,7 +214,9 @@ export type ExtensionMessageType =
   | "ENCRYPT_AND_SAVE_KEY"
   | "GET_USAGE_STATS"
   | "GET_USAGE_HISTORY"
-  | "CLEAR_USAGE_DATA";
+  | "CLEAR_USAGE_DATA"
+  | "GET_STORAGE_INFO"
+  | "TRIM_HISTORY";
 
 export interface ExtensionMessage {
   type: ExtensionMessageType;
@@ -226,4 +228,6 @@ export interface ExtensionMessage {
   keyType?: string;
   rawKey?: string;
   limit?: number;
+  keepLast?: number;
+  keepDays?: number;
 }
