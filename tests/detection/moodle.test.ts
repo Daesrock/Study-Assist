@@ -7,7 +7,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 // We need to mock the state module before importing detection
 vi.mock("../../src/content/modules/state", () => ({
-  DEBUG_MODE: false,
+  DEBUG_MODE: true,
   log: vi.fn(),
   state: {
     isActive: true,
@@ -55,7 +55,7 @@ vi.mock("../../src/content/modules/images", () => ({
   }),
 }));
 
-import { detectQuestionsOnPage, detectMoodleQuestions } from "../../src/content/modules/detection";
+import { detectQuestionsOnPage, detectMoodleQuestions, detectMoodleQuestion, frameHasQuizContent } from "../../src/content/modules/detection";
 import { state } from "../../src/content/modules/state";
 
 describe("Moodle Question Detection", () => {
@@ -475,6 +475,273 @@ describe("Moodle Question Detection", () => {
 
       expect(state.detectedQuestions).toHaveLength(1);
       expect(state.detectedQuestions[0].courseName).toBe("Operating Systems");
+    });
+  });
+
+  describe("Match Questions (dropdown table format)", () => {
+    it("should detect a basic .que.match question", async () => {
+      document.body.innerHTML = `
+        <div class="que match deferredfeedback notyetanswered">
+          <div class="info">
+            <h3 class="no">Pregunta <span class="qno">9</span></h3>
+          </div>
+          <div class="content">
+            <div class="formulation clearfix">
+              <div class="qtext">Relaciona los siguientes conceptos de acuerdo a las características del enfoque sistemico:</div>
+              <div class="ablock">
+                <table class="answer">
+                  <tbody>
+                    <tr class="r0">
+                      <td class="text">El Enfoque de Sistemas es un medio para resolver problemas amorfos</td>
+                      <td class="control">
+                        <select name="q1_sub0">
+                          <option value="0">Elegir...</option>
+                          <option value="1">Cuantitativo y cualitativo</option>
+                          <option value="2">Interdisciplinaria</option>
+                          <option value="3">Organizado</option>
+                        </select>
+                      </td>
+                    </tr>
+                    <tr class="r1">
+                      <td class="text">El enfoque al problema no está limitado a una sola disciplina</td>
+                      <td class="control">
+                        <select name="q1_sub1">
+                          <option value="0">Elegir...</option>
+                          <option value="1">Cuantitativo y cualitativo</option>
+                          <option value="2">Interdisciplinaria</option>
+                          <option value="3">Organizado</option>
+                        </select>
+                      </td>
+                    </tr>
+                    <tr class="r0">
+                      <td class="text">Se sirve de un enfoque adaptable</td>
+                      <td class="control">
+                        <select name="q1_sub2">
+                          <option value="0">Elegir...</option>
+                          <option value="1">Cuantitativo y cualitativo</option>
+                          <option value="2">Interdisciplinaria</option>
+                          <option value="3">Organizado</option>
+                        </select>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      await detectMoodleQuestions();
+
+      expect(state.detectedQuestions).toHaveLength(1);
+      const q = state.detectedQuestions[0];
+      expect(q.platform).toBe("moodle");
+      expect(q.type).toBe("matching");
+      expect(q.text).toContain("Relaciona los siguientes conceptos");
+      expect(q.questionNumber).toBe(9);
+      expect(q.confidence).toBe(95);
+
+      // Each row becomes a category (A, B, C...)
+      expect(q.categories).toHaveLength(3);
+      expect(q.categories![0].letter).toBe("A");
+      expect(q.categories![0].text).toContain("El Enfoque de Sistemas");
+      expect(q.categories![1].letter).toBe("B");
+      expect(q.categories![1].text).toContain("no está limitado a una sola disciplina");
+      expect(q.categories![2].letter).toBe("C");
+      expect(q.categories![2].text).toContain("enfoque adaptable");
+
+      // Dropdown options (excluding value=0 placeholder) become matchingOptions
+      expect(q.matchingOptions).toHaveLength(3);
+      expect(q.matchingOptions![0].index).toBe(1);
+      expect(q.matchingOptions![0].text).toBe("Cuantitativo y cualitativo");
+      expect(q.matchingOptions![1].index).toBe(2);
+      expect(q.matchingOptions![1].text).toBe("Interdisciplinaria");
+      expect(q.matchingOptions![2].index).toBe(3);
+      expect(q.matchingOptions![2].text).toBe("Organizado");
+
+      // matchingStyle is undefined → api.ts falls back to "drag-drop" → A-1, B-3, C-2 format
+      expect(q.matchingStyle).toBeUndefined();
+    });
+
+    it("should detect match question alongside multichoice questions on the same page", async () => {
+      document.body.innerHTML = `
+        <div class="que multichoice">
+          <span class="qno">1</span>
+          <div class="qtext">What is the OSI model?</div>
+          <div class="answer">
+            <div class="r0"><span class="answernumber">a.</span><div class="flex-fill">A networking framework</div></div>
+            <div class="r1"><span class="answernumber">b.</span><div class="flex-fill">A hardware specification</div></div>
+          </div>
+        </div>
+        <div class="que match">
+          <div class="info"><h3 class="no">Pregunta <span class="qno">2</span></h3></div>
+          <div class="content">
+            <div class="formulation">
+              <div class="qtext">Match each layer to its function:</div>
+              <div class="ablock">
+                <table class="answer">
+                  <tbody>
+                    <tr class="r0">
+                      <td class="text">Handles physical transmission of bits</td>
+                      <td class="control">
+                        <select>
+                          <option value="0">Elegir...</option>
+                          <option value="1">Physical</option>
+                          <option value="2">Network</option>
+                        </select>
+                      </td>
+                    </tr>
+                    <tr class="r1">
+                      <td class="text">Handles logical addressing and routing</td>
+                      <td class="control">
+                        <select>
+                          <option value="0">Elegir...</option>
+                          <option value="1">Physical</option>
+                          <option value="2">Network</option>
+                        </select>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      await detectMoodleQuestions();
+
+      expect(state.detectedQuestions).toHaveLength(2);
+      expect(state.detectedQuestions[0].type).toBe("multiple-choice");
+      expect(state.detectedQuestions[0].questionNumber).toBe(1);
+
+      const matchQ = state.detectedQuestions[1];
+      expect(matchQ.type).toBe("matching");
+      expect(matchQ.questionNumber).toBe(2);
+      expect(matchQ.categories).toHaveLength(2);
+      expect(matchQ.matchingOptions).toHaveLength(2);
+      expect(matchQ.matchingOptions![0].index).toBe(1);
+      expect(matchQ.matchingOptions![0].text).toBe("Physical");
+      expect(matchQ.matchingOptions![1].index).toBe(2);
+      expect(matchQ.matchingOptions![1].text).toBe("Network");
+    });
+
+    it("should not detect match question when qtext is empty", async () => {
+      document.body.innerHTML = `
+        <div class="que match">
+          <div class="info"><h3 class="no">Pregunta <span class="qno">1</span></h3></div>
+          <div class="content">
+            <div class="formulation">
+              <div class="qtext"></div>
+              <div class="ablock">
+                <table class="answer">
+                  <tbody>
+                    <tr class="r0">
+                      <td class="text">Some concept</td>
+                      <td class="control">
+                        <select>
+                          <option value="0">Elegir...</option>
+                          <option value="1">Answer A</option>
+                        </select>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      await detectMoodleQuestions();
+
+      expect(state.detectedQuestions).toHaveLength(0);
+    });
+  });
+
+  describe("detectMoodleQuestion (visible question for quick click)", () => {
+    const MATCH_HTML = `
+      <div class="que match">
+        <div class="info"><h3 class="no">Pregunta <span class="qno">5</span></h3></div>
+        <div class="content">
+          <div class="formulation clearfix">
+            <div class="qtext">Relaciona capa con función.</div>
+            <div class="ablock">
+              <table class="answer">
+                <tbody>
+                  <tr class="r0">
+                    <td class="text">Enrutamiento</td>
+                    <td class="control">
+                      <select>
+                        <option value="0">Elegir...</option>
+                        <option value="1">Física</option>
+                        <option value="2">Red</option>
+                      </select>
+                    </td>
+                  </tr>
+                  <tr class="r1">
+                    <td class="text">Transmisión de bits</td>
+                    <td class="control">
+                      <select>
+                        <option value="0">Elegir...</option>
+                        <option value="1">Física</option>
+                        <option value="2">Red</option>
+                      </select>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    it("should detect a .que.match question as 'matching' type", async () => {
+      document.body.innerHTML = MATCH_HTML;
+
+      const q = await detectMoodleQuestion();
+
+      expect(q).not.toBeNull();
+      expect(q!.type).toBe("matching");
+      expect(q!.platform).toBe("moodle");
+      expect(q!.questionNumber).toBe(5);
+      expect(q!.categories).toHaveLength(2);
+      expect(q!.matchingOptions).toHaveLength(2);
+      expect(q!.matchingOptions![0].index).toBe(1);
+      expect(q!.matchingOptions![0].text).toBe("Física");
+      expect(q!.matchingOptions![1].index).toBe(2);
+      expect(q!.matchingOptions![1].text).toBe("Red");
+    });
+
+    it("should return null when only .que.match is present but qtext is empty", async () => {
+      document.body.innerHTML = `
+        <div class="que match">
+          <div class="info"><h3 class="no">Pregunta <span class="qno">1</span></h3></div>
+          <div class="content"><div class="formulation"><div class="qtext"></div></div></div>
+        </div>
+      `;
+
+      const q = await detectMoodleQuestion();
+      expect(q).toBeNull();
+    });
+  });
+
+  describe("frameHasQuizContent with .que.match", () => {
+    it("should return true when only a .que.match element is present", () => {
+      document.body.innerHTML = `
+        <div class="que match">
+          <div class="qtext">Match question</div>
+        </div>
+      `;
+
+      expect(frameHasQuizContent()).toBe(true);
+    });
+
+    it("should return false when no quiz elements are present", () => {
+      document.body.innerHTML = `<div class="regular-div">Nothing here</div>`;
+      expect(frameHasQuizContent()).toBe(false);
     });
   });
 });
