@@ -40,20 +40,20 @@
     "description": "Opción modelo Haiku"
   },
   "modelHaiku35": {
-    "message": "Claude 3.5 Haiku (Más Rápido)",
-    "description": "Opción modelo Haiku 3.5"
+    "message": "Claude Haiku 4.5 (Más Rápido)",
+    "description": "Opción modelo Haiku 4.5"
   },
   "modelSonnet4": {
     "message": "Claude Sonnet 4 (Equilibrado)",
     "description": "Opción modelo Sonnet 4"
   },
   "modelSonnet45": {
-    "message": "Claude Sonnet 4.5 (Último)",
-    "description": "Opción modelo Sonnet 4.5"
+    "message": "Claude Sonnet 4.6 (Último)",
+    "description": "Opción modelo Sonnet 4.6"
   },
   "modelOpus45": {
-    "message": "Claude Opus 4.5 (Más Capaz)",
-    "description": "Opción modelo Opus 4.5"
+    "message": "Claude Opus 4.6 (Más Capaz)",
+    "description": "Opción modelo Opus 4.6"
   },
   "useDeepSeek": {
     "message": "Usar DeepSeek Reasoner",
