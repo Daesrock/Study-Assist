@@ -5,6 +5,13 @@
  */
 
 // ============================================
+// Global State
+// ============================================
+
+let cachedHistory = [];
+let cachedDevMode = false;
+
+// ============================================
 // Boot
 // ============================================
 
@@ -40,10 +47,18 @@ document.getElementById("error-log-btn").addEventListener("click", async () => {
   }
 });
 
-// Last AI response
-document
-  .getElementById("last-response-btn")
-  .addEventListener("click", showLastResponseModal);
+// Last AI response → opens detail subpage for most recent record
+document.getElementById("last-response-btn").addEventListener("click", () => {
+  if (cachedHistory.length > 0) {
+    openRecordDetail(0);
+  } else {
+    showModal(
+      "🔍 Última Respuesta IA",
+      null,
+      "No hay historial aún. Analiza una pregunta primero.",
+    );
+  }
+});
 
 // ============================================
 // Data Loading
@@ -54,29 +69,43 @@ async function loadData() {
   el.innerHTML = '<div class="loading-spinner">Cargando datos…</div>';
 
   try {
-    const [statsRes, historyRes, configRes, devModeRes] = await Promise.all([
-      chrome.runtime
-        .sendMessage({ type: "GET_USAGE_STATS" })
-        .catch(() => ({ success: false, stats: {} })),
-      chrome.runtime
-        .sendMessage({ type: "GET_USAGE_HISTORY", limit: 50 })
-        .catch(() => ({ success: false, history: [] })),
-      chrome.storage.local.get([
-        "useDeepSeek",
-        "deepseekOnly",
-        "claudeModel",
-        "deepseekApiKey",
-        "claudeApiKey",
-      ]),
-      chrome.storage.local.get(["dashboardDevMode"]),
-    ]);
+    const [statsRes, historyRes, configRes, devModeRes, storageRes] =
+      await Promise.all([
+        chrome.runtime
+          .sendMessage({ type: "GET_USAGE_STATS" })
+          .catch(() => ({ success: false, stats: {} })),
+        chrome.runtime
+          .sendMessage({ type: "GET_USAGE_HISTORY", limit: 50 })
+          .catch(() => ({ success: false, history: [] })),
+        chrome.storage.local.get([
+          "useDeepSeek",
+          "deepseekOnly",
+          "claudeModel",
+          "deepseekApiKey",
+          "claudeApiKey",
+        ]),
+        chrome.storage.local.get(["dashboardDevMode"]),
+        chrome.runtime
+          .sendMessage({ type: "GET_STORAGE_INFO" })
+          .catch(() => ({ success: false })),
+      ]);
 
     const stats = (statsRes && statsRes.stats) || {};
     const history = (historyRes && historyRes.history) || [];
     const config = configRes || {};
     const devMode = devModeRes?.dashboardDevMode ?? false;
+    const storageInfo = (storageRes?.success && storageRes.storageInfo) || null;
 
-    el.innerHTML = renderDashboard(stats, history, config, devMode);
+    cachedHistory = history;
+    cachedDevMode = devMode;
+
+    el.innerHTML = renderDashboard(
+      stats,
+      history,
+      config,
+      devMode,
+      storageInfo,
+    );
     bindDynamicEvents(history, devMode);
   } catch (e) {
     el.innerHTML =
@@ -88,7 +117,7 @@ async function loadData() {
 // Render
 // ============================================
 
-function renderDashboard(stats, history, config, devMode) {
+function renderDashboard(stats, history, config, devMode, storageInfo) {
   stats = Object.assign(
     {
       totalRequests: 0,
@@ -312,13 +341,14 @@ function renderDashboard(stats, history, config, devMode) {
       const validated = r.validated ? "badge-yes" : "badge-no";
       const trigger = r.trigger || "auto";
       const plat = r.platform || "other";
+      const isQA = plat === "qa-manual";
       return `
       <tr data-idx="${i}" data-platform="${escapeAttr(plat)}">
         <td>${time}</td>
         <td><span class="text-truncate" title="${escapeAttr(r.questionText)}">${escapeHtml(r.questionText)}</span></td>
         <td><span class="badge ${srcBadge}">${r.source}</span></td>
         <td>${r.model ? shortModel(r.model) : "—"}</td>
-        <td><span class="badge badge-platform">${plat}</span></td>
+        <td>${isQA ? '<span class="badge badge-qa-manual">QA</span>' : `<span class="badge badge-platform">${plat}</span>`}</td>
         <td>${trigger}</td>
         <td><span class="badge ${validated}">${r.validated ? "sí" : "no"}</span></td>
         <td>${r.inputTokens + r.outputTokens}</td>
@@ -343,6 +373,35 @@ function renderDashboard(stats, history, config, devMode) {
 
   // ========== Assemble HTML ==========
   let html = "";
+
+  // — Storage Warning Banner —
+  if (storageInfo && storageInfo.level !== "ok") {
+    const pct = Math.round(storageInfo.percent * 100);
+    const usedMb = (storageInfo.bytesUsed / 1024 / 1024).toFixed(2);
+    const totalMb = (storageInfo.bytesTotal / 1024 / 1024).toFixed(1);
+    const isCrit = storageInfo.level === "critical";
+    html += `
+    <div class="storage-warning-banner${isCrit ? " critical" : ""}" id="storage-warning-banner">
+      <div class="swb-top">
+        <div class="swb-title">
+          ${isCrit ? "🔴" : "⚠️"}
+          <strong>Almacenamiento chrome.storage.local al ${pct}%</strong>
+          ${isCrit ? '<span class="swb-crit-tag">CRÍTICO</span>' : ""}
+        </div>
+        <button class="btn swb-dismiss-btn" id="swb-dismiss-btn" title="Ocultar aviso">✕</button>
+      </div>
+      <div class="swb-bar-track"><div class="swb-bar-fill" style="width:${pct}%"></div></div>
+      <div class="swb-info">${usedMb} MB usados de ${totalMb} MB — Si el almacenamiento se llena, los nuevos registros no se podrán guardar.</div>
+      <div class="swb-actions">
+        <span class="swb-act-label">Limpiar historial:</span>
+        <button class="btn swb-btn" id="trim-keep-100">Últimas 100</button>
+        <button class="btn swb-btn" id="trim-keep-250">Últimas 250</button>
+        <button class="btn swb-btn" id="trim-30d">30 días</button>
+        <button class="btn swb-btn" id="trim-60d">60 días</button>
+        <button class="btn btn-primary swb-btn" id="swb-export-btn">📤 Exportar primero</button>
+      </div>
+    </div>`;
+  }
 
   // — Mode Banner —
   html += `
@@ -478,7 +537,7 @@ function renderDashboard(stats, history, config, devMode) {
     </div>`;
 
   // — Dev Mode Panel —
-  html += `<div id="dev-panel-area"></div>`;
+  html += `<div id="dev-panel-area">${devMode ? '<div class="dev-panel-hint">🛠️ <strong>Dev Mode activo</strong> — Haz clic en <strong>🔎 Ver detalles</strong> en cualquier fila del historial para inspeccionar el trace completo de esa petición.</div>' : ""}</div>`;
 
   // — Charts (hidden if insufficient data) —
   const hasSourceData = sourceEntries.length > 0;
@@ -560,6 +619,55 @@ function renderDashboard(stats, history, config, devMode) {
       </div>
     </div>`;
 
+  // — How to Use —
+  html += `
+    <div class="section-title">📖 Cómo Usar</div>
+    <div class="howto-card">
+      <div class="howto-columns">
+
+        <div class="howto-col">
+          <div class="howto-col-title">⌨️ Atajos de Teclado</div>
+          <div class="howto-shortcuts">
+            <div class="ks-row"><kbd>SHIFT</kbd><span>Quick Mode — responde con la letra de la opción correcta al instante</span></div>
+            <div class="ks-row"><kbd>ALT + W</kbd><span>Re-detectar preguntas en la página actual (útil tras cambiar de pregunta manualmente)</span></div>
+            <div class="ks-row"><kbd>ALT + X</kbd><span>Cancelar petición de IA en curso</span></div>
+            <div class="ks-row"><kbd>CTRL + SHIFT</kbd><span>Forzar Claude directo, saltándose DeepSeek</span></div>
+          </div>
+        </div>
+
+        <div class="howto-col">
+          <div class="howto-col-title">⚙️ Configuración</div>
+          <ul class="howto-list">
+            <li><strong>Clave Claude:</strong> Necesaria para el análisis principal. Se guarda cifrada.</li>
+            <li><strong>Modelo:</strong> Haiku (rápido/barato), Sonnet (equilibrado), Opus (máxima capacidad).</li>
+            <li><strong>DeepSeek:</strong> Opcional. Si se habilita, DeepSeek razona primero y Claude valida/corrige.</li>
+            <li><strong>DeepSeek Only:</strong> Usa solo DeepSeek; no funciona con imágenes ni preguntas de matching.</li>
+          </ul>
+        </div>
+
+        <div class="howto-col">
+          <div class="howto-col-title">🔄 Flujo de Análisis</div>
+          <ol class="howto-list">
+            <li>La extensión detecta la pregunta visible automáticamente.</li>
+            <li><strong>Quick Mode (SHIFT):</strong> DeepSeek razona → si confianza HIGH → respuesta directa. Si MEDIUM/LOW → Claude valida.</li>
+            <li><strong>Análisis Completo (clic badge):</strong> Claude genera explicación detallada con streaming.</li>
+            <li>Si hay imágenes en la pregunta, Claude se usa siempre (DeepSeek no soporta imágenes).</li>
+            <li>El banco de preguntas local (solo netacad) se consulta primero; si hay coincidencia ≥80% responde al instante sin IA.</li>
+          </ol>
+        </div>
+
+        <div class="howto-col">
+          <div class="howto-col-title">🌐 Plataformas Soportadas</div>
+          <ul class="howto-list">
+            <li><strong>NetAcad / SkillsForAll:</strong> MCQ y Matching (drag-drop y dropdown)</li>
+            <li><strong>Moodle:</strong> MCQ, Verdadero/Falso, Match (tabla select)</li>
+            <li>La detección es automática; usa ALT+W si la pregunta no se detecta.</li>
+          </ul>
+        </div>
+
+      </div>
+    </div>`;
+
   // — Manual QA Menu —
   html += `
     <div class="section-title">🧪 QA Manual</div>
@@ -571,13 +679,32 @@ function renderDashboard(stats, history, config, devMode) {
           <li>Usa <strong>SHIFT</strong> para quick mode o clic en badge para análisis completo.</li>
           <li>Usa <strong>ALT+W</strong> para re-detectar y repetir pruebas.</li>
         </ul>
+        <div class="qa-warning">
+          ⚠️ <strong>Aviso:</strong> Estos escenarios utilizan la IA real para verificar el funcionamiento de la extensión. Se selecciona automáticamente el modelo más económico disponible (<strong>Haiku</strong>) para minimizar el costo de las pruebas. Las peticiones aparecerán en el historial marcadas como <span class="badge badge-qa-manual" style="font-size:10px;">QA</span>.
+        </div>
       </div>
-      <div class="qa-actions">
-        <button class="btn" id="qa-moodle-mcq-btn">Moodle MCQ</button>
-        <button class="btn" id="qa-moodle-tf-btn">Moodle V/F</button>
-        <button class="btn" id="qa-netacad-mcq-btn">NetAcad MCQ</button>
-        <button class="btn" id="qa-netacad-matching-btn">NetAcad Matching</button>
-        <button class="btn btn-primary" id="qa-guide-btn">Ver guía completa</button>
+
+      <div class="qa-platform-group">
+        <div class="qa-platform-header qa-netacad-header">🔵 NetAcad</div>
+        <div class="qa-actions">
+          <button class="btn" id="qa-netacad-mcq-btn">MCQ</button>
+          <button class="btn" id="qa-netacad-matching-btn">Matching</button>
+          <button class="btn btn-accent" id="qa-netacad-quiz-btn" data-tooltip="Quiz completo con navegación">🎯 Quiz Real</button>
+        </div>
+      </div>
+
+      <div class="qa-platform-group">
+        <div class="qa-platform-header qa-moodle-header">🟣 Moodle</div>
+        <div class="qa-actions">
+          <button class="btn" id="qa-moodle-mcq-btn">MCQ</button>
+          <button class="btn" id="qa-moodle-tf-btn">V/F</button>
+          <button class="btn" id="qa-moodle-match-btn">Match</button>
+          <button class="btn btn-accent" id="qa-moodle-quiz-btn" data-tooltip="Quiz completo con navegación">🎯 Quiz Real</button>
+        </div>
+      </div>
+
+      <div class="qa-actions" style="margin-top:10px">
+        <button class="btn btn-primary" id="qa-guide-btn" data-tooltip="Ver checklist detallado de pasos para validar la extensión">Ver guía completa</button>
       </div>
     </div>`;
 
@@ -585,10 +712,10 @@ function renderDashboard(stats, history, config, devMode) {
   html += `
     <div class="section-title">⚙️ Acciones</div>
     <div class="actions-row">
-      <button class="btn btn-reset-state" id="force-reset-btn">⚡ Force AI State Reset</button>
-      <button class="btn btn-warning" id="reset-session-btn">🔄 Reset Estadísticas Sesión</button>
-      <button class="btn btn-danger" id="full-reset-btn">🗑️ Reset Completo</button>
-      <button class="btn" id="export-logs-btn">📤 Exportar Logs</button>
+      <button class="btn btn-reset-state" id="force-reset-btn" data-tooltip="Limpia los bloqueos de procesamiento activos (flags de petición en curso). NO borra historial ni estadísticas. Útil si la extensión queda 'colgada'.">⚡ Force AI State Reset</button>
+      <button class="btn btn-warning" id="reset-session-btn" data-tooltip="Las estadísticas de sesión se recalculan automáticamente del historial. Usa 'Reset Completo' para borrar todo.">🔄 Reset Estadísticas Sesión</button>
+      <button class="btn btn-danger" id="full-reset-btn" data-tooltip="⚠️ Borra TODOS los datos: historial, estadísticas, logs y caché. Acción irreversible.">🗑️ Reset Completo</button>
+      <button class="btn" id="export-logs-btn" data-tooltip="Descarga un archivo JSON con el historial completo y las estadísticas de uso.">📤 Exportar Logs</button>
     </div>`;
 
   return html;
@@ -599,20 +726,91 @@ function renderDashboard(stats, history, config, devMode) {
 // ============================================
 
 function bindDynamicEvents(history, devMode) {
+  // ---- Storage Warning Actions ----
+  const swbDismiss = document.getElementById("swb-dismiss-btn");
+  if (swbDismiss) {
+    swbDismiss.addEventListener("click", () => {
+      const banner = document.getElementById("storage-warning-banner");
+      if (banner) banner.style.display = "none";
+    });
+  }
+
+  const doTrim = async (opts, label) => {
+    if (
+      !confirm(
+        `¿${label}? Esta acción eliminará los registros más antiguos. Exporta primero si necesitas conservarlos.`,
+      )
+    )
+      return;
+    try {
+      const res = await chrome.runtime
+        .sendMessage({ type: "TRIM_HISTORY", ...opts })
+        .catch(() => null);
+      if (res?.success) {
+        alert(
+          `✅ Se eliminaron ${res.deleted} registro${res.deleted !== 1 ? "s" : ""}. El almacenamiento se ha liberado.`,
+        );
+        loadData();
+      } else {
+        alert("Error al limpiar: " + (res?.error || "desconocido"));
+      }
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+  };
+
+  const trimKeep100 = document.getElementById("trim-keep-100");
+  if (trimKeep100)
+    trimKeep100.addEventListener("click", () =>
+      doTrim({ keepLast: 100 }, "Conservar solo las últimas 100 entradas"),
+    );
+
+  const trimKeep250 = document.getElementById("trim-keep-250");
+  if (trimKeep250)
+    trimKeep250.addEventListener("click", () =>
+      doTrim({ keepLast: 250 }, "Conservar solo las últimas 250 entradas"),
+    );
+
+  const trim30d = document.getElementById("trim-30d");
+  if (trim30d)
+    trim30d.addEventListener("click", () =>
+      doTrim(
+        { keepDays: 30 },
+        "Conservar solo registros de los últimos 30 días",
+      ),
+    );
+
+  const trim60d = document.getElementById("trim-60d");
+  if (trim60d)
+    trim60d.addEventListener("click", () =>
+      doTrim(
+        { keepDays: 60 },
+        "Conservar solo registros de los últimos 60 días",
+      ),
+    );
+
+  const swbExport = document.getElementById("swb-export-btn");
+  if (swbExport) {
+    swbExport.addEventListener("click", () => {
+      const exportBtn = document.getElementById("export-logs-btn");
+      if (exportBtn) exportBtn.click();
+    });
+  }
+
   // Dev mode toggle
   const devToggle = document.getElementById("dev-mode-toggle");
   if (devToggle) {
     devToggle.addEventListener("change", async (e) => {
       const on = e.target.checked;
       await chrome.storage.local.set({ dashboardDevMode: on });
-      if (on) {
-        renderDevPanel(history);
-      } else {
-        const area = document.getElementById("dev-panel-area");
-        if (area) area.innerHTML = "";
+      cachedDevMode = on;
+      const area = document.getElementById("dev-panel-area");
+      if (area) {
+        area.innerHTML = on
+          ? '<div class="dev-panel-hint">🛠️ <strong>Dev Mode activo</strong> — Haz clic en <strong>🔎 Ver detalles</strong> en cualquier fila del historial para inspeccionar el trace completo de esa petición.</div>'
+          : "";
       }
     });
-    if (devMode) renderDevPanel(history);
   }
 
   // ---- History Pagination ----
@@ -697,14 +895,12 @@ function bindDynamicEvents(history, devMode) {
   // Initial pagination render
   applyPagination();
 
-  // Detail view buttons → open modal with full details
+  // Detail view buttons → open detail subpage
   document.querySelectorAll(".btn-detail-view").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       const idx = parseInt(btn.dataset.idx, 10);
-      const r = history[idx];
-      if (!r) return;
-      showRecordDetailModal(r);
+      openRecordDetail(idx);
     });
   });
 
@@ -800,6 +996,27 @@ function bindDynamicEvents(history, devMode) {
   if (qaNetacadMatchingBtn) {
     qaNetacadMatchingBtn.addEventListener("click", () =>
       runQAScenario("netacad-matching"),
+    );
+  }
+
+  const qaNetacadQuizBtn = document.getElementById("qa-netacad-quiz-btn");
+  if (qaNetacadQuizBtn) {
+    qaNetacadQuizBtn.addEventListener("click", () =>
+      runQAScenario("netacad-quiz"),
+    );
+  }
+
+  const qaMoodleMatchBtn = document.getElementById("qa-moodle-match-btn");
+  if (qaMoodleMatchBtn) {
+    qaMoodleMatchBtn.addEventListener("click", () =>
+      runQAScenario("moodle-match"),
+    );
+  }
+
+  const qaMoodleQuizBtn = document.getElementById("qa-moodle-quiz-btn");
+  if (qaMoodleQuizBtn) {
+    qaMoodleQuizBtn.addEventListener("click", () =>
+      runQAScenario("moodle-quiz"),
     );
   }
 
@@ -955,207 +1172,295 @@ function showQAGuideModal() {
 }
 
 // ============================================
-// Dev Mode Panel
+// Record Detail Subpage
 // ============================================
 
-function renderDevPanel(history) {
-  const area = document.getElementById("dev-panel-area");
-  if (!area) return;
+async function openRecordDetail(idx) {
+  const r = cachedHistory[idx];
+  if (!r) return;
 
-  const last = history.length ? history[0] : null;
-
-  let devHtml = `
-    <div class="dev-panel">
-      <h3>🛠️ Developer Mode</h3>`;
-
-  if (last) {
-    // Show usage record data
-    devHtml += `
-      <div class="dev-section">
-        <h4>Última Petición — Usage Record</h4>
-        <pre>${escapeHtml(JSON.stringify(last, null, 2))}</pre>
-      </div>`;
-
-    // Routing decision analysis
-    const routingReason = [];
-    if (last.source === "deepseek") {
-      routingReason.push("Respuesta directa de DeepSeek (confianza alta)");
-    } else if (last.source === "claude" && last.validated) {
-      routingReason.push(
-        "Claude validó respuesta de DeepSeek (confianza media/baja)",
-      );
-    } else if (last.source === "claude" && last.fallbackReason) {
-      routingReason.push("Fallback a Claude: " + last.fallbackReason);
-    } else if (last.source === "claude") {
-      routingReason.push(
-        "Claude directo (DeepSeek no disponible o no habilitado)",
-      );
-    } else if (last.source === "question-bank") {
-      routingReason.push("Respuesta del banco de preguntas local");
-    }
-
-    devHtml += `
-      <div class="dev-section">
-        <h4>Decisión de Enrutamiento</h4>
-        <pre>${routingReason.join("\n") || "Sin información de enrutamiento"}</pre>
-      </div>`;
-
-    // Timing
-    devHtml += `
-      <div class="dev-section">
-        <h4>Timing</h4>
-        <pre>Latencia total: ${(last.latencyMs / 1000).toFixed(2)}s
-Tokens entrada: ${last.inputTokens}
-Tokens salida: ${last.outputTokens}
-Costo: $${last.costUsd.toFixed(6)}</pre>
-      </div>`;
-
-    // Load and show API request/response data
-    devHtml += `
-      <div class="dev-section" id="dev-api-data">
-        <h4>📤 API Request / 📥 Response — Raw Data</h4>
-        <div class="loading-spinner" style="font-size:12px;">Cargando datos de API...</div>
-      </div>`;
-  } else {
-    devHtml +=
-      '<div class="no-data-msg">No hay peticiones recientes para analizar.</div>';
-  }
-
-  devHtml += "</div>";
-  area.innerHTML = devHtml;
-
-  // Load API request data asynchronously
-  if (last) {
-    loadApiRequestData();
-  }
-}
-
-async function loadApiRequestData() {
-  const container = document.getElementById("dev-api-data");
-  if (!container) return;
-
+  // Try to load raw API data – only matches if this is the most recent request
+  let apiData = null;
   try {
     const result = await chrome.storage.local.get(["lastApiRequestData"]);
-    const apiData = result.lastApiRequestData;
-
-    if (!apiData) {
-      container.innerHTML = `
-        <h4>📤 API Request / 📥 Response — Raw Data</h4>
-        <pre style="color: #888;">No hay datos de API disponibles. Analiza una pregunta primero.</pre>`;
-      return;
+    const raw = result.lastApiRequestData;
+    // Match if the API data timestamp is within 90s of the record
+    if (raw && Math.abs(raw.timestamp - r.timestamp) < 90000) {
+      apiData = raw;
     }
+  } catch (_) {}
 
-    let html = `<h4>📤 API Request / 📥 Response — Raw Data</h4>`;
+  const el = document.getElementById("content");
+  el.innerHTML = renderRecordDetailPage(
+    r,
+    idx,
+    cachedHistory,
+    cachedDevMode,
+    apiData,
+  );
 
-    // API Metadata
-    html += `
-      <div style="margin-bottom: 12px;">
-        <strong style="color:#4A9EFF;">🔧 Metadata</strong>
-        <pre style="font-size: 11px;">Type: ${escapeHtml(apiData.type || "—")}
-URL: ${escapeHtml(apiData.url || "—")}
-Status: ${apiData.status || "—"}
-Has Images: ${apiData.hasImages ? "✅ Yes" : "❌ No"}
-Timestamp: ${apiData.timestamp ? new Date(apiData.timestamp).toLocaleString() : "—"}</pre>
-      </div>`;
+  // Back button
+  document
+    .getElementById("detail-back-btn")
+    ?.addEventListener("click", loadData);
 
-    // Request Body
-    if (apiData.requestBody) {
-      html += `
-        <div style="margin-bottom: 12px;">
-          <strong style="color:#4A9EFF;">📤 Request Body</strong>
-          <pre style="max-height: 400px; overflow: auto; font-size: 11px;">${escapeHtml(JSON.stringify(apiData.requestBody, null, 2))}</pre>
-        </div>`;
-    }
-
-    // Response Body
-    if (apiData.responseBody) {
-      html += `
-        <div style="margin-bottom: 12px;">
-          <strong style="color:#4A9EFF;">📥 Response Body</strong>
-          <pre style="max-height: 400px; overflow: auto; font-size: 11px;">${escapeHtml(JSON.stringify(apiData.responseBody, null, 2))}</pre>
-        </div>`;
-    }
-
-    container.innerHTML = html;
-  } catch (e) {
-    container.innerHTML = `
-      <h4>📤 API Request / 📥 Response — Raw Data</h4>
-      <pre style="color: #f66;">Error cargando datos: ${escapeHtml(e.message)}</pre>`;
-  }
+  // Prev / Next navigation (history is newest-first, so idx+1 = older)
+  document
+    .getElementById("detail-prev-btn")
+    ?.addEventListener("click", () => openRecordDetail(idx + 1));
+  document
+    .getElementById("detail-next-btn")
+    ?.addEventListener("click", () => openRecordDetail(idx - 1));
 }
 
-// ============================================
-// Last AI Response Inspector
-// ============================================
-
-async function showLastResponseModal() {
-  try {
-    const result = await chrome.storage.local.get(["lastAiResponse"]);
-    const resp = result.lastAiResponse;
-
-    if (!resp) {
-      showModal(
-        "🔍 Última Respuesta IA",
-        null,
-        "No hay respuesta registrada aún. Analiza una pregunta primero.",
+function buildRoutingLines(r) {
+  const lines = [];
+  if (r.source === "question-bank") {
+    lines.push(
+      "📚 Respuesta instantánea del banco de preguntas local (sin llamada a la IA).",
+    );
+    lines.push(`Confianza de coincidencia: ${r.confidence || "HIGH"}`);
+  } else if (r.source === "deepseek") {
+    lines.push("DeepSeek Reasoner analizó la pregunta directamente.");
+    lines.push(`Confianza: ${r.confidence || "—"}`);
+    if (r.confidence === "HIGH") {
+      lines.push(
+        "Confianza alta → respuesta final directa, sin validación por Claude.",
       );
-      return;
+    } else {
+      lines.push(
+        "Confianza baja o media → normalmente se solicitaría validación Claude (no ocurrió en este caso).",
+      );
     }
+  } else if (r.source === "claude") {
+    if (r.validated) {
+      lines.push(
+        "1️⃣  DeepSeek Reasoner analizó la pregunta (confianza media o baja).",
+      );
+      lines.push(
+        `2️⃣  Claude (${shortModel(r.model)}) validó y refinó la respuesta de DeepSeek.`,
+      );
+      lines.push("✅ Flujo híbrido completado correctamente.");
+    } else if (r.fallbackReason === "images") {
+      lines.push(
+        "1️⃣  La pregunta contiene imágenes → DeepSeek no las soporta.",
+      );
+      lines.push(
+        `2️⃣  Claude (${shortModel(r.model)}) respondió directamente con contexto de imagen.`,
+      );
+    } else if (r.fallbackReason === "deepseek_error") {
+      lines.push(
+        "1️⃣  DeepSeek fue contactado pero falló (error de API o red).",
+      );
+      lines.push(
+        `2️⃣  Claude (${shortModel(r.model)}) actuó como fallback de error.`,
+      );
+    } else if (r.fallbackReason) {
+      lines.push(`1️⃣  Fallback activado por: ${r.fallbackReason}`);
+      lines.push(`2️⃣  Claude (${shortModel(r.model)}) respondió.`);
+    } else {
+      lines.push(`Claude (${shortModel(r.model)}) respondió directamente.`);
+      lines.push(
+        "DeepSeek no estaba disponible, desactivado, o el tipo de pregunta lo omite (matching).",
+      );
+    }
+  }
+  return lines;
+}
 
-    const detailHtml = `
-      <div class="modal-detail-grid">
-        <span class="label">Pregunta:</span>
-        <span class="value">${escapeHtml(resp.questionText || "—")}</span>
+function renderAnswerBlock(r) {
+  const raw = (r.answer || "").trim();
 
-        <span class="label">Modelo:</span>
-        <span class="value">${escapeHtml(resp.model || "—")}</span>
+  if (!raw) {
+    return '<div class="dp-block dp-muted">— Sin respuesta registrada —</div>';
+  }
 
-        <span class="label">Fuente:</span>
-        <span class="value"><span class="badge badge-${resp.source || "bank"}">${resp.source || "—"}</span></span>
+  // Short answer: already an extracted letter/token (e.g. "C", "V", "A,C", "A-1 B-3")
+  // This covers quick mode and question-bank results.
+  if (raw.length <= 20) {
+    return `<div class="dp-block dp-answer">${escapeHtml(raw)}</div>`;
+  }
 
-        <span class="label">Validación:</span>
-        <span class="value">${resp.validated ? "Sí — Claude validó DeepSeek" : "No"}</span>
+  // Long answer: full Claude analysis text.
+  // Extract the final answer letter(s) to show prominently, rest goes into collapsible.
+  const shortMatch =
+    raw.match(/ANSWER:\s*([A-J](?:\s*[,|]\s*[A-J])*)/i) ||
+    raw.match(/^\s*([A-J])\s*[.:\-]?\s*$/m);
+  const shortAnswer = shortMatch ? shortMatch[1].trim().toUpperCase() : null;
 
-        <span class="label">Confianza:</span>
-        <span class="value">${resp.confidence || "—"}</span>
+  if (shortAnswer) {
+    return `
+      <div class="dp-block dp-answer">${escapeHtml(shortAnswer)}</div>
+      <details class="dp-analysis-details" open>
+        <summary class="dp-analysis-summary">📄 Análisis completo de Claude</summary>
+        <pre class="dp-trace" style="margin-top:8px;">${escapeHtml(raw)}</pre>
+      </details>`;
+  }
 
-        <span class="label">Tokens:</span>
-        <span class="value">In: ${resp.inputTokens || 0} / Out: ${resp.outputTokens || 0} / Total: ${(resp.inputTokens || 0) + (resp.outputTokens || 0)}</span>
+  // Matching or free-text answer without extractable letter—show as plain pre block.
+  return `<pre class="dp-trace">${escapeHtml(raw)}</pre>`;
+}
 
-        <span class="label">Latencia:</span>
-        <span class="value">${resp.latencyMs ? (resp.latencyMs / 1000).toFixed(2) + "s" : "—"}</span>
+function renderRecordDetailPage(r, idx, history, devMode, apiData) {
+  const srcBadge =
+    r.source === "claude"
+      ? "badge-claude"
+      : r.source === "deepseek"
+        ? "badge-deepseek"
+        : "badge-bank";
+  const statusBadge = r.success ? "badge-success" : "badge-error";
+  const time = new Date(r.timestamp).toLocaleString();
+  const isQA = r.platform === "qa-manual";
+  const routingLines = buildRoutingLines(r);
 
-        <span class="label">Costo:</span>
-        <span class="value">$${resp.costUsd ? resp.costUsd.toFixed(6) : "0.000000"}</span>
+  const metrics = [
+    { k: "Fuente", v: r.source },
+    { k: "Modelo", v: shortModel(r.model) || "—" },
+    {
+      k: "Plataforma",
+      v: isQA ? "QA Manual (example.com)" : r.platform || "—",
+    },
+    { k: "Tipo de Pregunta", v: r.questionType || "—" },
+    { k: "Modo de Respuesta", v: r.responseMode || "—" },
+    { k: "Trigger", v: r.trigger || "auto" },
+    { k: "Confianza", v: r.confidence || "—" },
+    { k: "Validado por Claude", v: r.validated ? "✅ Sí" : "No" },
+    { k: "Razón de Fallback", v: r.fallbackReason || "—" },
+    { k: "Estado", v: r.success ? "✅ Éxito" : "❌ Error" },
+    { k: "Tokens de Entrada", v: String(r.inputTokens) },
+    { k: "Tokens de Salida", v: String(r.outputTokens) },
+    { k: "Tokens Totales", v: String(r.inputTokens + r.outputTokens) },
+    { k: "Costo", v: "$" + r.costUsd.toFixed(6) },
+    { k: "Latencia", v: (r.latencyMs / 1000).toFixed(2) + "s" },
+    { k: "Fecha/Hora", v: time },
+  ];
+
+  const metricsHtml = metrics
+    .map(
+      (m) => `
+    <div class="dp-metric-row">
+      <span class="dp-metric-key">${escapeHtml(m.k)}</span>
+      <span class="dp-metric-val">${escapeHtml(m.v)}</span>
+    </div>`,
+    )
+    .join("");
+
+  let html = `
+    <div class="detail-page">
+
+      <!-- Header -->
+      <div class="dp-header">
+        <button class="btn" id="detail-back-btn">← Volver al Dashboard</button>
+        <div class="dp-title-row">
+          <h2>🔎 Detalles de Petición</h2>
+          <span class="badge ${srcBadge}" style="font-size:12px;padding:3px 12px;">${r.source}</span>
+          <span class="badge ${statusBadge}">${r.success ? "OK" : "ERROR"}</span>
+          ${isQA ? '<span class="badge badge-qa-manual">QA Manual</span>' : ""}
+        </div>
+        <span class="dp-timestamp">${time}</span>
+      </div>
+
+      <!-- Question -->
+      <div class="dp-section">
+        <div class="dp-section-label">📝 Pregunta</div>
+        <div class="dp-block">${escapeHtml(r.questionText || "—")}</div>
+      </div>
+
+      <!-- Answer -->
+      <div class="dp-section">
+        <div class="dp-section-label">💬 Respuesta Final</div>
+        ${renderAnswerBlock(r)}
+      </div>
+
+      <!-- Routing -->
+      <div class="dp-section">
+        <div class="dp-section-label">🔀 Decisión de Enrutamiento</div>
+        <div class="dp-block dp-routing">
+          ${
+            routingLines.length
+              ? routingLines
+                  .map(
+                    (l) =>
+                      `<div class="dp-routing-line">${escapeHtml(l)}</div>`,
+                  )
+                  .join("")
+              : '<span class="dp-muted">Sin datos de enrutamiento disponibles.</span>'
+          }
+        </div>
       </div>
 
       ${
-        resp.deepseekReasoning
+        r.deepseekReasoning
           ? `
-        <h4 style="margin:10px 0 4px;font-size:12px;color:var(--color-deepseek);">DeepSeek Reasoning</h4>
-        <pre>${escapeHtml(resp.deepseekReasoning)}</pre>`
+      <!-- DeepSeek Reasoning -->
+      <div class="dp-section">
+        <div class="dp-section-label" style="color:var(--color-deepseek);">🧠 Razonamiento DeepSeek</div>
+        <pre class="dp-trace">${escapeHtml(r.deepseekReasoning)}</pre>
+      </div>`
           : ""
       }
 
       ${
-        resp.claudeCorrection
+        r.claudeCorrection
           ? `
-        <h4 style="margin:10px 0 4px;font-size:12px;color:var(--color-claude);">Claude Corrección</h4>
-        <pre>${escapeHtml(resp.claudeCorrection)}</pre>`
+      <!-- Claude Correction -->
+      <div class="dp-section">
+        <div class="dp-section-label" style="color:var(--color-claude);">🔧 Validación / Corrección Claude</div>
+        <pre class="dp-trace">${escapeHtml(r.claudeCorrection)}</pre>
+      </div>`
           : ""
       }
 
-      <h4 style="margin:10px 0 4px;font-size:12px;">Respuesta Final</h4>
-      <pre>${escapeHtml(resp.answer || resp.result || "—")}</pre>`;
+      <!-- Metrics -->
+      <div class="dp-section">
+        <div class="dp-section-label">📊 Métricas Completas</div>
+        <div class="dp-metrics-grid">${metricsHtml}</div>
+      </div>
 
-    showModal("🔍 Última Respuesta IA", detailHtml);
-  } catch (e) {
-    showModal(
-      "🔍 Última Respuesta IA",
-      null,
-      "Error cargando respuesta: " + e.message,
-    );
-  }
+      ${
+        devMode
+          ? `
+      <!-- Dev Trace Completo -->
+      <div class="dp-section dp-trace-section">
+        <div class="dp-section-label">🔍 Trace Completo <span class="dp-dev-badge">DEV MODE</span></div>
+        <p class="dp-muted" style="margin-bottom:12px;">Toda la información almacenada sobre esta petición, incluyendo el payload enviado a la API y la respuesta raw recibida.</p>
+
+        <div class="dp-trace-subtitle">📋 Registro de Uso (JSON completo del UsageRecord)</div>
+        <pre class="dp-trace">${escapeHtml(JSON.stringify(r, null, 2))}</pre>
+
+        ${
+          apiData
+            ? `
+        <div class="dp-trace-subtitle" style="margin-top:18px;">🔧 Metadata de la Llamada a la API</div>
+        <pre class="dp-trace">Tipo:          ${escapeHtml(apiData.type || "—")}
+URL:           ${escapeHtml(apiData.url || "—")}
+HTTP Status:   ${apiData.status || "—"}
+¿Con imágenes?: ${apiData.hasImages ? "Sí" : "No"}
+Timestamp:     ${apiData.timestamp ? new Date(apiData.timestamp).toLocaleString() : "—"}</pre>
+
+        <div class="dp-trace-subtitle" style="margin-top:18px;">📤 Request Body — Prompt enviado a la API</div>
+        <pre class="dp-trace dp-trace-tall">${escapeHtml(JSON.stringify(apiData.requestBody, null, 2))}</pre>
+
+        <div class="dp-trace-subtitle" style="margin-top:18px;">📥 Response Body — Respuesta raw de la API</div>
+        <pre class="dp-trace dp-trace-tall">${escapeHtml(JSON.stringify(apiData.responseBody, null, 2))}</pre>`
+            : `
+        <div class="dp-trace-subtitle" style="margin-top:18px;">📤 Request / 📥 Response — Raw API Data</div>
+        <div class="dp-trace-unavail">Los datos raw de la API solo están disponibles para la petición más reciente (máx. 90 segundos de antigüedad). Ejecuta una pregunta nueva y abre los detalles inmediatamente.</div>`
+        }
+      </div>`
+          : ""
+      }
+
+      <!-- Navigation between records -->
+      <div class="dp-nav">
+        <button class="btn" id="detail-prev-btn" ${idx >= history.length - 1 ? "disabled" : ""}>← Más antigua</button>
+        <span class="dp-nav-pos">${idx + 1} de ${history.length}</span>
+        <button class="btn" id="detail-next-btn" ${idx <= 0 ? "disabled" : ""}>Más reciente →</button>
+      </div>
+
+    </div>`;
+
+  return html;
 }
 
 // ============================================
@@ -1196,87 +1501,6 @@ function showModal(title, contentHtml, preText) {
   modal.addEventListener("click", (e) => {
     if (e.target === modal) modal.remove();
   });
-}
-
-// ============================================
-// Record Detail Modal
-// ============================================
-
-function showRecordDetailModal(r) {
-  const srcBadge =
-    r.source === "claude"
-      ? "badge-claude"
-      : r.source === "deepseek"
-        ? "badge-deepseek"
-        : "badge-bank";
-  const statusBadge = r.success ? "badge-success" : "badge-error";
-  const time = new Date(r.timestamp).toLocaleString();
-
-  let html = `
-    <div class="detail-modal-body">
-      <div class="detail-modal-header">
-        <span class="badge ${srcBadge}" style="font-size:13px;padding:4px 12px;">${r.source}</span>
-        <span style="color:var(--text-secondary);font-size:12px;">${time}</span>
-        <span class="badge ${statusBadge}">${r.success ? "OK" : "ERROR"}</span>
-      </div>
-
-      <div class="detail-modal-section">
-        <h4>📝 Pregunta</h4>
-        <div class="detail-modal-block">${escapeHtml(r.questionText || "—")}</div>
-      </div>
-
-      <div class="detail-modal-section">
-        <h4>💬 Respuesta</h4>
-        <div class="detail-modal-block">${escapeHtml(r.answer || "— Sin respuesta registrada —")}</div>
-      </div>
-
-      ${
-        r.deepseekReasoning
-          ? `
-      <div class="detail-modal-section">
-        <h4 style="color:var(--color-deepseek);">🧠 DeepSeek Reasoning</h4>
-        <pre class="detail-modal-pre">${escapeHtml(r.deepseekReasoning)}</pre>
-      </div>`
-          : ""
-      }
-
-      ${
-        r.claudeCorrection
-          ? `
-      <div class="detail-modal-section">
-        <h4 style="color:var(--color-claude);">🔧 Claude Corrección</h4>
-        <pre class="detail-modal-pre">${escapeHtml(r.claudeCorrection)}</pre>
-      </div>`
-          : ""
-      }
-
-      <div class="detail-modal-section">
-        <h4>📊 Metadatos</h4>
-        <div class="detail-modal-grid">
-          <div class="detail-modal-kv"><span class="detail-k">Modelo</span><span class="detail-v">${r.model || "—"}</span></div>
-          <div class="detail-modal-kv"><span class="detail-k">Plataforma</span><span class="detail-v">${r.platform || "—"}</span></div>
-          <div class="detail-modal-kv"><span class="detail-k">Tipo</span><span class="detail-v">${r.questionType || "—"}</span></div>
-          <div class="detail-modal-kv"><span class="detail-k">Modo</span><span class="detail-v">${r.responseMode || "—"}</span></div>
-          <div class="detail-modal-kv"><span class="detail-k">Trigger</span><span class="detail-v">${r.trigger || "auto"}</span></div>
-          <div class="detail-modal-kv"><span class="detail-k">Confianza</span><span class="detail-v">${r.confidence || "—"}</span></div>
-          <div class="detail-modal-kv"><span class="detail-k">Validado</span><span class="detail-v">${r.validated ? "Sí" : "No"}</span></div>
-          <div class="detail-modal-kv"><span class="detail-k">Fallback</span><span class="detail-v">${r.fallbackReason || "—"}</span></div>
-        </div>
-      </div>
-
-      <div class="detail-modal-section">
-        <h4>🔢 Tokens y Costo</h4>
-        <div class="detail-modal-grid">
-          <div class="detail-modal-kv"><span class="detail-k">Tokens In</span><span class="detail-v">${r.inputTokens}</span></div>
-          <div class="detail-modal-kv"><span class="detail-k">Tokens Out</span><span class="detail-v">${r.outputTokens}</span></div>
-          <div class="detail-modal-kv"><span class="detail-k">Total Tokens</span><span class="detail-v">${r.inputTokens + r.outputTokens}</span></div>
-          <div class="detail-modal-kv"><span class="detail-k">Costo</span><span class="detail-v">$${r.costUsd.toFixed(6)}</span></div>
-          <div class="detail-modal-kv"><span class="detail-k">Latencia</span><span class="detail-v">${(r.latencyMs / 1000).toFixed(2)}s</span></div>
-        </div>
-      </div>
-    </div>`;
-
-  showModal("🔎 Detalles Completos", html);
 }
 
 // ============================================
