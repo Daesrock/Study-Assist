@@ -215,9 +215,9 @@ export async function detectQuestionsOnPage(retryCount: number = 0): Promise<Det
  * Moodle uses standard HTML with classes like .que.multichoice
  */
 export async function detectMoodleQuestions(): Promise<void> {
-  // Look for Moodle question containers
+  // Look for Moodle question containers (multichoice, true/false, and match/dropdown)
   const moodleQuestions = document.querySelectorAll(
-    ".que.multichoice, .que.truefalse",
+    ".que.multichoice, .que.truefalse, .que.match",
   );
 
   if (moodleQuestions.length === 0) {
@@ -225,20 +225,30 @@ export async function detectMoodleQuestions(): Promise<void> {
   }
 
   for (const [index, questionEl] of Array.from(moodleQuestions).entries()) {
-    const questionData = await extractMoodleQuestionData(questionEl);
-    if (questionData) {
-      state.detectedQuestions.push({
-        id: `moodle-q-${index}`,
-        element: questionEl,
-        text: questionData.text,
-        type: questionData.type,
-        options: questionData.options,
-        questionNumber: questionData.questionNumber,
-        images: questionData.images,
-        confidence: 95,
-        platform: "moodle",
-        courseName: questionData.courseName, // Pass course name through
-      });
+    if (questionEl.classList.contains("match")) {
+      // Moodle matching question (dropdown table format)
+      const questionData = await extractMoodleMatchQuestion(questionEl);
+      if (questionData) {
+        questionData.id = `moodle-q-${index}`;
+        state.detectedQuestions.push(questionData);
+      }
+    } else {
+      // multichoice or truefalse
+      const questionData = await extractMoodleQuestionData(questionEl);
+      if (questionData) {
+        state.detectedQuestions.push({
+          id: `moodle-q-${index}`,
+          element: questionEl,
+          text: questionData.text,
+          type: questionData.type,
+          options: questionData.options,
+          questionNumber: questionData.questionNumber,
+          images: questionData.images,
+          confidence: 95,
+          platform: "moodle",
+          courseName: questionData.courseName,
+        });
+      }
     }
   }
 }
@@ -980,7 +990,7 @@ export function frameHasQuizContent(): boolean {
 
   // Moodle detection - look for quiz question containers
   const moodleQuestions = document.querySelectorAll(
-    ".que.multichoice, .que.truefalse, .que.shortanswer, .que.essay",
+    ".que.multichoice, .que.truefalse, .que.shortanswer, .que.essay, .que.match",
   );
   if (moodleQuestions.length > 0) {
     return true;
@@ -1264,9 +1274,9 @@ export async function detectVisibleQuestion(): Promise<DetectedQuestion | null> 
  * @returns The detected question or null
  */
 export async function detectMoodleQuestion(): Promise<DetectedQuestion | null> {
-  // Look for Moodle question containers
+  // Look for Moodle question containers (all supported types)
   const moodleQuestions = document.querySelectorAll(
-    ".que.multichoice, .que.truefalse",
+    ".que.multichoice, .que.truefalse, .que.match",
   );
 
   if (moodleQuestions.length === 0) {
@@ -1297,10 +1307,19 @@ export async function detectMoodleQuestion(): Promise<DetectedQuestion | null> {
   }
 
   if (!bestQuestion) {
+    // Fallback: use the first question in the DOM when getBoundingClientRect
+    // returns zero dimensions (iframes, jsdom, or non-laid-out pages)
+    bestQuestion = moodleQuestions[0] ?? null;
+  }
+
+  if (!bestQuestion) {
     return null;
   }
 
-  // Extract question data from Moodle HTML structure (async for image extraction)
+  // Route to correct extractor based on question type
+  if (bestQuestion.classList.contains("match")) {
+    return await extractMoodleMatchQuestion(bestQuestion);
+  }
   return await extractMoodleQuestionData(bestQuestion);
 }
 
@@ -1527,6 +1546,83 @@ export async function extractMoodleQuestionData(questionEl: Element): Promise<De
     images: questionImages, // Array of images from question text
     confidence: 95,
     courseName: courseName, // Academic course name for context
+  };
+}
+
+/**
+ * Extract question data from a Moodle "match" question element.
+ * These use a table layout where each row has a concept (td.text) and a
+ * <select> dropdown with shared answer options (td.control).
+ *
+ * The extracted question uses:
+ *   categories (A, B, C...) = the row concepts
+ *   matchingOptions (1, 2, 3...) = the dropdown option values
+ * which produces the answer format: A-1, B-3, C-2
+ */
+async function extractMoodleMatchQuestion(questionEl: Element): Promise<DetectedQuestion | null> {
+  const courseName = extractMoodleCourseName();
+
+  const qnoEl = questionEl.querySelector(".qno");
+  const questionNumber = qnoEl ? parseInt(qnoEl.textContent?.trim() || "1") : 1;
+
+  const qtextEl = questionEl.querySelector(".qtext");
+  const questionText = qtextEl?.textContent?.trim() || "";
+
+  if (!questionText) return null;
+
+  const rows = questionEl.querySelectorAll("table.answer tbody tr");
+  if (rows.length === 0) return null;
+
+  const categories: MatchingCategory[] = [];
+  let matchingOptions: MatchingOption[] | null = null;
+
+  for (const [rowIndex, row] of Array.from(rows).entries()) {
+    const textCell = row.querySelector("td.text");
+    const conceptText = textCell?.textContent?.trim() || "";
+
+    if (conceptText) {
+      categories.push({
+        letter: String.fromCharCode(65 + rowIndex), // A, B, C...
+        text: conceptText,
+      });
+    }
+
+    // Options are identical across all rows — extract once from the first select
+    if (!matchingOptions) {
+      const selectEl = row.querySelector("td.control select");
+      if (selectEl) {
+        matchingOptions = [];
+        for (const opt of Array.from(selectEl.querySelectorAll("option"))) {
+          const value = parseInt(opt.getAttribute("value") || "0");
+          if (value > 0) { // Skip the "Elegir..." placeholder (value="0")
+            matchingOptions.push({
+              index: value,
+              text: opt.textContent?.trim() || "",
+            });
+          }
+        }
+      }
+    }
+  }
+
+  if (categories.length === 0 || !matchingOptions || matchingOptions.length === 0) {
+    return null;
+  }
+
+  return {
+    id: `moodle-q-${questionNumber}`,
+    type: "matching",
+    text: questionText,
+    options: [],
+    element: questionEl,
+    questionNumber,
+    platform: "moodle",
+    confidence: 95,
+    courseName,
+    categories,
+    matchingOptions,
+    // matchingStyle intentionally omitted → falls back to "drag-drop" in api.ts
+    // which uses the A-1, B-3, C-2 answer format expected for this question type
   };
 }
 
