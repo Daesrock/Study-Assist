@@ -115,6 +115,7 @@ async function initializePopup() {
   await updateUIState();
   await loadRecentHistory();
   await loadTodayStats();
+  checkStorageWarning();
 }
 
 // ============================================
@@ -145,7 +146,6 @@ async function loadSettings() {
     // Set API key (if exists)
     if (result[STORAGE_KEYS.API_KEY]) {
       elements.apiKeyInput.value = result[STORAGE_KEYS.API_KEY];
-      showApiStatus("Clave API guardada", "success");
     }
 
     // Set response mode
@@ -177,7 +177,6 @@ async function loadSettings() {
     if (result[STORAGE_KEYS.DEEPSEEK_API_KEY]) {
       elements.deepseekApiKeyInput.value =
         result[STORAGE_KEYS.DEEPSEEK_API_KEY];
-      showDeepSeekStatus("Clave API guardada", "success");
     }
 
     // Load domains list
@@ -650,6 +649,40 @@ async function removeDomain(index) {
   await chrome.storage.local.set({ [STORAGE_KEYS.ALLOWED_DOMAINS]: domains });
 
   renderDomainsList(domains);
+}
+
+// ============================================
+// Storage Warning Banner
+// ============================================
+async function checkStorageWarning() {
+  try {
+    const res = await chrome.runtime
+      .sendMessage({ type: "GET_STORAGE_INFO" })
+      .catch(() => null);
+    if (!res?.success || !res.storageInfo) return;
+
+    const info = res.storageInfo;
+    if (info.level === "ok") return;
+
+    const banner = document.getElementById("storage-warning");
+    if (!banner) return;
+
+    const pct = Math.round(info.percent * 100);
+    const usedMb = (info.bytesUsed / 1024 / 1024).toFixed(1);
+
+    if (info.level === "critical") {
+      banner.className = "storage-warning critical";
+      banner.textContent = `🔴 Almacenamiento al ${pct}% (${usedMb} MB) — ¡Crítico! Abrir dashboard para gestionar →`;
+    } else {
+      banner.className = "storage-warning";
+      banner.textContent = `⚠️ Almacenamiento al ${pct}% (${usedMb} MB) — Abrir dashboard para gestionar →`;
+    }
+
+    banner.style.display = "block";
+    banner.addEventListener("click", openDashboard, { once: true });
+  } catch (_) {
+    // silent fail
+  }
 }
 
 // ============================================
