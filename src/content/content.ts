@@ -237,8 +237,11 @@ async function initialize(): Promise<void> {
 type QAScenarioType =
   | "moodle-mcq"
   | "moodle-truefalse"
+  | "moodle-match"
+  | "moodle-quiz"
   | "netacad-mcq"
-  | "netacad-matching";
+  | "netacad-matching"
+  | "netacad-quiz";
 
 function clearQASandbox(): void {
   const sandbox = document.getElementById("study-assist-qa-sandbox");
@@ -315,8 +318,274 @@ function injectNetAcadMatching(target: HTMLElement): void {
   `;
 }
 
+function injectMoodleMatch(target: HTMLElement): void {
+  target.innerHTML = `
+    <div class="qa-block">
+      <h3>Moodle Simulado — Relacionar (Match)</h3>
+      <p class="qa-tip">Respuesta esperada: <strong>A-2, B-1, C-3</strong> (categoría-opción).</p>
+      <div class="que match">
+        <div class="info"><h3 class="no">Pregunta <span class="qno">1</span></h3></div>
+        <div class="content">
+          <div class="formulation clearfix">
+            <div class="qtext">Relaciona cada capa del modelo OSI con su función principal.</div>
+            <div class="ablock">
+              <table class="answer">
+                <tbody>
+                  <tr class="r0">
+                    <td class="text">Enrutamiento lógico de paquetes</td>
+                    <td class="control">
+                      <select>
+                        <option value="0">Elegir...</option>
+                        <option value="1">Capa Física</option>
+                        <option value="2">Capa de Red</option>
+                        <option value="3">Capa de Transporte</option>
+                      </select>
+                    </td>
+                  </tr>
+                  <tr class="r1">
+                    <td class="text">Transmisión de bits por el medio físico</td>
+                    <td class="control">
+                      <select>
+                        <option value="0">Elegir...</option>
+                        <option value="1">Capa Física</option>
+                        <option value="2">Capa de Red</option>
+                        <option value="3">Capa de Transporte</option>
+                      </select>
+                    </td>
+                  </tr>
+                  <tr class="r0">
+                    <td class="text">Control de flujo y segmentación extremo a extremo</td>
+                    <td class="control">
+                      <select>
+                        <option value="0">Elegir...</option>
+                        <option value="1">Capa Física</option>
+                        <option value="2">Capa de Red</option>
+                        <option value="3">Capa de Transporte</option>
+                      </select>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Attaches prev/next navigation logic to a quiz container that has .qa-slide elements.
+ * Dispatches 'study-assist-navigate' on window after each slide change so the content
+ * script re-runs detection automatically.
+ */
+function attachQANavigation(container: HTMLElement): void {
+  const slides = Array.from(container.querySelectorAll<HTMLElement>(".qa-slide"));
+  if (slides.length === 0) return;
+
+  let current = 0;
+
+  const prevBtn = container.querySelector<HTMLButtonElement>("#qa-nav-prev");
+  const nextBtn = container.querySelector<HTMLButtonElement>("#qa-nav-next");
+  const progressEl = container.querySelector<HTMLElement>(".qa-quiz-progress");
+
+  function update(): void {
+    slides.forEach((slide, i) => {
+      slide.style.display = i === current ? "" : "none";
+    });
+    if (prevBtn) prevBtn.disabled = current <= 0;
+    if (nextBtn) nextBtn.disabled = current >= slides.length - 1;
+    if (progressEl) progressEl.textContent = `Pregunta ${current + 1} de ${slides.length}`;
+    window.dispatchEvent(new CustomEvent("study-assist-navigate"));
+  }
+
+  if (prevBtn) prevBtn.addEventListener("click", () => { if (current > 0) { current--; update(); } });
+  if (nextBtn) nextBtn.addEventListener("click", () => { if (current < slides.length - 1) { current++; update(); } });
+}
+
+function injectNetAcadQuiz(target: HTMLElement): void {
+  target.innerHTML = `
+    <div class="qa-quiz-header">
+      <span class="qa-quiz-platform">🔵 NetAcad — Quiz Real</span>
+      <div class="qa-quiz-nav">
+        <button class="qa-sandbox-nav-btn" id="qa-nav-prev" disabled>← Anterior</button>
+        <span class="qa-quiz-progress">Pregunta 1 de 2</span>
+        <button class="qa-sandbox-nav-btn" id="qa-nav-next">Siguiente →</button>
+      </div>
+    </div>
+    <p class="qa-tip">La detección se actualiza automáticamente al navegar.</p>
+
+    <div class="qa-slide" data-slide="0">
+      <div class="qa-block">
+        <h3>Pregunta 1 — Opción múltiple (MCQ)</h3>
+        <div class="qa-question-title">Pregunta 1</div>
+        <mcq-view id="qa-netacad-quiz-mcq"></mcq-view>
+      </div>
+    </div>
+
+    <div class="qa-slide" data-slide="1" style="display:none">
+      <div class="qa-block">
+        <h3>Pregunta 2 — Relacionar (Matching)</h3>
+        <p class="qa-tip">En quick mode la respuesta se mostrará como pares (ej. <strong>A-2</strong>).</p>
+        <div class="qa-question-title">Pregunta 2</div>
+        <object-matching-view id="qa-netacad-quiz-matching"></object-matching-view>
+      </div>
+    </div>
+  `;
+
+  // MCQ shadow DOM
+  const mcqView = target.querySelector("#qa-netacad-quiz-mcq") as HTMLElement | null;
+  if (mcqView) {
+    const sr = mcqView.attachShadow({ mode: "open" });
+    sr.innerHTML = `
+      <style>
+        .mcq__body-inner { font-size: 16px; margin-bottom: 12px; color: #1f2937; }
+        .mcq__item { margin: 8px 0; padding: 10px; border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; }
+        .mcq__item-text-inner { font-size: 14px; color: #111827; }
+      </style>
+      <div class="mcq__body-inner">¿Cuál capa del modelo OSI se encarga del enrutamiento lógico de paquetes?</div>
+      <div class="mcq__item"><div class="mcq__item-text-inner">Capa Física</div></div>
+      <div class="mcq__item"><div class="mcq__item-text-inner">Capa de Enlace de Datos</div></div>
+      <div class="mcq__item"><div class="mcq__item-text-inner">Capa de Red</div></div>
+      <div class="mcq__item"><div class="mcq__item-text-inner">Capa de Transporte</div></div>
+    `;
+  }
+
+  // Matching shadow DOM
+  const matchingView = target.querySelector("#qa-netacad-quiz-matching") as HTMLElement | null;
+  if (matchingView) {
+    const sr = matchingView.attachShadow({ mode: "open" });
+    sr.innerHTML = `
+      <style>
+        .component__body-inner { font-size: 16px; margin-bottom: 12px; color: #1f2937; }
+        .objectMatching-category-item,
+        .objectMatching-option-item {
+          display: flex; align-items: center; gap: 8px;
+          margin: 6px 0; padding: 8px;
+          border: 1px solid #e5e7eb; border-radius: 8px; background: #fff;
+        }
+        .category-item-number { font-weight: 700; min-width: 20px; }
+      </style>
+      <div class="component__body-inner">Relaciona cada protocolo con su puerto por defecto.</div>
+      <div class="objectMatching-category-item"><span class="category-item-number">A</span><span class="category-item-text">HTTP</span></div>
+      <div class="objectMatching-category-item"><span class="category-item-number">B</span><span class="category-item-text">HTTPS</span></div>
+      <div class="objectMatching-category-item"><span class="category-item-number">C</span><span class="category-item-text">SSH</span></div>
+      <hr />
+      <div class="objectMatching-option-item"><span class="category-item-text">443</span></div>
+      <div class="objectMatching-option-item"><span class="category-item-text">22</span></div>
+      <div class="objectMatching-option-item"><span class="category-item-text">80</span></div>
+    `;
+  }
+
+  attachQANavigation(target);
+}
+
+function injectMoodleQuiz(target: HTMLElement): void {
+  target.innerHTML = `
+    <div class="qa-quiz-header">
+      <span class="qa-quiz-platform">🟣 Moodle — Quiz Real</span>
+      <div class="qa-quiz-nav">
+        <button class="qa-sandbox-nav-btn" id="qa-nav-prev" disabled>← Anterior</button>
+        <span class="qa-quiz-progress">Pregunta 1 de 3</span>
+        <button class="qa-sandbox-nav-btn" id="qa-nav-next">Siguiente →</button>
+      </div>
+    </div>
+    <p class="qa-tip">La detección se actualiza automáticamente al navegar.</p>
+
+    <div class="qa-slide" data-slide="0">
+      <div class="qa-block">
+        <h3>Pregunta 1 — Opción múltiple (MCQ)</h3>
+        <div class="que multichoice">
+          <div class="info"><h3 class="no">Pregunta <span class="qno">1</span></h3></div>
+          <div class="qtext">¿Qué protocolo utiliza el puerto 443 por defecto?</div>
+          <div class="answer">
+            <div class="r0"><span class="answernumber">a.</span><div class="flex-fill">HTTP</div></div>
+            <div class="r1"><span class="answernumber">b.</span><div class="flex-fill">HTTPS</div></div>
+            <div class="r0"><span class="answernumber">c.</span><div class="flex-fill">FTP</div></div>
+            <div class="r1"><span class="answernumber">d.</span><div class="flex-fill">Telnet</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="qa-slide" data-slide="1" style="display:none">
+      <div class="qa-block">
+        <h3>Pregunta 2 — Verdadero/Falso</h3>
+        <div class="que truefalse">
+          <div class="info"><h3 class="no">Pregunta <span class="qno">2</span></h3></div>
+          <div class="qtext">La entropía representa la tendencia natural de un sistema a desorganizarse.</div>
+          <div class="answer">
+            <div class="r0">
+              <input type="radio" name="qa_tf" value="1" id="qa_tf_true" />
+              <label for="qa_tf_true" class="ms-1">Verdadero</label>
+            </div>
+            <div class="r1">
+              <input type="radio" name="qa_tf" value="0" id="qa_tf_false" />
+              <label for="qa_tf_false" class="ms-1">Falso</label>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="qa-slide" data-slide="2" style="display:none">
+      <div class="qa-block">
+        <h3>Pregunta 3 — Relacionar (Match)</h3>
+        <div class="que match">
+          <div class="info"><h3 class="no">Pregunta <span class="qno">3</span></h3></div>
+          <div class="content">
+            <div class="formulation clearfix">
+              <div class="qtext">Relaciona cada capa del modelo OSI con su función principal.</div>
+              <div class="ablock">
+                <table class="answer">
+                  <tbody>
+                    <tr class="r0">
+                      <td class="text">Enrutamiento lógico de paquetes</td>
+                      <td class="control">
+                        <select>
+                          <option value="0">Elegir...</option>
+                          <option value="1">Capa Física</option>
+                          <option value="2">Capa de Red</option>
+                          <option value="3">Capa de Transporte</option>
+                        </select>
+                      </td>
+                    </tr>
+                    <tr class="r1">
+                      <td class="text">Transmisión de bits por el medio físico</td>
+                      <td class="control">
+                        <select>
+                          <option value="0">Elegir...</option>
+                          <option value="1">Capa Física</option>
+                          <option value="2">Capa de Red</option>
+                          <option value="3">Capa de Transporte</option>
+                        </select>
+                      </td>
+                    </tr>
+                    <tr class="r0">
+                      <td class="text">Control de flujo y segmentación extremo a extremo</td>
+                      <td class="control">
+                        <select>
+                          <option value="0">Elegir...</option>
+                          <option value="1">Capa Física</option>
+                          <option value="2">Capa de Red</option>
+                          <option value="3">Capa de Transporte</option>
+                        </select>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  attachQANavigation(target);
+}
+
 function injectQAScenario(scenario: QAScenarioType): void {
-  clearQASandbox();
 
   const styleId = "study-assist-qa-sandbox-style";
   if (!document.getElementById(styleId)) {
@@ -352,6 +621,61 @@ function injectQAScenario(scenario: QAScenarioType): void {
         display: flex;
         align-items: center;
         gap: 8px;
+      }
+      #study-assist-qa-sandbox .qa-quiz-header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 12px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #cbd5e1;
+      }
+      #study-assist-qa-sandbox .qa-quiz-platform {
+        font-weight: 700;
+        color: #1d4ed8;
+        font-size: 15px;
+        flex: 1;
+      }
+      #study-assist-qa-sandbox .qa-quiz-nav {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      #study-assist-qa-sandbox .qa-quiz-progress {
+        font-size: 13px;
+        color: #334155;
+        min-width: 80px;
+        text-align: center;
+      }
+      #study-assist-qa-sandbox .qa-sandbox-nav-btn {
+        padding: 4px 10px;
+        font-size: 13px;
+        background: #3b82f6;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      #study-assist-qa-sandbox .qa-sandbox-nav-btn:disabled {
+        background: #94a3b8;
+        cursor: default;
+      }
+      #study-assist-qa-sandbox table.answer {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      #study-assist-qa-sandbox table.answer td {
+        padding: 8px;
+        border: 1px solid #e2e8f0;
+        vertical-align: middle;
+      }
+      #study-assist-qa-sandbox table.answer td.control select {
+        padding: 4px 6px;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        background: white;
+        font-size: 13px;
       }
     `;
     document.head.appendChild(style);
@@ -407,6 +731,12 @@ function injectQAScenario(scenario: QAScenarioType): void {
     `;
   } else if (scenario === "netacad-mcq") {
     injectNetAcadMcq(content);
+  } else if (scenario === "moodle-match") {
+    injectMoodleMatch(content);
+  } else if (scenario === "netacad-quiz") {
+    injectNetAcadQuiz(content);
+  } else if (scenario === "moodle-quiz") {
+    injectMoodleQuiz(content);
   } else {
     injectNetAcadMatching(content);
   }
@@ -566,4 +896,12 @@ chrome.runtime.onMessage.addListener(
 // ============================================
 // Start
 // ============================================
+
+// Re-detect when QA quiz navigation changes the visible question
+window.addEventListener("study-assist-navigate", () => {
+  if (state.isActive && state.isDomainAllowed) {
+    runDetection();
+  }
+});
+
 initialize();
