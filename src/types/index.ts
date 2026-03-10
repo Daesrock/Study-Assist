@@ -11,8 +11,23 @@ export type QuestionType =
   | "multiple-choice" 
   | "true-false" 
   | "fill-blank" 
-  | "matching" 
+  | "matching"
+  | "short-answer"
+  | "numerical"
+  | "select-missing-words"
   | "unknown";
+
+/** One gap inside a Select Missing Words question. */
+export interface SelectGap {
+  /** 1-based gap number matching [[n]] in the question text */
+  index: number;
+  /** Text immediately to the left of the gap (up to ~60 chars) */
+  leftContext: string;
+  /** Text immediately to the right of the gap (up to ~60 chars) */
+  rightContext: string;
+  /** Group id string (e.g. "A", "B") — only choices of the same group appear in this dropdown */
+  groupId: string;
+}
 
 export type QuestionPlatform = "moodle" | "netacad" | "general";
 
@@ -57,6 +72,10 @@ export interface DetectedQuestion {
   matchingStyle?: MatchingStyle;
   categories?: MatchingCategory[];
   matchingOptions?: MatchingOption[];
+  // For select-missing-words questions
+  selectGaps?: SelectGap[];
+  /** All available choice strings keyed by group id (e.g. { A: ["nominative", ...], B: ["his", ...] }) */
+  selectChoices?: Record<string, string[]>;
 }
 
 // ============================================
@@ -110,6 +129,9 @@ export interface AnalysisContext {
   skipDeepSeek?: boolean;
   courseName?: string; // Academic course name for better context
   qaMode?: boolean;
+  // For select-missing-words questions
+  selectGaps?: SelectGap[];
+  selectChoices?: Record<string, string[]>;
 }
 
 export interface AnalysisResponse {
