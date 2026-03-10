@@ -41,10 +41,15 @@ export function injectWebexToggleWithCtrl(callbacks: KeyboardCallbacks): void {
   // Uses postMessage to communicate between frames
 
   const styleId = "study-assist-webex-hide-style";
+  const keyboardMarkerId = "study-assist-keyboard-injected";
   const isMainFrame = window.self === window.top;
 
-  // Don't inject twice
-  if (document.getElementById(styleId)) return;
+  // Keyboard handlers can be re-registered when quickMode is toggled on/off.
+  // Use a custom attribute on document to track registration separately from the style.
+  const keyboardAlreadyInjected = document.documentElement.hasAttribute(keyboardMarkerId);
+
+  // Only inject the style once (shared with ui.ts Ctrl/Webex handler)
+  if (!document.getElementById(styleId)) {
 
   const style = document.createElement("style");
   style.id = styleId;
@@ -60,6 +65,11 @@ export function injectWebexToggleWithCtrl(callbacks: KeyboardCallbacks): void {
     }
   `;
   (document.head ?? document.documentElement).appendChild(style);
+  }
+
+  // Don't re-register keyboard shortcuts if already done
+  if (keyboardAlreadyInjected) return;
+  document.documentElement.setAttribute(keyboardMarkerId, "1");
 
   // Apply icon size to existing button if present
   const existingWebexBtn = document.querySelector(
