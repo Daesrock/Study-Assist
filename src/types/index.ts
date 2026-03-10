@@ -178,6 +178,7 @@ export interface KeyboardCallbacks {
 export interface QuickClickCallbacks {
   detectVisibleQuestion: () => Promise<DetectedQuestion | null>;
   startQuestionChangeObserver: () => void;
+  showQuestionsSummary?: () => Promise<void>;
 }
 
 export interface UICallbacks {
