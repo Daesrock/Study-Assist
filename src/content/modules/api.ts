@@ -796,7 +796,7 @@ export async function analyzeQuestion(
     // Use streaming via port for full (non-quick) mode
     const port = (chrome.runtime as unknown as { connect: (info: { name: string }) => { postMessage: (msg: unknown) => void; onMessage: { addListener: (cb: (msg: Record<string, unknown>) => void) => void }; onDisconnect: { addListener: (cb: () => void) => void }; disconnect: () => void } }).connect({ name: "stream-analysis" });
 
-    displayAnalysisResultStreaming("", question, undefined, true);
+    displayAnalysisResultStreaming("", question, callbacks.showQuestionsSummary, true);
 
     let fullText = "";
     let streamInputTokens = 0;
@@ -808,7 +808,7 @@ export async function analyzeQuestion(
         switch (msg.type) {
           case "STREAM_CHUNK":
             fullText += msg.chunk as string;
-            displayAnalysisResultStreaming(fullText, question, undefined, false);
+            displayAnalysisResultStreaming(fullText, question, callbacks.showQuestionsSummary, false);
             break;
           case "STREAM_STATUS":
             if (msg.status === "input_tokens") {
@@ -826,7 +826,7 @@ export async function analyzeQuestion(
             displayAnalysisResultStreaming(
               fullText,
               question,
-              undefined,
+              callbacks.showQuestionsSummary,
               false,
               { inputTokens: streamInputTokens, outputTokens: streamOutputTokens, cost: streamCost },
             );
@@ -834,7 +834,7 @@ export async function analyzeQuestion(
             break;
           case "STREAM_ERROR":
             hideLoading();
-            displayError(msg.error as string || "Stream error");
+            displayError(msg.error as string || "Stream error", callbacks.showQuestionsSummary);
             reject(new Error(msg.error as string));
             break;
         }
@@ -843,7 +843,7 @@ export async function analyzeQuestion(
       port.onDisconnect.addListener(() => {
         if (!fullText) {
           hideLoading();
-          displayError("Connection lost");
+          displayError("Connection lost", callbacks.showQuestionsSummary);
           reject(new Error("Port disconnected"));
         } else {
           resolve();
@@ -854,6 +854,6 @@ export async function analyzeQuestion(
     });
   } catch (error) {
     hideLoading();
-    displayError((error as Error).message);
+    displayError((error as Error).message, callbacks.showQuestionsSummary);
   }
 }
