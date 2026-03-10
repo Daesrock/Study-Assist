@@ -727,7 +727,7 @@ export async function analyzeWithClaude(
 
   // For quick mode, extract the final answer
   if (isQuickMode && !isMatching) {
-    result = extractClaudeQuickAnswer(result);
+    result = extractClaudeQuickAnswer(result, context.questionType);
   }
 
   return { success: true, result, source: "claude" };
