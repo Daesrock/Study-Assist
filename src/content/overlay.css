@@ -646,8 +646,8 @@
 .study-assist-option-letter {
   min-width: 20px;
   height: 20px;
-  background: #e0e0e0;
-  color: #666;
+  background: #4a5568;
+  color: #ffffff;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -698,6 +698,7 @@
   gap: 8px;
   padding: 6px 10px;
   background: white;
+  color: #1a1a1a !important;
   border-radius: 4px;
   font-size: 12px;
   border: 1px solid #e0e0e0;
@@ -705,15 +706,16 @@
 
 .study-assist-matching-item strong {
   min-width: 16px;
-  color: #666;
+  color: #444 !important;
 }
 
 .study-assist-answer-box h4 {
   margin: 0 0 10px 0;
   font-size: 10px;
-  color: #666;
+  color: #1a202c;
   text-transform: uppercase;
   letter-spacing: 0.3px;
+  font-weight: 700;
 }
 
 .study-assist-answer-content {
@@ -832,10 +834,23 @@
 
   .study-assist-answer-box {
     background: #1e3a29;
+    border-left-color: #52b788;
+  }
+
+  .study-assist-answer-box h4 {
+    color: #95d5b2;
   }
 
   .study-assist-answer-content {
     color: #e8eaed;
+  }
+
+  .study-assist-answer-content strong {
+    color: #ffffff;
+  }
+
+  .study-assist-answer-content em {
+    color: #b7e4c7;
   }
 
   .study-assist-back-btn {
@@ -845,6 +860,20 @@
 
   .study-assist-back-btn:hover {
     background: #3c4043;
+  }
+
+  .study-assist-matching-item {
+    background: #35363a;
+    color: #e8eaed !important;
+    border-color: #4a4b4f;
+  }
+
+  .study-assist-matching-item strong {
+    color: #aecbfa !important;
+  }
+
+  .study-assist-matching-section h5 {
+    color: #9aa0a6;
   }
 
   .study-assist-summary {
