@@ -1265,29 +1265,25 @@ function buildRoutingLines(r) {
   } else if (r.source === "claude") {
     if (r.validated) {
       lines.push(
-        "1️⃣  DeepSeek Reasoner analizó la pregunta (confianza media o baja).",
+        "DeepSeek Reasoner analizó la pregunta (confianza media o baja).",
       );
       lines.push(
-        `2️⃣  Claude (${shortModel(r.model)}) validó y refinó la respuesta de DeepSeek.`,
+        `Claude (${shortModel(r.model)}) validó y refinó la respuesta de DeepSeek.`,
       );
       lines.push("✅ Flujo híbrido completado correctamente.");
     } else if (r.fallbackReason === "images") {
+      lines.push("La pregunta contiene imágenes → DeepSeek no las soporta.");
       lines.push(
-        "1️⃣  La pregunta contiene imágenes → DeepSeek no las soporta.",
-      );
-      lines.push(
-        `2️⃣  Claude (${shortModel(r.model)}) respondió directamente con contexto de imagen.`,
+        `Claude (${shortModel(r.model)}) respondió directamente con contexto de imagen.`,
       );
     } else if (r.fallbackReason === "deepseek_error") {
+      lines.push("DeepSeek fue contactado pero falló (error de API o red).");
       lines.push(
-        "1️⃣  DeepSeek fue contactado pero falló (error de API o red).",
-      );
-      lines.push(
-        `2️⃣  Claude (${shortModel(r.model)}) actuó como fallback de error.`,
+        `Claude (${shortModel(r.model)}) actuó como fallback de error.`,
       );
     } else if (r.fallbackReason) {
-      lines.push(`1️⃣  Fallback activado por: ${r.fallbackReason}`);
-      lines.push(`2️⃣  Claude (${shortModel(r.model)}) respondió.`);
+      lines.push(`Fallback activado por: ${r.fallbackReason}`);
+      lines.push(`Claude (${shortModel(r.model)}) respondió.`);
     } else {
       lines.push(`Claude (${shortModel(r.model)}) respondió directamente.`);
       lines.push(
