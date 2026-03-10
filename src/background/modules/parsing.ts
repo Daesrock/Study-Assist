@@ -21,6 +21,9 @@ export function parseDeepSeekResponse(
 ): DeepSeekAnalysisResult {
   const isMatching = context.questionType === "matching";
   const isTrueFalse = context.questionType === "true-false";
+  const isShortAnswer = context.questionType === "short-answer";
+  const isNumerical = context.questionType === "numerical";
+  const isSelectMissingWords = context.questionType === "select-missing-words";
 
   // Extract CONFIDENCE level
   const confidenceMatch = response.match(/CONFIDENCE:\s*(HIGH|MEDIUM|LOW)/i);
@@ -64,6 +67,25 @@ export function parseDeepSeekResponse(
         answer = value.startsWith("V") || value === "TRUE" ? "V" : "F";
       }
     }
+  } else if (isSelectMissingWords) {
+    // Extract gap-fill answer: ANSWER: [[1]]=word, [[2]]=word, ...
+    const gapMatch = response.match(/ANSWER:\s*(\[\[\d+\]\]=[^\n,]+(?:,\s*\[\[\d+\]\]=[^\n,]+)*)/i);
+    if (gapMatch) {
+      answer = gapMatch[1].trim();
+    }
+  } else if (isNumerical) {
+    // Extract numerical answer: accept digits (with optional units), strip unit words
+    const numMatch = response.match(/ANSWER:\s*([\d.,]+(?:\s*\w+)?)/i);
+    if (numMatch) {
+      // Keep only the numeric part — strip trailing words like "bits", "km", etc.
+      answer = numMatch[1].trim().replace(/^([\d.,]+).*$/, "$1").trim();
+    }
+  } else if (isShortAnswer) {
+    // Extract free-text answer: everything after "ANSWER:" up to newline
+    const freeMatch = response.match(/ANSWER:\s*([^\n]+)/i);
+    if (freeMatch) {
+      answer = freeMatch[1].trim();
+    }
   } else {
     const answerMatch = response.match(/ANSWER:\s*([A-J](?:\s*,\s*[A-J])*)/i);
     if (answerMatch) {
@@ -92,7 +114,28 @@ export function parseDeepSeekResponse(
 /**
  * Extract the answer from Claude's response for quick mode
  */
-export function extractClaudeQuickAnswer(result: string): string {
+export function extractClaudeQuickAnswer(result: string, questionType?: string): string {
+  // Gap-fill answer: [[1]]=word, [[2]]=word
+  if (questionType === "select-missing-words") {
+    const gapMatch = result.match(/ANSWER:\s*(\[\[\d+\]\]=[^\n,]+(?:,\s*\[\[\d+\]\]=[^\n,]+)*)/i);
+    if (gapMatch) return gapMatch[1].trim();
+    return result.trim();
+  }
+
+  // Numerical answer: strip unit words, keep only the number
+  if (questionType === "numerical") {
+    const numMatch = result.match(/ANSWER:\s*([\d.,]+(?:\s*\w+)?)/i);
+    if (numMatch) return numMatch[1].trim().replace(/^([\d.,]+).*$/, "$1").trim();
+    return result.trim();
+  }
+
+  // Short-answer: plain text after ANSWER:
+  if (questionType === "short-answer") {
+    const freeMatch = result.match(/ANSWER:\s*([^\n]+)/i);
+    if (freeMatch) return freeMatch[1].trim();
+    return result.trim();
+  }
+
   const tfAnswerMatch = result.match(/ANSWER:\s*(V|F|TRUE|FALSE|VERDADERO|FALSO)\b/i);
   if (tfAnswerMatch) {
     const value = tfAnswerMatch[1].toUpperCase();
