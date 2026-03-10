@@ -134,7 +134,7 @@ export function createOverlayContainer(callbacks: UICallbacks): void {
     }
   } else {
     // Full overlay can be shown in any frame
-    createFullOverlay();
+    createFullOverlay(callbacks.showQuestionsSummary);
   }
 }
 
