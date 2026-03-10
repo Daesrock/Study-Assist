@@ -660,7 +660,7 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
           <div class="howto-col-title">🌐 Plataformas Soportadas</div>
           <ul class="howto-list">
             <li><strong>NetAcad / SkillsForAll:</strong> MCQ y Matching (drag-drop y dropdown)</li>
-            <li><strong>Moodle:</strong> MCQ, Verdadero/Falso, Match (tabla select)</li>
+            <li><strong>Moodle:</strong> MCQ, True/False, Match, Short Answer, Numerical, Select Missing Words</li>
             <li>La detección es automática; usa ALT+W si la pregunta no se detecta.</li>
           </ul>
         </div>
@@ -699,6 +699,9 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
           <button class="btn" id="qa-moodle-mcq-btn">MCQ</button>
           <button class="btn" id="qa-moodle-tf-btn">V/F</button>
           <button class="btn" id="qa-moodle-match-btn">Match</button>
+          <button class="btn" id="qa-moodle-shortanswer-btn" data-tooltip="Respuesta corta libre">Short Answer</button>
+          <button class="btn" id="qa-moodle-numerical-btn" data-tooltip="Respuesta numérica">Numerical</button>
+          <button class="btn" id="qa-moodle-gapselect-btn" data-tooltip="Selecciona palabras faltantes con dropdowns">Gap Select</button>
           <button class="btn btn-accent" id="qa-moodle-quiz-btn" data-tooltip="Quiz completo con navegación">🎯 Quiz Real</button>
         </div>
       </div>
@@ -1010,6 +1013,33 @@ function bindDynamicEvents(history, devMode) {
   if (qaMoodleMatchBtn) {
     qaMoodleMatchBtn.addEventListener("click", () =>
       runQAScenario("moodle-match"),
+    );
+  }
+
+  const qaMoodleShortAnswerBtn = document.getElementById(
+    "qa-moodle-shortanswer-btn",
+  );
+  if (qaMoodleShortAnswerBtn) {
+    qaMoodleShortAnswerBtn.addEventListener("click", () =>
+      runQAScenario("moodle-shortanswer"),
+    );
+  }
+
+  const qaMoodleNumericalBtn = document.getElementById(
+    "qa-moodle-numerical-btn",
+  );
+  if (qaMoodleNumericalBtn) {
+    qaMoodleNumericalBtn.addEventListener("click", () =>
+      runQAScenario("moodle-numerical"),
+    );
+  }
+
+  const qaMoodleGapSelectBtn = document.getElementById(
+    "qa-moodle-gapselect-btn",
+  );
+  if (qaMoodleGapSelectBtn) {
+    qaMoodleGapSelectBtn.addEventListener("click", () =>
+      runQAScenario("moodle-gapselect"),
     );
   }
 
