@@ -113,6 +113,7 @@ function analyzeQuestionWithCallbacks(question: DetectedQuestion): Promise<void>
   return analyzeQuestion(question, {
     detectVisibleQuestion,
     startQuestionChangeObserver,
+    showQuestionsSummary: showQuestionsSummaryWithCallbacks,
   });
 }
 
@@ -133,6 +134,7 @@ function initOverlayContainer(): void {
         detectVisibleQuestion,
         startQuestionChangeObserver,
       }),
+    showQuestionsSummary: showQuestionsSummaryWithCallbacks,
   });
 }
 
@@ -162,8 +164,14 @@ function initKeyboardHandlers(): void {
 async function runDetection(): Promise<void> {
   const result = await detectQuestionsOnPage();
   
-  if (result && result.found && state.settings.highlightQuestions) {
-    highlightDetectedQuestions(analyzeQuestionWithCallbacks);
+  if (result && result.found) {
+    if (state.settings.highlightQuestions) {
+      highlightDetectedQuestions(analyzeQuestionWithCallbacks);
+    }
+    // In non-quick mode, auto-show the overlay with the detected question
+    if (!state.settings.quickMode) {
+      await showQuestionsSummaryWithCallbacks();
+    }
   }
 }
 
@@ -971,10 +979,10 @@ chrome.runtime.onMessage.addListener(
         state.settings = { ...state.settings, ...message.settings } as Settings;
 
         if (oldQuickMode !== state.settings.quickMode) {
-          initOverlayContainer();
           if (state.settings.quickMode) {
             initKeyboardHandlers();
           }
+          initOverlayContainer();
         }
 
         if (state.settings.highlightQuestions && state.isActive) {
@@ -991,7 +999,13 @@ chrome.runtime.onMessage.addListener(
           break;
         }
         if (state.isActive) {
-          runDetection();
+          // Run full page detection (refreshes state.detectedQuestions, updates highlights)
+          // then open the overlay showing the currently visible question so the user
+          // can read it and trigger the AI analysis — this is the non-quick mode flow.
+          (async () => {
+            await runDetection();
+            await showQuestionsSummaryWithCallbacks();
+          })();
         }
         sendResponse({ success: true });
         break;
