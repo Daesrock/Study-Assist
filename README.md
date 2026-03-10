@@ -5,7 +5,20 @@ Study Assist is a Chromium browser extension that uses AI (Claude + DeepSeek) to
 ## Supported Platforms
 
 - **NetAcad (Cisco Networking Academy)** — Deep Shadow DOM detection, including MCQ and matching (drag-and-drop style and dropdown-style matching views)
-- **Moodle** — Multichoice and true/false detection, with automatic course context extraction
+- **Moodle** — Multichoice, true/false, matching, short answer, numerical, and select missing words detection, with automatic course context extraction
+
+## TODO — Moodle question types not yet implemented
+
+The following Moodle question types are recognised by the platform but not yet detected by Study Assist:
+
+- **Essay** — Free-text essay with no selectable options; requires open-ended evaluation
+- **Calculated** — Numeric questions with randomised variable substitution
+- **Calculated Multichoice** — Multichoice variant with calculated/randomised values
+- **Calculated Simple** — Simplified version of Calculated
+- **Drag and Drop into Text** — Words/phrases dragged into gaps in a paragraph
+- **Embedded Answers (Cloze)** — Mixed-format question with inline sub-questions (MCQ, short-answer, numeric) embedded in the question body
+- **Random Short-Answer Matching** — Matching table built from randomly selected short-answer question pool
+- **Ordering** — Drag items into the correct sequential order
 
 ## Current Features
 
@@ -61,10 +74,21 @@ npm run build
 
 The dashboard includes a **QA Manual** section to inject test scenarios into `https://example.com`:
 
-- Moodle MCQ
-- Moodle True/False
-- NetAcad MCQ
-- NetAcad Matching
+**Moodle**
+
+- Moodle MCQ — standard multiple-choice question
+- Moodle True/False — boolean question
+- Moodle Matching — dropdown-style matching pairs
+- Moodle Short Answer — free-text response question
+- Moodle Numerical — numeric answer question
+- Moodle Gap Select — select missing words (gap-fill)
+- Moodle Quiz — combined multi-question page
+
+**NetAcad**
+
+- NetAcad MCQ — standard multiple-choice question
+- NetAcad Matching — drag-and-drop / dropdown matching
+- NetAcad Quiz — combined multi-question page
 
 This is useful to validate detection, quick mode, and UI behavior without requiring a live assessment page.
 
