@@ -773,10 +773,11 @@ export async function analyzeQuestionStreaming(
           platform: detectPlatform(context.pageUrl),
           confidence: "HIGH",
         });
+        const bankChunkText = `**Respuesta del banco de preguntas (${bankMatch.similarity}% coincidencia):**\n\n**${answerLetter}** — ${displayAnswer}\n\n${bankMatch.explanation || ""}`;
         try {
           port.postMessage({ type: "STREAM_STATUS", status: "started" });
-          port.postMessage({ type: "STREAM_CHUNK", chunk: `**Respuesta del banco de preguntas (${bankMatch.similarity}% coincidencia):**\n\n**${answerLetter}** — ${displayAnswer}\n\n${bankMatch.explanation || ""}` });
-          port.postMessage({ type: "STREAM_STATUS", status: "complete", outputTokens: 0 });
+          port.postMessage({ type: "STREAM_CHUNK", chunk: bankChunkText });
+          port.postMessage({ type: "STREAM_COMPLETE", fullText: bankChunkText, inputTokens: 0, outputTokens: 0, cost: 0 });
         } catch { /* port disconnected */ }
         return;
       }
