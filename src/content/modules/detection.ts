@@ -17,6 +17,7 @@ import type {
   MatchingCategory,
   MatchingOption,
   MatchingStyle,
+  SelectGap,
 } from "../../types/index.js";
 
 import { log, state } from "./state.js";
@@ -215,9 +216,9 @@ export async function detectQuestionsOnPage(retryCount: number = 0): Promise<Det
  * Moodle uses standard HTML with classes like .que.multichoice
  */
 export async function detectMoodleQuestions(): Promise<void> {
-  // Look for Moodle question containers (multichoice, true/false, and match/dropdown)
+  // Look for Moodle question containers (all supported types)
   const moodleQuestions = document.querySelectorAll(
-    ".que.multichoice, .que.truefalse, .que.match",
+    ".que.multichoice, .que.truefalse, .que.match, .que.shortanswer, .que.numerical, .que.gapselect",
   );
 
   if (moodleQuestions.length === 0) {
@@ -226,8 +227,25 @@ export async function detectMoodleQuestions(): Promise<void> {
 
   for (const [index, questionEl] of Array.from(moodleQuestions).entries()) {
     if (questionEl.classList.contains("match")) {
-      // Moodle matching question (dropdown table format)
       const questionData = await extractMoodleMatchQuestion(questionEl);
+      if (questionData) {
+        questionData.id = `moodle-q-${index}`;
+        state.detectedQuestions.push(questionData);
+      }
+    } else if (questionEl.classList.contains("shortanswer")) {
+      const questionData = await extractMoodleShortAnswerQuestion(questionEl, "short-answer");
+      if (questionData) {
+        questionData.id = `moodle-q-${index}`;
+        state.detectedQuestions.push(questionData);
+      }
+    } else if (questionEl.classList.contains("numerical")) {
+      const questionData = await extractMoodleShortAnswerQuestion(questionEl, "numerical");
+      if (questionData) {
+        questionData.id = `moodle-q-${index}`;
+        state.detectedQuestions.push(questionData);
+      }
+    } else if (questionEl.classList.contains("gapselect")) {
+      const questionData = await extractMoodleSelectMissingWords(questionEl);
       if (questionData) {
         questionData.id = `moodle-q-${index}`;
         state.detectedQuestions.push(questionData);
@@ -990,7 +1008,7 @@ export function frameHasQuizContent(): boolean {
 
   // Moodle detection - look for quiz question containers
   const moodleQuestions = document.querySelectorAll(
-    ".que.multichoice, .que.truefalse, .que.shortanswer, .que.essay, .que.match",
+    ".que.multichoice, .que.truefalse, .que.shortanswer, .que.numerical, .que.essay, .que.match, .que.gapselect",
   );
   if (moodleQuestions.length > 0) {
     return true;
@@ -1276,7 +1294,7 @@ export async function detectVisibleQuestion(): Promise<DetectedQuestion | null> 
 export async function detectMoodleQuestion(): Promise<DetectedQuestion | null> {
   // Look for Moodle question containers (all supported types)
   const moodleQuestions = document.querySelectorAll(
-    ".que.multichoice, .que.truefalse, .que.match",
+    ".que.multichoice, .que.truefalse, .que.match, .que.shortanswer, .que.numerical, .que.gapselect",
   );
 
   if (moodleQuestions.length === 0) {
@@ -1292,11 +1310,9 @@ export async function detectMoodleQuestion(): Promise<DetectedQuestion | null> {
     const rect = questionEl.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) continue;
 
-    // Check if question is in viewport
     const isInViewport = rect.top < window.innerHeight && rect.bottom > 0;
     if (!isInViewport) continue;
 
-    // Score by proximity to center
     const centerDist = Math.abs((rect.top + rect.bottom) / 2 - viewportCenterY);
     const score = 10000 - centerDist;
 
@@ -1307,8 +1323,7 @@ export async function detectMoodleQuestion(): Promise<DetectedQuestion | null> {
   }
 
   if (!bestQuestion) {
-    // Fallback: use the first question in the DOM when getBoundingClientRect
-    // returns zero dimensions (iframes, jsdom, or non-laid-out pages)
+    // Fallback for zero-dimension contexts (iframes, jsdom)
     bestQuestion = moodleQuestions[0] ?? null;
   }
 
@@ -1319,6 +1334,15 @@ export async function detectMoodleQuestion(): Promise<DetectedQuestion | null> {
   // Route to correct extractor based on question type
   if (bestQuestion.classList.contains("match")) {
     return await extractMoodleMatchQuestion(bestQuestion);
+  }
+  if (bestQuestion.classList.contains("shortanswer")) {
+    return await extractMoodleShortAnswerQuestion(bestQuestion, "short-answer");
+  }
+  if (bestQuestion.classList.contains("numerical")) {
+    return await extractMoodleShortAnswerQuestion(bestQuestion, "numerical");
+  }
+  if (bestQuestion.classList.contains("gapselect")) {
+    return await extractMoodleSelectMissingWords(bestQuestion);
   }
   return await extractMoodleQuestionData(bestQuestion);
 }
@@ -1623,6 +1647,128 @@ async function extractMoodleMatchQuestion(questionEl: Element): Promise<Detected
     matchingOptions,
     // matchingStyle intentionally omitted → falls back to "drag-drop" in api.ts
     // which uses the A-1, B-3, C-2 answer format expected for this question type
+  };
+}
+
+/**
+ * Extract a Moodle Short Answer or Numerical question.
+ * These are free-text questions — no predefined options.
+ */
+async function extractMoodleShortAnswerQuestion(
+  questionEl: Element,
+  type: "short-answer" | "numerical",
+): Promise<DetectedQuestion | null> {
+  const courseName = extractMoodleCourseName();
+
+  const qnoEl = questionEl.querySelector(".qno");
+  const questionNumber = qnoEl ? parseInt(qnoEl.textContent?.trim() || "1") : 1;
+
+  const qtextEl = questionEl.querySelector(".qtext");
+  const questionText = qtextEl?.textContent?.trim() || "";
+
+  if (!questionText) return null;
+
+  return {
+    id: `moodle-q-${questionNumber}`,
+    type,
+    text: questionText,
+    options: [],
+    element: questionEl,
+    questionNumber,
+    platform: "moodle",
+    confidence: 95,
+    courseName,
+  };
+}
+
+/**
+ * Extract a Moodle "Select Missing Words" (gapselect) question.
+ * The question text contains inline <select> dropdowns that replace [[n]] placeholders.
+ * Each dropdown belongs to a choice group; gaps sharing identical option lists share a group.
+ */
+async function extractMoodleSelectMissingWords(
+  questionEl: Element,
+): Promise<DetectedQuestion | null> {
+  const courseName = extractMoodleCourseName();
+
+  const qnoEl = questionEl.querySelector(".qno");
+  const questionNumber = qnoEl ? parseInt(qnoEl.textContent?.trim() || "1") : 1;
+
+  const qtextEl = questionEl.querySelector(".qtext");
+  if (!qtextEl) return null;
+
+  const liveSelects = Array.from(qtextEl.querySelectorAll("select"));
+  if (liveSelects.length === 0) return null;
+
+  // Clone to reconstruct text without modifying the live DOM
+  const cloned = qtextEl.cloneNode(true) as Element;
+  const clonedSelects = Array.from(cloned.querySelectorAll("select"));
+
+  const selectGaps: SelectGap[] = [];
+  const selectChoices: Record<string, string[]> = {};
+
+  // fingerprint → groupId, so gaps sharing the same option list reuse the same group
+  const choiceFingerprints = new Map<string, string>();
+  let groupCounter = 0;
+
+  for (let i = 0; i < liveSelects.length; i++) {
+    const liveSelect = liveSelects[i];
+    const clonedSelect = clonedSelects[i];
+    const gapIndex = i + 1; // 1-based
+
+    // Collect choices (skip the "Choose..." placeholder at value 0)
+    const choices: string[] = [];
+    for (const opt of Array.from(liveSelect.querySelectorAll("option"))) {
+      const value = parseInt(opt.getAttribute("value") || "0");
+      if (value > 0) {
+        choices.push(opt.textContent?.trim() || "");
+      }
+    }
+
+    // Determine group by fingerprinting the choice list
+    const fingerprint = choices.join("|");
+    let groupId: string;
+    if (choiceFingerprints.has(fingerprint)) {
+      groupId = choiceFingerprints.get(fingerprint)!;
+    } else {
+      groupId = String.fromCharCode(65 + groupCounter); // A, B, C...
+      groupCounter++;
+      choiceFingerprints.set(fingerprint, groupId);
+      selectChoices[groupId] = choices;
+    }
+
+    // Replace the cloned <select> with a plain-text [[n]] marker
+    clonedSelect.replaceWith(`[[${gapIndex}]]`);
+
+    selectGaps.push({ index: gapIndex, groupId, leftContext: "", rightContext: "" });
+  }
+
+  // Reconstruct question text and fill in gap contexts
+  const fullText = (cloned.textContent || "").replace(/\s+/g, " ").trim();
+
+  for (const gap of selectGaps) {
+    const marker = `[[${gap.index}]]`;
+    const pos = fullText.indexOf(marker);
+    if (pos !== -1) {
+      gap.leftContext = fullText.substring(0, pos).slice(-60).trim();
+      gap.rightContext = fullText.substring(pos + marker.length, pos + marker.length + 60).trim();
+    }
+  }
+
+  if (!fullText || selectGaps.length === 0) return null;
+
+  return {
+    id: `moodle-q-${questionNumber}`,
+    type: "select-missing-words",
+    text: fullText,
+    options: [],
+    element: questionEl,
+    questionNumber,
+    platform: "moodle",
+    confidence: 95,
+    courseName,
+    selectGaps,
+    selectChoices,
   };
 }
 
