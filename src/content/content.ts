@@ -238,6 +238,9 @@ type QAScenarioType =
   | "moodle-mcq"
   | "moodle-truefalse"
   | "moodle-match"
+  | "moodle-shortanswer"
+  | "moodle-numerical"
+  | "moodle-gapselect"
   | "moodle-quiz"
   | "netacad-mcq"
   | "netacad-matching"
@@ -315,6 +318,92 @@ function injectNetAcadMatching(target: HTMLElement): void {
     <div class="objectMatching-option-item"><span class="category-item-text">443</span></div>
     <div class="objectMatching-option-item"><span class="category-item-text">22</span></div>
     <div class="objectMatching-option-item"><span class="category-item-text">80</span></div>
+  `;
+}
+
+function injectMoodleShortAnswer(target: HTMLElement): void {
+  target.innerHTML = `
+    <div class="qa-block">
+      <h3>Moodle Simulado — Respuesta corta (Short Answer)</h3>
+      <p class="qa-tip">La IA responderá con texto libre. Respuesta esperada: <strong>HyperText Transfer Protocol</strong>.</p>
+      <div class="que shortanswer">
+        <div class="info"><h3 class="no">Pregunta <span class="qno">1</span></h3></div>
+        <div class="content">
+          <div class="formulation clearfix">
+            <div class="qtext">¿Qué significa el acrónimo <strong>HTTP</strong> en el contexto de la World Wide Web?</div>
+            <div class="answer">
+              <input type="text" class="form-control d-inline" size="30" placeholder="Escribe tu respuesta aquí" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function injectMoodleNumerical(target: HTMLElement): void {
+  target.innerHTML = `
+    <div class="qa-block">
+      <h3>Moodle Simulado — Numérica (Numerical)</h3>
+      <p class="qa-tip">La IA responderá con un número. Respuesta esperada: <strong>32</strong>.</p>
+      <div class="que numerical">
+        <div class="info"><h3 class="no">Pregunta <span class="qno">1</span></h3></div>
+        <div class="content">
+          <div class="formulation clearfix">
+            <div class="qtext">¿Cuántos bits tiene una dirección IPv4?</div>
+            <div class="answer">
+              <input type="text" class="form-control d-inline" size="15" placeholder="Respuesta numérica" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function injectMoodleGapSelect(target: HTMLElement): void {
+  target.innerHTML = `
+    <div class="qa-block">
+      <h3>Moodle Simulado — Selecciona las palabras faltantes (Select Missing Words)</h3>
+      <p class="qa-tip">Respuesta esperada: <strong>[[1]]=HTTP, [[2]]=80, [[3]]=HTTPS, [[4]]=443</strong>.</p>
+      <div class="que gapselect">
+        <div class="info"><h3 class="no">Pregunta <span class="qno">1</span></h3></div>
+        <div class="content">
+          <div class="formulation clearfix">
+            <div class="qtext">El protocolo
+              <select name="resp_1">
+                <option value="0">Elegir...</option>
+                <option value="1">HTTP</option>
+                <option value="2">FTP</option>
+                <option value="3">SSH</option>
+              </select>
+              utiliza el puerto
+              <select name="resp_2">
+                <option value="0">Elegir...</option>
+                <option value="1">80</option>
+                <option value="2">21</option>
+                <option value="3">22</option>
+              </select>
+              para comunicación no cifrada, mientras que
+              <select name="resp_3">
+                <option value="0">Elegir...</option>
+                <option value="1">HTTP</option>
+                <option value="2">HTTPS</option>
+                <option value="3">FTP</option>
+              </select>
+              usa el puerto
+              <select name="resp_4">
+                <option value="0">Elegir...</option>
+                <option value="1">80</option>
+                <option value="2">443</option>
+                <option value="3">8080</option>
+              </select>
+              para comunicación cifrada.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   `;
 }
 
@@ -486,7 +575,7 @@ function injectMoodleQuiz(target: HTMLElement): void {
       <span class="qa-quiz-platform">🟣 Moodle — Quiz Real</span>
       <div class="qa-quiz-nav">
         <button class="qa-sandbox-nav-btn" id="qa-nav-prev" disabled>← Anterior</button>
-        <span class="qa-quiz-progress">Pregunta 1 de 3</span>
+        <span class="qa-quiz-progress">Pregunta 1 de 6</span>
         <button class="qa-sandbox-nav-btn" id="qa-nav-next">Siguiente →</button>
       </div>
     </div>
@@ -574,6 +663,85 @@ function injectMoodleQuiz(target: HTMLElement): void {
                     </tr>
                   </tbody>
                 </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="qa-slide" data-slide="3" style="display:none">
+      <div class="qa-block">
+        <h3>Pregunta 4 — Respuesta corta (Short Answer)</h3>
+        <div class="que shortanswer">
+          <div class="info"><h3 class="no">Pregunta <span class="qno">4</span></h3></div>
+          <div class="content">
+            <div class="formulation clearfix">
+              <div class="qtext">¿Cuál es el nombre completo del protocolo cuyas siglas son HTTP?</div>
+              <div class="ablock">
+                <label for="qa_sa_input">Respuesta:</label>
+                <input type="text" id="qa_sa_input" class="form-control d-inline" size="30" placeholder="Escribe tu respuesta..." />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="qa-slide" data-slide="4" style="display:none">
+      <div class="qa-block">
+        <h3>Pregunta 5 — Numérica (Numerical)</h3>
+        <div class="que numerical">
+          <div class="info"><h3 class="no">Pregunta <span class="qno">5</span></h3></div>
+          <div class="content">
+            <div class="formulation clearfix">
+              <div class="qtext">¿Cuántos bits componen una dirección IPv4?</div>
+              <div class="ablock">
+                <label for="qa_num_input">Respuesta:</label>
+                <input type="text" id="qa_num_input" class="form-control d-inline" size="10" placeholder="Número..." />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="qa-slide" data-slide="5" style="display:none">
+      <div class="qa-block">
+        <h3>Pregunta 6 — Seleccionar palabras que faltan (Gap Select)</h3>
+        <div class="que gapselect">
+          <div class="info"><h3 class="no">Pregunta <span class="qno">6</span></h3></div>
+          <div class="content">
+            <div class="formulation clearfix">
+              <div class="qtext">El protocolo
+                <select name="resp_1">
+                  <option value="0">Elegir...</option>
+                  <option value="1">HTTP</option>
+                  <option value="2">FTP</option>
+                  <option value="3">SMTP</option>
+                </select>
+                utiliza el puerto
+                <select name="resp_2">
+                  <option value="0">Elegir...</option>
+                  <option value="1">80</option>
+                  <option value="2">21</option>
+                  <option value="3">25</option>
+                </select>
+                para tráfico no cifrado, mientras que
+                <select name="resp_3">
+                  <option value="0">Elegir...</option>
+                  <option value="1">HTTPS</option>
+                  <option value="2">SFTP</option>
+                  <option value="3">SMTPS</option>
+                </select>
+                utiliza el puerto
+                <select name="resp_4">
+                  <option value="0">Elegir...</option>
+                  <option value="1">443</option>
+                  <option value="2">22</option>
+                  <option value="3">465</option>
+                </select>
+                para comunicaciones seguras.
               </div>
             </div>
           </div>
@@ -729,6 +897,12 @@ function injectQAScenario(scenario: QAScenarioType): void {
         </div>
       </div>
     `;
+  } else if (scenario === "moodle-shortanswer") {
+    injectMoodleShortAnswer(content);
+  } else if (scenario === "moodle-numerical") {
+    injectMoodleNumerical(content);
+  } else if (scenario === "moodle-gapselect") {
+    injectMoodleGapSelect(content);
   } else if (scenario === "netacad-mcq") {
     injectNetAcadMcq(content);
   } else if (scenario === "moodle-match") {
