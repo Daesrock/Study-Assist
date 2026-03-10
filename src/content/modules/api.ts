@@ -474,6 +474,32 @@ export async function handleQuickClick(
         courseName: question.courseName, // Academic course for context
         qaMode: isQASandboxActive(),
       };
+    } else if (question.type === "select-missing-words") {
+      context = {
+        questionText: question.text,
+        questionType: "select-missing-words",
+        selectGaps: question.selectGaps,
+        selectChoices: question.selectChoices,
+        images: images,
+        pageTitle: document.title,
+        pageUrl: window.location.href,
+        responseMode: "quick",
+        skipDeepSeek: state.skipDeepSeek,
+        courseName: question.courseName,
+        qaMode: isQASandboxActive(),
+      };
+    } else if (question.type === "short-answer" || question.type === "numerical") {
+      context = {
+        questionText: question.text,
+        questionType: question.type,
+        images: images,
+        pageTitle: document.title,
+        pageUrl: window.location.href,
+        responseMode: "quick",
+        skipDeepSeek: state.skipDeepSeek,
+        courseName: question.courseName,
+        qaMode: isQASandboxActive(),
+      };
     } else {
       // Regular multiple choice context
       context = {
@@ -555,6 +581,23 @@ export async function handleQuickClick(
 
         // Mark as valid answer - block new requests until reload
         state.hasValidAnswer = true;
+      } else if (question.type === "select-missing-words") {
+        // Gap-fill answer: [[1]]=HTTP, [[2]]=80, ...
+        // Show on button vertically: one gap per line
+        const cleanResult = result.trim().replace(/,\s*/g, "\n");
+        quickBtn.innerHTML = `<span class="study-assist-quick-answer study-assist-matching-answer">${cleanResult}</span>`;
+        quickBtn.classList.add("has-answer", "matching-answer");
+        if (container) container.classList.add("matching-mode");
+        state.hasValidAnswer = true;
+      } else if (question.type === "short-answer" || question.type === "numerical") {
+        // Free-text answer — display as-is on the button
+        const displayAnswer = result.trim() || "?";
+        quickBtn.innerHTML = `<span class="study-assist-quick-answer study-assist-matching-answer">${displayAnswer}</span>`;
+        quickBtn.classList.add("has-answer", "matching-answer");
+        if (container) container.classList.add("matching-mode");
+        if (displayAnswer !== "?") {
+          state.hasValidAnswer = true;
+        }
       } else {
         // Regular multiple choice handling
         const upperResult = result.toUpperCase();
@@ -707,6 +750,30 @@ export async function analyzeQuestion(
       pageUrl: window.location.href,
       responseMode: state.settings.responseMode,
       courseName: question.courseName, // Academic course for context
+      qaMode: isQASandboxActive(),
+    };
+  } else if (question.type === "select-missing-words") {
+    context = {
+      questionText: question.text,
+      questionType: "select-missing-words",
+      selectGaps: question.selectGaps,
+      selectChoices: question.selectChoices,
+      images: images,
+      pageTitle: document.title,
+      pageUrl: window.location.href,
+      responseMode: state.settings.responseMode,
+      courseName: question.courseName,
+      qaMode: isQASandboxActive(),
+    };
+  } else if (question.type === "short-answer" || question.type === "numerical") {
+    context = {
+      questionText: question.text,
+      questionType: question.type,
+      images: images,
+      pageTitle: document.title,
+      pageUrl: window.location.href,
+      responseMode: state.settings.responseMode,
+      courseName: question.courseName,
       qaMode: isQASandboxActive(),
     };
   } else {
