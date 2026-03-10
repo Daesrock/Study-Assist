@@ -21,6 +21,9 @@ export function formatQuestionType(type: string | undefined): string {
     "true-false": "True/False",
     "fill-blank": "Fill in the Blank",
     matching: "Matching",
+    "short-answer": "Short Answer",
+    numerical: "Numerical",
+    "select-missing-words": "Select Missing Words",
     unknown: "General Question",
   };
   return types[type || "unknown"] || types["unknown"];
@@ -111,6 +114,31 @@ export function buildDeepSeekPrompt(
   // Handle matching questions
   if (questionType === "matching" && categories && matchingOptions) {
     return buildDeepSeekMatchingPrompt(context, expertContext, referenceSection);
+  }
+
+  // Handle select-missing-words questions
+  if (questionType === "select-missing-words" && context.selectGaps && context.selectChoices) {
+    return buildDeepSeekSelectMissingWordsPrompt(context, expertContext);
+  }
+
+  // Handle short-answer and numerical questions (free-text, no options)
+  if (questionType === "short-answer" || questionType === "numerical") {
+    const academicContext = courseName ? `\nACADEMIC CONTEXT:\nCourse: ${courseName}\n` : '';
+    const typeLabel = questionType === "numerical" ? "Numerical" : "Short Answer";
+    return `${expertContext}${academicContext}
+${referenceSection}
+This is a ${typeLabel} question. Answer with a concise, precise response.
+
+QUESTION: ${questionText}
+
+INSTRUCTIONS:
+1. Analyze the question carefully
+2. Provide the correct answer
+3. Rate your confidence: LOW, MEDIUM, or HIGH
+
+RESPONSE FORMAT (exactly as shown):
+ANSWER: [your answer]
+CONFIDENCE: [LOW/MEDIUM/HIGH]`;
   }
 
   // Build academic context if available
@@ -214,6 +242,50 @@ CONFIDENCE: [LOW/MEDIUM/HIGH]`;
   return prompt;
 }
 
+function buildDeepSeekSelectMissingWordsPrompt(
+  context: AnalysisContext,
+  expertContext: string,
+): string {
+  const { questionText, selectGaps, selectChoices, courseName } = context;
+  const academicContext = courseName ? `\nACADEMIC CONTEXT:\nCourse: ${courseName}\n` : '';
+
+  let prompt = `${expertContext}${academicContext}
+
+This is a SELECT MISSING WORDS question. Fill each numbered gap [[n]] with the correct word from the available choices.
+
+QUESTION: ${questionText}
+
+AVAILABLE CHOICES PER GROUP:
+`;
+
+  for (const [groupId, choices] of Object.entries(selectChoices || {})) {
+    prompt += `Group ${groupId}: ${choices.join(", ")}\n`;
+  }
+
+  if (selectGaps && selectGaps.length > 0) {
+    prompt += `\nGAP CONTEXT:\n`;
+    for (const gap of selectGaps) {
+      prompt += `[[${gap.index}]] (Group ${gap.groupId}): "...${gap.leftContext} ___ ${gap.rightContext}..."\n`;
+    }
+  }
+
+  const exampleFormat = selectGaps
+    ? selectGaps.map((g) => `[[${g.index}]]=word`).join(", ")
+    : "[[1]]=word, [[2]]=word";
+
+  prompt += `
+INSTRUCTIONS:
+1. Read the full question with the [[n]] gap markers
+2. For each gap, choose the correct word from its group's choices
+3. Rate your confidence: LOW, MEDIUM, or HIGH
+
+RESPONSE FORMAT (exactly as shown):
+ANSWER: ${exampleFormat}
+CONFIDENCE: [LOW/MEDIUM/HIGH]`;
+
+  return prompt;
+}
+
 // ============================================
 // Claude Validation Prompt
 // ============================================
@@ -242,10 +314,23 @@ export function buildClaudeValidationPrompt(
       questionSection += `\nOPTIONS:\n`;
       matchingOptions.forEach((opt) => { questionSection += `${opt.index}. ${opt.text}\n`; });
     }
-  } else if (options && options.length > 0) {
+  } else if (questionType === "select-missing-words" && context.selectChoices) {
+    questionSection += `AVAILABLE CHOICES:\n`;
+    for (const [groupId, choices] of Object.entries(context.selectChoices)) {
+      questionSection += `Group ${groupId}: ${choices.join(", ")}\n`;
+    }
+  } else if (questionType !== "short-answer" && questionType !== "numerical" && options && options.length > 0) {
     questionSection += `OPTIONS:\n`;
     options.forEach((opt) => { questionSection += `${opt.letter}) ${opt.text}\n`; });
   }
+
+  const validationAnswerHint = questionType === "true-false"
+    ? "[correct answer - V or F]"
+    : questionType === "short-answer" || questionType === "numerical"
+    ? "[correct answer text]"
+    : questionType === "select-missing-words"
+    ? "[[1]]=word, [[2]]=word, etc."
+    : "[correct answer - single letter or comma-separated letters]";
 
   let prompt = `${expertContext}${academicContext}
 
@@ -267,10 +352,6 @@ DeepSeek's Chain-of-Thought Reasoning:
 ${deepseekAnalysis.reasoning}
 `;
   }
-
-  const validationAnswerHint = context.questionType === "true-false"
-    ? "[correct answer - V or F]"
-    : "[correct answer - single letter or comma-separated letters]";
 
   prompt += `
 === END DEEPSEEK ANALYSIS ===
@@ -310,6 +391,34 @@ export function buildAnalysisPrompt(
   if (responseMode === "quick") {
     if (questionType === "matching" && categories && matchingOptions) {
       return buildMatchingPrompt(context);
+    }
+
+    // Select Missing Words quick mode
+    if (questionType === "select-missing-words" && context.selectGaps && context.selectChoices) {
+      return buildDeepSeekSelectMissingWordsPrompt(context,
+        getExpertContext(pageTitle).isNetAcad
+          ? "You are a CCNA/CCNP networking expert."
+          : "You are an expert exam analyst."
+      );
+    }
+
+    // Short Answer / Numerical quick mode
+    if (questionType === "short-answer" || questionType === "numerical") {
+      const expertContext = getExpertContext(pageTitle).isNetAcad
+        ? "You are a CCNA/CCNP networking expert with deep knowledge of Cisco technologies."
+        : "You are an expert exam analyst with broad knowledge across all academic and technical subjects.";
+      const typeLabel = questionType === "numerical" ? "Numerical" : "Short Answer";
+      return `${expertContext}${academicContext}
+
+This is a ${typeLabel} question. Answer concisely.
+
+Question: ${questionText}
+
+Think step-by-step:
+1. What is the question asking?
+2. Determine the correct answer
+
+After your analysis, write ANSWER: [your answer] on the last line.`;
     }
 
     const requiredAnswers = extractRequiredAnswers(questionText);
@@ -382,6 +491,13 @@ ${quickAnswerHint}`;
   // Handle matching questions in non-quick mode
   if (questionType === "matching" && categories && matchingOptions) {
     return buildMatchingPrompt(context);
+  }
+
+  // Handle select-missing-words in non-quick mode
+  if (questionType === "select-missing-words" && context.selectGaps && context.selectChoices) {
+    return buildDeepSeekSelectMissingWordsPrompt(context,
+      "You are an educational AI tutor helping a student understand a question."
+    );
   }
 
   // Non-quick mode: educational format
