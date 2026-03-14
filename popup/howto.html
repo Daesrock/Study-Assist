@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="es-MX">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Study Assist — Cómo usar</title>
+    <link rel="stylesheet" href="howto.css" />
+  </head>
+  <body>
+    <main class="guide">
+      <header class="guide-header">
+        <h1>📖 Cómo usar Study Assist</h1>
+        <p>
+          Guía completa de funcionalidades, atajos y configuración para Moodle y
+          NetAcad.
+        </p>
+      </header>
+
+      <section class="card">
+        <h2>1) Configuración inicial</h2>
+        <ol>
+          <li>
+            Abre el popup de la extensión y activa el interruptor principal.
+          </li>
+          <li>Guarda tu clave de Claude. (Opcional: agrega DeepSeek).</li>
+          <li>Agrega el dominio permitido donde estudiarás.</li>
+          <li>Activa o desactiva Modo Rápido según prefieras.</li>
+        </ol>
+      </section>
+
+      <section class="card grid-2">
+        <div>
+          <h2>2) Modos de uso</h2>
+          <ul>
+            <li>
+              <strong>Modo rápido:</strong> botón SA flotante y respuesta corta.
+            </li>
+            <li>
+              <strong>Modo non-quick:</strong> panel completo con pregunta,
+              opciones y análisis.
+            </li>
+            <li>
+              <strong>Auto-detect:</strong> detecta preguntas automáticamente al
+              cargar o navegar.
+            </li>
+          </ul>
+        </div>
+        <div>
+          <h2>3) IA y fuentes</h2>
+          <ul>
+            <li>
+              <strong>DeepSeek + Claude:</strong> flujo híbrido (razonamiento +
+              validación).
+            </li>
+            <li><strong>Solo Claude:</strong> análisis directo.</li>
+            <li>
+              <strong>Question bank (NetAcad):</strong> respuesta instantánea
+              cuando hay coincidencia alta.
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>4) Atajos de teclado</h2>
+        <div class="shortcuts">
+          <div>
+            <kbd>SHIFT</kbd
+            ><span>Analiza la pregunta visible (quick mode).</span>
+          </div>
+          <div>
+            <kbd>CTRL + SHIFT</kbd><span>Fuerza Claude (omite DeepSeek).</span>
+          </div>
+          <div>
+            <kbd>ALT + W</kbd><span>Re-detecta la pregunta actual.</span>
+          </div>
+          <div><kbd>ALT + Q</kbd><span>Oculta/muestra el botón SA.</span></div>
+          <div>
+            <kbd>ALT + X</kbd><span>Cancela una petición en curso.</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>5) Tipos de preguntas soportadas</h2>
+        <ul>
+          <li>
+            <strong>Moodle:</strong> Opción múltiple, V/F, Match, Short Answer,
+            Numerical, Select Missing Words.
+          </li>
+          <li>
+            <strong>NetAcad:</strong> MCQ y Matching (incluyendo quiz
+            navegable).
+          </li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <h2>6) Dashboard y QA Manual</h2>
+        <ul>
+          <li>Revisa costos, tokens, latencia y salud del sistema.</li>
+          <li>Filtra historial por plataforma, fuente, modelo y validación.</li>
+          <li>
+            Usa QA Manual para simular escenarios reales sin entrar a un curso.
+          </li>
+        </ul>
+      </section>
+
+      <section class="card note">
+        <h2>Notas importantes</h2>
+        <ul>
+          <li>Verifica siempre las respuestas; úsalo como ayuda de estudio.</li>
+          <li>
+            Si no detecta una pregunta, prueba <strong>ALT + W</strong> o el
+            botón ↻ del panel.
+          </li>
+          <li>
+            Con imágenes, normalmente Claude toma el control del análisis.
+          </li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>
