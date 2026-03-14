@@ -186,6 +186,45 @@ CONFIDENCE: HIGH`;
       expect(result.success).toBe(false);
     });
   });
+
+  describe("Short Answer, Numerical y Select Missing Words", () => {
+    it("should parse short-answer free text", () => {
+      const response = "ANSWER: HyperText Transfer Protocol\nCONFIDENCE: HIGH";
+      const result = parseDeepSeekResponse(
+        response,
+        mcqContext({ questionType: "short-answer", options: undefined }),
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.result).toBe("HyperText Transfer Protocol");
+      expect(result.confidence).toBe("HIGH");
+    });
+
+    it("should parse numerical answer", () => {
+      const response = "ANSWER: 32";
+      const result = parseDeepSeekResponse(
+        response,
+        mcqContext({ questionType: "numerical", options: undefined }),
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.result).toBe("32");
+      expect(result.confidence).toBe("LOW");
+    });
+
+    it("should parse select-missing-words mapping", () => {
+      const response = "ANSWER: [[1]]=HTTP, [[2]]=80\nCONFIDENCE: MEDIUM";
+      const result = parseDeepSeekResponse(
+        response,
+        mcqContext({ questionType: "select-missing-words", options: undefined }),
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.result).toContain("[[1]]=HTTP");
+      expect(result.result).toContain("[[2]]=80");
+      expect(result.confidence).toBe("MEDIUM");
+    });
+  });
 });
 
 // ============================================
@@ -230,6 +269,30 @@ ANSWER: C`;
 
   it("should extract true/false answer as F from last line", () => {
     expect(extractClaudeQuickAnswer("Análisis breve\nFALSO")).toBe("F");
+  });
+
+  it("should extract short-answer text when questionType is short-answer", () => {
+    expect(
+      extractClaudeQuickAnswer(
+        "Resultado final\nANSWER: HyperText Transfer Protocol",
+        "short-answer",
+      ),
+    ).toBe("HyperText Transfer Protocol");
+  });
+
+  it("should extract numerical text when questionType is numerical", () => {
+    expect(
+      extractClaudeQuickAnswer("Resultado final\nANSWER: 32", "numerical"),
+    ).toBe("32");
+  });
+
+  it("should extract select-missing-words mapping when questionType is select-missing-words", () => {
+    expect(
+      extractClaudeQuickAnswer(
+        "ANSWER: [[1]]=HTTP, [[2]]=80",
+        "select-missing-words",
+      ),
+    ).toContain("[[1]]=HTTP");
   });
 });
 
