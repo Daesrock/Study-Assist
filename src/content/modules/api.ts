@@ -834,7 +834,7 @@ export async function analyzeQuestion(
             break;
           case "STREAM_ERROR":
             hideLoading();
-            displayError(msg.error as string || "Stream error", callbacks.showQuestionsSummary);
+            displayError(msg.error as string || "Error de transmisión", callbacks.showQuestionsSummary);
             reject(new Error(msg.error as string));
             break;
         }
@@ -843,8 +843,8 @@ export async function analyzeQuestion(
       port.onDisconnect.addListener(() => {
         if (!fullText) {
           hideLoading();
-          displayError("Connection lost", callbacks.showQuestionsSummary);
-          reject(new Error("Port disconnected"));
+          displayError("Conexión perdida", callbacks.showQuestionsSummary);
+          reject(new Error("Puerto desconectado"));
         } else {
           resolve();
         }
