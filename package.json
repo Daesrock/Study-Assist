@@ -9,6 +9,7 @@
     "dev": "node scripts/build.js --watch",
     "package": "node scripts/package.js",
     "package:zip": "node scripts/package.js --zip",
+    "release:tag": "node scripts/tag-release.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:smoke": "vitest run tests/detection/netacad.test.ts tests/detection/moodle.test.ts tests/background/parsing.test.ts",
