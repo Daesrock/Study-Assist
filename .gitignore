@@ -4,6 +4,7 @@ node_modules/
 # Build outputs
 dist/
 dist.zip
+study-assist-v*.zip
 
 # IDE
 .vscode/
