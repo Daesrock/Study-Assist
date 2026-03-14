@@ -728,6 +728,94 @@ describe("Moodle Question Detection", () => {
     });
   });
 
+  describe("Additional Moodle types", () => {
+    it("should detect short-answer question", async () => {
+      document.body.innerHTML = `
+        <div class="que shortanswer">
+          <div class="info"><h3 class="no">Pregunta <span class="qno">4</span></h3></div>
+          <div class="content">
+            <div class="formulation clearfix">
+              <div class="qtext">¿Qué significan las siglas HTTP?</div>
+              <div class="answer"><input type="text" /></div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      await detectMoodleQuestions();
+
+      expect(state.detectedQuestions).toHaveLength(1);
+      const q = state.detectedQuestions[0];
+      expect(q.type).toBe("short-answer");
+      expect(q.platform).toBe("moodle");
+      expect(q.questionNumber).toBe(4);
+      expect(q.text).toContain("HTTP");
+      expect(q.options).toHaveLength(0);
+    });
+
+    it("should detect numerical question", async () => {
+      document.body.innerHTML = `
+        <div class="que numerical">
+          <div class="info"><h3 class="no">Pregunta <span class="qno">5</span></h3></div>
+          <div class="content">
+            <div class="formulation clearfix">
+              <div class="qtext">¿Cuántos bits tiene una dirección IPv4?</div>
+              <div class="answer"><input type="text" /></div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      await detectMoodleQuestions();
+
+      expect(state.detectedQuestions).toHaveLength(1);
+      const q = state.detectedQuestions[0];
+      expect(q.type).toBe("numerical");
+      expect(q.platform).toBe("moodle");
+      expect(q.questionNumber).toBe(5);
+      expect(q.text).toContain("IPv4");
+      expect(q.options).toHaveLength(0);
+    });
+
+    it("should detect gapselect (select missing words) question", async () => {
+      document.body.innerHTML = `
+        <div class="que gapselect">
+          <div class="info"><h3 class="no">Pregunta <span class="qno">6</span></h3></div>
+          <div class="content">
+            <div class="formulation clearfix">
+              <div class="qtext">
+                El protocolo
+                <select name="resp_1">
+                  <option value="0">Elegir...</option>
+                  <option value="1">HTTP</option>
+                  <option value="2">FTP</option>
+                </select>
+                usa el puerto
+                <select name="resp_2">
+                  <option value="0">Elegir...</option>
+                  <option value="1">80</option>
+                  <option value="2">21</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      await detectMoodleQuestions();
+
+      expect(state.detectedQuestions).toHaveLength(1);
+      const q = state.detectedQuestions[0];
+      expect(q.type).toBe("select-missing-words");
+      expect(q.platform).toBe("moodle");
+      expect(q.questionNumber).toBe(6);
+      expect(q.text).toContain("[[1]]");
+      expect(q.text).toContain("[[2]]");
+      expect((q.selectGaps || []).length).toBeGreaterThanOrEqual(2);
+      expect(q.selectChoices).toBeDefined();
+    });
+  });
+
   describe("frameHasQuizContent with .que.match", () => {
     it("should return true when only a .que.match element is present", () => {
       document.body.innerHTML = `
