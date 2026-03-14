@@ -3,7 +3,7 @@
   "name": "__MSG_extName__",
   "version": "1.0.0",
   "description": "__MSG_extDescription__",
-  "default_locale": "en",
+  "default_locale": "es",
   "permissions": ["storage", "activeTab", "tabs", "scripting"],
   "host_permissions": [
     "https://api.anthropic.com/*",
