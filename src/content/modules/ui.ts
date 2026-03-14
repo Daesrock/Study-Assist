@@ -48,7 +48,7 @@ export function showReloadPrompt(): void {
       gap: 12px;
       animation: slideIn 0.3s ease;
     ">
-      <span>📚 Study Assist activated. Reload to enable.</span>
+      <span>📚 Study Assist activado. Recarga para habilitarlo.</span>
       <button id="study-assist-reload-btn" style="
         background: #4285f4;
         color: white;
@@ -58,7 +58,7 @@ export function showReloadPrompt(): void {
         cursor: pointer;
         font-weight: 600;
         font-size: 13px;
-      ">Reload</button>
+      ">Recargar</button>
       <button id="study-assist-dismiss-btn" style="
         background: transparent;
         color: #999;
@@ -149,15 +149,15 @@ export function createFullOverlay(refreshCurrentQuestionCallback?: () => Promise
     <div class="study-assist-header">
       <span class="study-assist-logo">SA</span>
       <div class="study-assist-controls">
-        <button class="study-assist-refresh" title="Re-detect question">↻</button>
-        <button class="study-assist-minimize" title="Minimize">−</button>
-        <button class="study-assist-close" title="Close">×</button>
+        <button class="study-assist-refresh" title="Volver a detectar pregunta">↻</button>
+        <button class="study-assist-minimize" title="Minimizar">−</button>
+        <button class="study-assist-close" title="Cerrar">×</button>
       </div>
     </div>
     <div class="study-assist-content">
       <div class="study-assist-loading" style="display: none;">
         <div class="study-assist-spinner"></div>
-        <span>Analyzing...</span>
+        <span>Analizando...</span>
       </div>
       <div class="study-assist-results"></div>
     </div>
@@ -329,7 +329,7 @@ export function createQuickButton(callbacks: QuickButtonCallbacks): void {
   quickBtn.id = "study-assist-quick";
   quickBtn.innerHTML = `<span>SA</span>`;
   quickBtn.title =
-    "Click to get answer | SHIFT: Analyze | ALT+W: Re-detect | ALT+Q: Hide | ALT+X: Cancel";
+    "Clic para obtener respuesta | SHIFT: Analizar | ALT+W: Re-detectar | ALT+Q: Ocultar | ALT+X: Cancelar";
   container.appendChild(quickBtn);
 
   document.body.appendChild(container);
@@ -505,7 +505,7 @@ export function highlightDetectedQuestions(
     const badge = document.createElement("div");
     badge.className = "study-assist-question-badge";
     badge.textContent = String(index + 1);
-    badge.title = `Question ${index + 1} - Click to analyze`;
+    badge.title = `Pregunta ${index + 1} - Clic para analizar`;
     badge.addEventListener("click", (e: MouseEvent): void => {
       e.stopPropagation();
       if (analyzeQuestionCallback) {
@@ -578,20 +578,20 @@ export function displaySingleQuestion(
           <p>${escapeHtml(question.text)}</p>
           <div class="study-assist-matching-container">
             <div class="study-assist-matching-section">
-              <h5>Categories:</h5>
+              <h5>Categorías:</h5>
               <div class="study-assist-matching-items">
                 ${categoriesList}
               </div>
             </div>
             <div class="study-assist-matching-section">
-              <h5>Options:</h5>
+              <h5>Opciones:</h5>
               <div class="study-assist-matching-items">
                 ${optionsList}
               </div>
             </div>
           </div>
         </div>
-        <button class="study-assist-analyze-btn-large">Analyze Question</button>
+        <button class="study-assist-analyze-btn-large">Analizar Pregunta</button>
       </div>
     `;
   } else {
@@ -612,7 +612,7 @@ export function displaySingleQuestion(
             ${optionsList}
           </div>
         </div>
-        <button class="study-assist-analyze-btn-large">Analyze Question</button>
+        <button class="study-assist-analyze-btn-large">Analizar Pregunta</button>
       </div>
     `;
   }
@@ -692,7 +692,7 @@ export function showNoQuestionsFound(): void {
 
   results.innerHTML = `
     <div class="study-assist-empty">
-      <p>No question detected. Click ↻ to retry.</p>
+      <p>No se detectó una pregunta. Haz clic en ↻ para reintentar.</p>
     </div>
   `;
 }
@@ -742,10 +742,10 @@ export function displayAnalysisResult(
 
   results.innerHTML = `
     <div class="study-assist-analysis">
-      <button class="study-assist-back-btn">← Back to Questions</button>
+      <button class="study-assist-back-btn">← Volver a Preguntas</button>
       
       <div class="study-assist-question-box">
-        <h4>📝 Question</h4>
+        <h4>📝 Pregunta</h4>
         <p>${escapeHtml(truncateText(question.text, 300))}</p>
         ${
           question.options && question.options.length > 0
@@ -775,7 +775,7 @@ export function displayAnalysisResult(
       </div>
       
       <div class="study-assist-disclaimer">
-        ⚠️ This is an AI-generated learning aid. Always verify information and use it to improve your understanding, not as a substitute for studying.
+          ⚠️ Esta es una ayuda de aprendizaje generada por IA. Verifica siempre la información y úsala para mejorar tu comprensión, no como sustituto del estudio.
       </div>
     </div>
   `;
@@ -817,10 +817,10 @@ export function displayAnalysisResultStreaming(
   if (isInitial) {
     results.innerHTML = `
       <div class="study-assist-analysis">
-        <button class="study-assist-back-btn">← Back to Questions</button>
+        <button class="study-assist-back-btn">← Volver a Preguntas</button>
         
         <div class="study-assist-question-box">
-          <h4>📝 Question</h4>
+          <h4>📝 Pregunta</h4>
           <p>${escapeHtml(truncateText(question.text, 300))}</p>
           ${
             question.options && question.options.length > 0
@@ -852,7 +852,7 @@ export function displayAnalysisResultStreaming(
         <div class="study-assist-token-info" id="study-assist-token-info" style="display:none;"></div>
         
         <div class="study-assist-disclaimer">
-          ⚠️ This is an AI-generated learning aid. Always verify information.
+          ⚠️ Esta es una ayuda de aprendizaje generada por IA. Verifica siempre la información.
         </div>
       </div>
     `;
@@ -883,9 +883,9 @@ export function displayAnalysisResultStreaming(
     if (tokenInfoEl) {
       tokenInfoEl.style.display = "block";
       tokenInfoEl.innerHTML = `
-        <span title="Input tokens">📥 ${tokenInfo.inputTokens}</span>
-        <span title="Output tokens">📤 ${tokenInfo.outputTokens}</span>
-        <span title="Estimated cost">💰 $${tokenInfo.cost.toFixed(6)}</span>
+        <span title="Tokens de entrada">📥 ${tokenInfo.inputTokens}</span>
+        <span title="Tokens de salida">📤 ${tokenInfo.outputTokens}</span>
+        <span title="Costo estimado">💰 $${tokenInfo.cost.toFixed(6)}</span>
       `;
     }
   }
@@ -909,9 +909,9 @@ export function displayError(
   results.innerHTML = `
     <div class="study-assist-error">
       <span class="study-assist-error-icon">⚠️</span>
-      <h3>Analysis Error</h3>
+      <h3>Error de Análisis</h3>
       <p>${escapeHtml(errorMessage)}</p>
-      <button class="study-assist-retry-btn">Try Again</button>
+      <button class="study-assist-retry-btn">Reintentar</button>
     </div>
   `;
 
