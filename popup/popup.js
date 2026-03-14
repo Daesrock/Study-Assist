@@ -75,6 +75,7 @@ const elements = {
   disguiseMode: document.getElementById("disguise-mode"),
   // New elements
   openDashboard: document.getElementById("open-dashboard"),
+  openHowTo: document.getElementById("open-howto"),
   recentHistory: document.getElementById("recent-history"),
   todayRequests: document.getElementById("today-requests"),
   todayTokens: document.getElementById("today-tokens"),
@@ -221,6 +222,9 @@ function setupEventListeners() {
   // Dashboard button
   if (elements.openDashboard) {
     elements.openDashboard.addEventListener("click", openDashboard);
+  }
+  if (elements.openHowTo) {
+    elements.openHowTo.addEventListener("click", openHowToPanel);
   }
 
   // DeepSeek API key management
@@ -690,6 +694,10 @@ async function checkStorageWarning() {
 // ============================================
 function openDashboard() {
   chrome.tabs.create({ url: chrome.runtime.getURL("popup/dashboard.html") });
+}
+
+function openHowToPanel() {
+  chrome.tabs.create({ url: chrome.runtime.getURL("popup/howto.html") });
 }
 
 // ============================================
