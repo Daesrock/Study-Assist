@@ -16,6 +16,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
 const DIST = join(ROOT, "dist");
 
+const pkgRaw = await fs.readFile(join(ROOT, "package.json"), "utf8");
+const pkg = JSON.parse(pkgRaw);
+const version = pkg.version || "0.0.0";
+const zipFileName = `study-assist-v${version}.zip`;
+
 const createZip = process.argv.includes("--zip");
 
 // Files/folders to include in distribution
@@ -78,7 +83,7 @@ async function copyRecursive(src, dest) {
 async function createZipFile() {
   console.log("\nCreating ZIP file...");
 
-  const zipPath = join(ROOT, "dist.zip");
+  const zipPath = join(ROOT, zipFileName);
   const isWindows = process.platform === "win32";
 
   const escapeForPowerShell = (value) => value.replace(/'/g, "''");
@@ -120,7 +125,7 @@ async function createZipFile() {
 
     try {
       execSync(method.cmd, method.options);
-      console.log(`Created: dist.zip (using ${method.name})`);
+      console.log(`Created: ${zipFileName} (using ${method.name})`);
       return;
     } catch {
       // Try next method
@@ -283,7 +288,7 @@ Click the extension icon then "Dashboard" to view:
   console.log(`Size: ${folderSize}`);
 
   if (createZip) {
-    console.log(`ZIP file: dist.zip`);
+    console.log(`ZIP file: ${zipFileName}`);
   }
 
   console.log("\nTo share with others:");
