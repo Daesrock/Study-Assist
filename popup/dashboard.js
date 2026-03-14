@@ -256,13 +256,13 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
   }
   let healthStatus, healthColor;
   if (recentErrors >= 3 || dsFailures >= 2) {
-    healthStatus = "Degraded";
+    healthStatus = "Degradado";
     healthColor = "red";
   } else if (recentErrors >= 1 || recentErrorFallbacks >= 2) {
-    healthStatus = "Warning";
+    healthStatus = "Advertencia";
     healthColor = "yellow";
   } else {
-    healthStatus = "Healthy";
+    healthStatus = "Saludable";
     healthColor = "green";
   }
 
@@ -274,13 +274,13 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
 
   let activeMode, modeCss;
   if (useDeepSeek && deepseekOnly) {
-    activeMode = "DeepSeek Only";
+    activeMode = "Solo DeepSeek";
     modeCss = "deepseek";
   } else if (useDeepSeek) {
-    activeMode = "Hybrid";
+    activeMode = "Híbrido";
     modeCss = "hybrid";
   } else {
-    activeMode = "Claude Only";
+    activeMode = "Solo Claude";
     modeCss = "claude";
   }
 
@@ -343,7 +343,7 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
       const plat = r.platform || "other";
       const isQA = plat === "qa-manual";
       return `
-      <tr data-idx="${i}" data-platform="${escapeAttr(plat)}">
+      <tr data-idx="${i}" data-platform="${escapeAttr(plat)}" data-source="${escapeAttr(r.source || "")}" data-model="${escapeAttr(r.model || "")}" data-validated="${r.validated ? "yes" : "no"}">
         <td>${time}</td>
         <td><span class="text-truncate" title="${escapeAttr(r.questionText)}">${escapeHtml(r.questionText)}</span></td>
         <td><span class="badge ${srcBadge}">${r.source}</span></td>
@@ -574,6 +574,23 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
         .map((p) => `<option value="${escapeAttr(p)}">${p}</option>`)
         .join("")
     : "";
+  const sourceOptions = Object.keys(stats.bySource || {}).sort().length
+    ? Object.keys(stats.bySource || {})
+        .sort()
+        .map(
+          (s) => `<option value="${escapeAttr(s)}">${escapeHtml(s)}</option>`,
+        )
+        .join("")
+    : "";
+  const modelOptions = Object.keys(stats.byModel || {}).sort().length
+    ? Object.keys(stats.byModel || {})
+        .sort()
+        .map(
+          (m) =>
+            `<option value="${escapeAttr(m)}">${escapeHtml(shortModel(m))}</option>`,
+        )
+        .join("")
+    : "";
   html += `
     <div class="section-title">📋 Historial Reciente</div>
     <div class="history-card">
@@ -583,11 +600,27 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
           <option value="all" selected>Todas</option>
           ${platformOptions}
         </select>
+        <label for="source-filter">🧠 Fuente:</label>
+        <select id="source-filter" class="platform-select">
+          <option value="all" selected>Todas</option>
+          ${sourceOptions}
+        </select>
+        <label for="model-filter">🤖 Modelo:</label>
+        <select id="model-filter" class="platform-select">
+          <option value="all" selected>Todos</option>
+          ${modelOptions}
+        </select>
+        <label for="valid-filter">✅ Valid.:</label>
+        <select id="valid-filter" class="platform-select">
+          <option value="all" selected>Todas</option>
+          <option value="yes">Sí</option>
+          <option value="no">No</option>
+        </select>
         <div class="history-pagination">
           <button class="btn-page" id="page-prev" title="Página anterior" disabled>←</button>
           <button class="btn-page" id="page-next" title="Página siguiente">→</button>
           <span class="page-info" id="page-info">1 / 1</span>
-          <label class="lines-label">LINES<br>PER<br>PAGE</label>
+          <label class="lines-label">FILAS<br>POR<br>PÁGINA</label>
           <select id="page-size" class="platform-select page-size-select">
             <option value="10" selected>10</option>
             <option value="25">25</option>
@@ -641,7 +674,7 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
             <li><strong>Clave Claude:</strong> Necesaria para el análisis principal. Se guarda cifrada.</li>
             <li><strong>Modelo:</strong> Haiku (rápido/barato), Sonnet (equilibrado), Opus (máxima capacidad).</li>
             <li><strong>DeepSeek:</strong> Opcional. Si se habilita, DeepSeek razona primero y Claude valida/corrige.</li>
-            <li><strong>DeepSeek Only:</strong> Usa solo DeepSeek; no funciona con imágenes ni preguntas de matching.</li>
+            <li><strong>Solo DeepSeek:</strong> Usa solo DeepSeek; no funciona con imágenes ni preguntas de matching.</li>
           </ul>
         </div>
 
@@ -687,8 +720,8 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
       <div class="qa-platform-group">
         <div class="qa-platform-header qa-netacad-header">🔵 NetAcad</div>
         <div class="qa-actions">
-          <button class="btn" id="qa-netacad-mcq-btn">MCQ</button>
-          <button class="btn" id="qa-netacad-matching-btn">Matching</button>
+          <button class="btn" id="qa-netacad-mcq-btn" data-tooltip="Pregunta de opción múltiple en componente NetAcad">MCQ</button>
+          <button class="btn" id="qa-netacad-matching-btn" data-tooltip="Pregunta de relación tipo drag/drop en NetAcad">Matching</button>
           <button class="btn btn-accent" id="qa-netacad-quiz-btn" data-tooltip="Quiz completo con navegación">🎯 Quiz Real</button>
         </div>
       </div>
@@ -696,9 +729,9 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
       <div class="qa-platform-group">
         <div class="qa-platform-header qa-moodle-header">🟣 Moodle</div>
         <div class="qa-actions">
-          <button class="btn" id="qa-moodle-mcq-btn">MCQ</button>
-          <button class="btn" id="qa-moodle-tf-btn">V/F</button>
-          <button class="btn" id="qa-moodle-match-btn">Match</button>
+          <button class="btn" id="qa-moodle-mcq-btn" data-tooltip="Moodle opción múltiple clásico">MCQ</button>
+          <button class="btn" id="qa-moodle-tf-btn" data-tooltip="Moodle verdadero/falso">V/F</button>
+          <button class="btn" id="qa-moodle-match-btn" data-tooltip="Moodle tipo relacionar (tabla con dropdowns)">Match</button>
           <button class="btn" id="qa-moodle-shortanswer-btn" data-tooltip="Respuesta corta libre">Short Answer</button>
           <button class="btn" id="qa-moodle-numerical-btn" data-tooltip="Respuesta numérica">Numerical</button>
           <button class="btn" id="qa-moodle-gapselect-btn" data-tooltip="Selecciona palabras faltantes con dropdowns">Gap Select</button>
@@ -715,7 +748,7 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
   html += `
     <div class="section-title">⚙️ Acciones</div>
     <div class="actions-row">
-      <button class="btn btn-reset-state" id="force-reset-btn" data-tooltip="Limpia los bloqueos de procesamiento activos (flags de petición en curso). NO borra historial ni estadísticas. Útil si la extensión queda 'colgada'.">⚡ Force AI State Reset</button>
+      <button class="btn btn-reset-state" id="force-reset-btn" data-tooltip="Limpia los bloqueos de procesamiento activos (flags de petición en curso). NO borra historial ni estadísticas. Útil si la extensión queda 'colgada'.">⚡ Forzar reinicio de estado IA</button>
       <button class="btn btn-warning" id="reset-session-btn" data-tooltip="Las estadísticas de sesión se recalculan automáticamente del historial. Usa 'Reset Completo' para borrar todo.">🔄 Reset Estadísticas Sesión</button>
       <button class="btn btn-danger" id="full-reset-btn" data-tooltip="⚠️ Borra TODOS los datos: historial, estadísticas, logs y caché. Acción irreversible.">🗑️ Reset Completo</button>
       <button class="btn" id="export-logs-btn" data-tooltip="Descarga un archivo JSON con el historial completo y las estadísticas de uso.">📤 Exportar Logs</button>
@@ -825,8 +858,15 @@ function bindDynamicEvents(history, devMode) {
       document.querySelectorAll("#history-tbody tr[data-platform]"),
     );
     const platVal = document.getElementById("platform-filter")?.value || "all";
+    const sourceVal = document.getElementById("source-filter")?.value || "all";
+    const modelVal = document.getElementById("model-filter")?.value || "all";
+    const validVal = document.getElementById("valid-filter")?.value || "all";
     return allRows.filter(
-      (row) => platVal === "all" || row.dataset.platform === platVal,
+      (row) =>
+        (platVal === "all" || row.dataset.platform === platVal) &&
+        (sourceVal === "all" || row.dataset.source === sourceVal) &&
+        (modelVal === "all" || row.dataset.model === modelVal) &&
+        (validVal === "all" || row.dataset.validated === validVal),
     );
   }
 
@@ -866,6 +906,30 @@ function bindDynamicEvents(history, devMode) {
   const platformFilter = document.getElementById("platform-filter");
   if (platformFilter) {
     platformFilter.addEventListener("change", () => {
+      historyPage = 0;
+      applyPagination();
+    });
+  }
+
+  const sourceFilter = document.getElementById("source-filter");
+  if (sourceFilter) {
+    sourceFilter.addEventListener("change", () => {
+      historyPage = 0;
+      applyPagination();
+    });
+  }
+
+  const modelFilter = document.getElementById("model-filter");
+  if (modelFilter) {
+    modelFilter.addEventListener("change", () => {
+      historyPage = 0;
+      applyPagination();
+    });
+  }
+
+  const validFilter = document.getElementById("valid-filter");
+  if (validFilter) {
+    validFilter.addEventListener("change", () => {
       historyPage = 0;
       applyPagination();
     });
@@ -1056,7 +1120,7 @@ function bindDynamicEvents(history, devMode) {
     forceResetBtn.addEventListener("click", async () => {
       if (
         !confirm(
-          "⚡ This will clear all pending request locks and processing flags.\nStats and history are NOT affected.\n\nProceed?",
+          "⚡ Esto limpiará todos los bloqueos de peticiones pendientes y flags de procesamiento.\nHistorial y estadísticas NO se verán afectados.\n\n¿Continuar?",
         )
       )
         return;
@@ -1075,7 +1139,9 @@ function bindDynamicEvents(history, devMode) {
             .sendMessage(tab.id, { type: "FORCE_STATE_RESET" })
             .catch(() => {});
         }
-        alert("AI state reset complete. Extension is ready for new requests.");
+        alert(
+          "Reinicio de estado IA completado. La extensión está lista para nuevas peticiones.",
+        );
       } catch (e) {
         alert("Error: " + e.message);
       }
