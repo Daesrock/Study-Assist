@@ -17,7 +17,7 @@ const PRICING: Record<string, { input: number; output: number }> = {
   "claude-sonnet-4-6": { input: 3.0, output: 15.0 },
 
   // Claude Opus
-  "claude-opus-4-6": { input: 15.0, output: 75.0 },
+  "claude-opus-4-6": { input: 5.0, output: 25.0 },
 
   // DeepSeek (thinking)
   "deepseek-reasoner": { input: 0.28, output: 0.42 },
