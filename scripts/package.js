@@ -100,20 +100,23 @@ async function createZipFile() {
   const methods = [
     {
       name: "PowerShell",
-      cmd: `powershell -NoProfile -Command "Import-Module Microsoft.PowerShell.Archive -ErrorAction Stop; Compress-Archive -LiteralPath '${escapedDist}' -DestinationPath '${escapedZip}' -Force"`,
+      // Compress contents of dist folder, not the folder itself
+      cmd: `powershell -NoProfile -Command "Import-Module Microsoft.PowerShell.Archive -ErrorAction Stop; Get-ChildItem -LiteralPath '${escapedDist}' | Compress-Archive -DestinationPath '${escapedZip}' -Force"`,
       options: { stdio: "pipe" },
       enabled: isWindows,
     },
     {
       name: "tar",
-      cmd: `tar -a -cf "${zipPath}" -C "${ROOT}" dist`,
-      options: { stdio: "pipe" },
+      // Enter dist directory and compress its contents
+      cmd: `tar -a -cf "${zipFileName}" *`,
+      options: { cwd: DIST, stdio: "pipe" },
       enabled: true,
     },
     {
       name: "zip",
-      cmd: `zip -r "${zipPath}" dist`,
-      options: { cwd: ROOT, stdio: "pipe" },
+      // Enter dist directory and compress its contents
+      cmd: `zip -r "../${zipFileName}" .`,
+      options: { cwd: DIST, stdio: "pipe" },
       enabled: true,
     },
   ];
