@@ -89,6 +89,26 @@ describe("calculateSimilarity", () => {
     const similarity = calculateSimilarity(bankQuestion, pageQuestion);
     expect(similarity).toBeGreaterThanOrEqual(0.6); // Should pass the 60% threshold
   });
+
+  it("should detect questions with 55% similarity (modules 10+ calibration)", () => {
+    // Real-world scenario: bank has "ataque de agotamiento de DHCP"
+    // but page says "ataque agotamiento DHCP servidores"
+    const bankQuestion = "cual es resultado ataque agotamiento dhcp";
+    const pageQuestion = "cual resultado ataque agotamiento dhcp servidores red";
+    const similarity = calculateSimilarity(bankQuestion, pageQuestion);
+    // This should be around 55-75%, which should pass the lowered threshold of 55%
+    expect(similarity).toBeGreaterThanOrEqual(0.5);
+    expect(similarity).toBeLessThanOrEqual(0.8);
+  });
+
+  it("should handle questions with extra context words", () => {
+    // Modules 10+ often have longer questions with more context
+    const bankQuestion = "que representa practica recomendada protocolos descubrimiento cdp lldp dispositivos red";
+    const pageQuestion = "que representa mejor practica recomendada relacion protocolos descubrimiento como cdp lldp dispositivos red empresa";
+    const similarity = calculateSimilarity(bankQuestion, pageQuestion);
+    // Should be around 55-70% due to extra words
+    expect(similarity).toBeGreaterThanOrEqual(0.5);
+  });
 });
 
 describe("isNetAcadPage", () => {

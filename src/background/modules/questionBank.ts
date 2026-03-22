@@ -163,11 +163,12 @@ export async function findMatchingQuestion(
 
   let bestMatch: MatchedQuestion | null = null;
   let bestSimilarity = 0;
-  
-  // Use lower threshold for long texts (routing tables, command outputs)
-  // These often have identical content but different text order (table-first vs question-first)
+
+  // Lowered threshold from 0.6 to 0.55 to improve detection for modules 10+
+  // Previously, many valid questions from modules 10-13 and 14-16 were not being matched
+  // due to slight variations in wording between the bank and actual exam questions
   const isLongText = questionText.length > 800;
-  const SIMILARITY_THRESHOLD = isLongText ? 0.55 : 0.6;
+  const SIMILARITY_THRESHOLD = isLongText ? 0.50 : 0.55;
 
   for (const moduleRange of modulesToSearch) {
     const module = bank.modules[moduleRange];
