@@ -10,7 +10,6 @@ import { log } from "./constants.js";
 // ============================================
 const PRICING: Record<string, { input: number; output: number }> = {
   // Claude Haiku
-  "claude-3-haiku-20240307": { input: 0.25, output: 1.25 },
   "claude-haiku-4-5-20251001": { input: 1.0, output: 5.0 },
 
   // Claude Sonnet

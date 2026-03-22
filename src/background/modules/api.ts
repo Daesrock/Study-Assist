@@ -45,7 +45,7 @@ import { trackUsage, calculateCost } from "./usageTracker.js";
 import { checkRateLimit, recordRequest } from "./rateLimiter.js";
 import { streamClaudeResponse } from "./streaming.js";
 
-const QA_CLAUDE_MODEL = "claude-3-haiku-20240307";
+const QA_CLAUDE_MODEL = "claude-haiku-4-5-20251001";
 
 // ============================================
 // Platform Detection

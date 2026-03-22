@@ -14,7 +14,7 @@ export const log = (...args: unknown[]): void => {
 // API Constants
 // ============================================
 export const CLAUDE_API_BASE = "https://api.anthropic.com/v1/messages";
-export const DEFAULT_MODEL = "claude-3-haiku-20240307";
+export const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
 export const ANTHROPIC_VERSION = "2023-06-01";
 
 export const DEEPSEEK_API_BASE = "https://api.deepseek.com/v1/chat/completions";

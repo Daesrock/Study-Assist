@@ -155,7 +155,7 @@ async function loadSettings() {
 
     // Set Claude model
     elements.claudeModel.value =
-      result[STORAGE_KEYS.CLAUDE_MODEL] ?? "claude-3-haiku-20240307";
+      result[STORAGE_KEYS.CLAUDE_MODEL] ?? "claude-haiku-4-5-20251001";
 
     // Set checkboxes
     elements.autoDetect.checked = result[STORAGE_KEYS.AUTO_DETECT] ?? true;
