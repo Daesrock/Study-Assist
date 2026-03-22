@@ -43,6 +43,10 @@
     "message": "Claude Haiku 4.5 (Más Rápido)",
     "description": "Opción modelo Haiku 4.5"
   },
+  "modelHaiku45": {
+    "message": "Claude Haiku 4.5 (Rápido)",
+    "description": "Opción modelo Haiku 4.5"
+  },
   "modelSonnet4": {
     "message": "Claude Sonnet 4 (Equilibrado)",
     "description": "Opción modelo Sonnet 4"
