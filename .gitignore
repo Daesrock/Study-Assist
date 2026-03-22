@@ -5,6 +5,7 @@ node_modules/
 dist/
 dist.zip
 study-assist-v*.zip
+AGENTS.md
 
 # IDE
 .vscode/
