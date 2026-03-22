@@ -1348,25 +1348,52 @@ export async function detectMoodleQuestion(): Promise<DetectedQuestion | null> {
 }
 
 /**
- * Extract course name from Moodle page title
- * Moodle format: "Quiz Title: Course Name" or just "Course Name"
+ * Extract course name from Moodle page
+ * Tries multiple sources in order of reliability:
+ * 1. #coursetitle element (most reliable)
+ * 2. Breadcrumb with itemprop="title" for course link
+ * 3. Page title format "Activity: Course Name"
  * @returns Course name or undefined
  */
 function extractMoodleCourseName(): string | undefined {
+  // Method 1: Look for #coursetitle (most reliable in Moodle themes)
+  const courseTitleEl = document.getElementById("coursetitle");
+  if (courseTitleEl) {
+    const courseName = courseTitleEl.textContent?.trim();
+    if (courseName && courseName.length > 2) {
+      return courseName;
+    }
+  }
+
+  // Method 2: Look in breadcrumb for course link
+  // Format: <a title="Course Name" href="...course/view.php..."><span itemprop="title">Course Name</span></a>
+  const breadcrumbLinks = document.querySelectorAll('.breadcrumb a[href*="/course/view.php"]');
+  for (const link of breadcrumbLinks) {
+    const titleAttr = link.getAttribute("title");
+    if (titleAttr && titleAttr.length > 2) {
+      return titleAttr;
+    }
+    const span = link.querySelector('span[itemprop="title"]');
+    if (span) {
+      const courseName = span.textContent?.trim();
+      if (courseName && courseName.length > 2) {
+        return courseName;
+      }
+    }
+  }
+
+  // Method 3: Fall back to page title parsing
+  // Moodle format: "Activity: Course Name" or "Quiz Title: Course Name"
   const title = document.title.trim();
-  
-  // Moodle typically uses format "Activity: Course Name"
-  // Example: "Cuestionario 3. UBUNTU: Sistemas Operativos"
   const colonIndex = title.lastIndexOf(':');
-  
+
   if (colonIndex !== -1 && colonIndex < title.length - 1) {
     const courseName = title.substring(colonIndex + 1).trim();
-    // Only return if it's not empty and not too short
     if (courseName.length > 3) {
       return courseName;
     }
   }
-  
+
   return undefined;
 }
 
