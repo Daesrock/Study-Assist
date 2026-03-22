@@ -150,8 +150,13 @@ export function injectWebexToggleWithCtrl(callbacks: KeyboardCallbacks): void {
   }
 
   // ALL FRAMES: Listen for Ctrl key and send message to parent
+  // IMPORTANT: CTRL does not work when SA button is hidden (Alt+Q pressed)
   document.addEventListener("keydown", (e: KeyboardEvent): void => {
     if (e.key === "Control") {
+      // If SA button is hidden (Alt+Q pressed), do not hide Webex
+      if (state.saButtonHidden) {
+        return;
+      }
       // Try locally first
       hideWebex();
       // Also send to parent frame (in case Webex is there)
@@ -257,6 +262,10 @@ export function injectWebexToggleWithCtrl(callbacks: KeyboardCallbacks): void {
 
   document.addEventListener("keyup", (e: KeyboardEvent): void => {
     if (e.key === "Control") {
+      // If SA button is hidden (Alt+Q pressed), do not show Webex
+      if (state.saButtonHidden) {
+        return;
+      }
       // Try locally first
       showWebex();
       // Also send to parent frame

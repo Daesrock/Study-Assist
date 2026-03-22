@@ -109,6 +109,8 @@ export interface State {
   slowConnectionTimer: ReturnType<typeof setTimeout> | null;
   requestCancelled: boolean;
   pendingQuestionChange: number | null;
+  // Track if SA button is hidden by Alt+Q (when true, CTRL should not hide Webex)
+  saButtonHidden: boolean;
 }
 
 // ============================================

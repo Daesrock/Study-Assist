@@ -272,7 +272,9 @@ export function toggleSAButtonVisibility(): void {
   if (container) {
     const isHidden = container.style.display === "none";
     container.style.display = isHidden ? "" : "none";
-    log(`[Study Assist] SA button ${isHidden ? "shown" : "hidden"}`);
+    // Update state to track SA button visibility
+    state.saButtonHidden = !isHidden;
+    log(`[Study Assist] SA button ${isHidden ? "shown" : "hidden"}, CTRL webex toggle ${isHidden ? "enabled" : "disabled"}`);
   } else {
     log("[Study Assist] SA button container not found");
   }

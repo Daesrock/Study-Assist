@@ -50,6 +50,8 @@ export const state: State = {
   requestCancelled: false,
   // Pending question change (for double-confirmation)
   pendingQuestionChange: null,
+  // Track if SA button is hidden by Alt+Q (when true, CTRL should not hide Webex)
+  saButtonHidden: false,
 };
 
 // ============================================
