@@ -141,6 +141,9 @@ export interface AnalysisResponse {
   result?: string;
   error?: string;
   source?: "deepseek" | "claude" | "question-bank";
+  // Status flags for visual feedback in quick mode
+  deepseekRetried?: boolean; // True if DeepSeek was retried after first failure
+  claudeFallback?: boolean; // True if Claude was used as fallback after DeepSeek failures
 }
 
 // ============================================

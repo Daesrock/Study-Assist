@@ -350,6 +350,8 @@ export async function analyzeQuestion(context: AnalysisContext): Promise<Analysi
 
     let deepseekAnalysisForClaude: DeepSeekAnalysisForClaude | null = null;
     let claudeFallbackReason: string | undefined;
+    let deepseekRetried = false; // Track if DeepSeek was retried
+    let claudeFallback = false; // Track if Claude is used as fallback after DeepSeek failure
 
     if (isDeepSeekOnlyMode && hasImages) {
       return { success: false, error: "⚠️ DeepSeek Only mode: Images are not supported. Disable 'DeepSeek Only' to use Claude for image questions." };
@@ -370,8 +372,10 @@ export async function analyzeQuestion(context: AnalysisContext): Promise<Analysi
       } else if (!deepseekResult.success) {
         if (deepseekResult.skipRetry) {
           log(`[Study Assist] DeepSeek failed (non-retryable) → Claude fallback: ${deepseekResult.error}`);
+          claudeFallback = true;
         } else {
           log("[Study Assist] DeepSeek failed, retrying...");
+          deepseekRetried = true; // Mark that we're retrying
           await new Promise((r) => setTimeout(r, 1000));
           deepseekResult = await analyzeWithDeepSeek(context, deepseekApiKey);
         }
@@ -379,6 +383,7 @@ export async function analyzeQuestion(context: AnalysisContext): Promise<Analysi
         if (!deepseekResult.success && !deepseekResult.cancelled) {
           log("[Study Assist] DeepSeek failed → Claude fallback");
           claudeFallbackReason = "deepseek_error";
+          claudeFallback = true; // Mark Claude as fallback
           if (isDeepSeekOnlyMode) {
             return { success: false, error: `⚠️ DeepSeek Only mode: ${deepseekResult.error || "API failed after retry. No Claude fallback available."}` };
           }
@@ -449,7 +454,13 @@ export async function analyzeQuestion(context: AnalysisContext): Promise<Analysi
     // When falling back to Claude after DeepSeek attempt, let Claude track its own latency.
     // Only pass original startTime if Claude is the primary (no DeepSeek attempt was made).
     const claudeStartTime = deepseekAnalysisForClaude ? Date.now() : startTime;
-    return await analyzeWithClaude(context, claudeApiKey!, selectedClaudeModel, deepseekAnalysisForClaude, claudeStartTime, claudeFallbackReason);
+    const claudeResponse = await analyzeWithClaude(context, claudeApiKey!, selectedClaudeModel, deepseekAnalysisForClaude, claudeStartTime, claudeFallbackReason);
+
+    // Add status flags to response for visual feedback
+    if (deepseekRetried) claudeResponse.deepseekRetried = true;
+    if (claudeFallback) claudeResponse.claudeFallback = true;
+
+    return claudeResponse;
   } catch (error) {
     await logError({ type: "analyzeQuestion_exception", error: (error as Error).message, stack: (error as Error).stack });
 

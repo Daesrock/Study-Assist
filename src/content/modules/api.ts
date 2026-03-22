@@ -554,6 +554,16 @@ export async function handleQuickClick(
     quickBtn.classList.remove("loading", "slow-connection");
     state.isRequestInProgress = false; // Release lock after API response
 
+    // Show visual feedback for DeepSeek retries/fallback (only when using Claude as fallback)
+    // Don't show if Claude was used directly (skipDeepSeek) or if using question bank
+    if (response.deepseekRetried && !response.claudeFallback && response.success) {
+      // DeepSeek was retried but succeeded on second attempt
+      showTemporaryBadge("⚠️ Reintentado", 2000);
+    } else if (response.claudeFallback && response.success) {
+      // Claude was used as fallback after DeepSeek failed
+      showTemporaryBadge("🔄 Claude fallback", 2500);
+    }
+
     if (response.success && response.result) {
       const result = response.result.trim();
 
@@ -856,4 +866,57 @@ export async function analyzeQuestion(
     hideLoading();
     displayError((error as Error).message, callbacks.showQuestionsSummary);
   }
+}
+
+// ============================================
+// Visual Feedback Helpers
+// ============================================
+
+/**
+ * Show a temporary badge near the SA button for error/retry feedback
+ * @param text - Text to display in the badge
+ * @param duration - How long to show the badge (ms)
+ */
+function showTemporaryBadge(text: string, duration: number): void {
+  const container = document.getElementById("study-assist-quick-container");
+  if (!container) return;
+
+  // Remove any existing badge
+  const existingBadge = document.getElementById("study-assist-status-badge");
+  if (existingBadge) {
+    existingBadge.remove();
+  }
+
+  // Create new badge
+  const badge = document.createElement("div");
+  badge.id = "study-assist-status-badge";
+  badge.className = "study-assist-status-badge";
+  badge.textContent = text;
+  badge.style.cssText = `
+    position: absolute;
+    top: -40px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(255, 152, 0, 0.95);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    z-index: 10000001;
+    animation: study-assist-badge-slide-in 0.3s ease-out;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  `;
+
+  container.appendChild(badge);
+
+  // Remove after duration
+  setTimeout(() => {
+    badge.style.animation = "study-assist-badge-slide-out 0.3s ease-in";
+    setTimeout(() => {
+      badge.remove();
+    }, 300);
+  }, duration);
 }
