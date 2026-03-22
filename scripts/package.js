@@ -107,8 +107,8 @@ async function createZipFile() {
     },
     {
       name: "tar",
-      // Enter dist directory and compress its contents
-      cmd: `tar -a -cf "${zipFileName}" *`,
+      // Enter dist directory and compress its contents to parent directory
+      cmd: `tar -a -cf "../${zipFileName}" *`,
       options: { cwd: DIST, stdio: "pipe" },
       enabled: true,
     },
