@@ -20,6 +20,8 @@ export function isPublicImageUrl(src: string): boolean {
     if (host === "localhost" || host === "127.0.0.1" || host === "[::1]") return false;
     // Exclude extension-internal URLs
     if (src.startsWith("chrome-extension://") || src.startsWith("moz-extension://")) return false;
+    // Moodle's pluginfile.php requires session authentication
+    if (url.pathname.includes("/pluginfile.php/")) return false;
     return true;
   } catch {
     return false;
