@@ -43,8 +43,16 @@ export function setQuestionsBank(bank: QuestionsBank | null): void {
 // ============================================
 
 export interface QuestionsBank {
+  version?: string;
+  generated?: string;
+  source?: string;
+  course?: string;
   modules: {
     [moduleKey: string]: {
+      moduleRange?: string;
+      title?: string;
+      url?: string;
+      questionCount?: number;
       questions: QuestionBankQuestion[];
     };
   };
@@ -62,6 +70,11 @@ export interface QuestionBankQuestion {
 export interface MatchedQuestion extends QuestionBankQuestion {
   moduleRange: string;
   similarity: number;
+  bankModel: "questions-bank.json" | "questions-bank-ccnadesdecero.json";
+  bankConflictDetected?: boolean;
+  bankConflictType?: "semantic-equivalent" | "real-conflict";
+  bankConflictAnswerSimilarity?: number;
+  bankSecondaryModel?: "questions-bank.json" | "questions-bank-ccnadesdecero.json";
 }
 
 export type ConfidenceLevel = "HIGH" | "MEDIUM" | "LOW";
@@ -85,6 +98,7 @@ export interface StorageData {
   claudeApiKey?: string;
   claudeModel?: string;
   useDeepSeek?: boolean;
+  useMultiBank?: boolean;
   deepseekApiKey?: string;
   deepseekOnly?: boolean;
   extensionActive?: boolean;

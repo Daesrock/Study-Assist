@@ -294,15 +294,22 @@ export async function analyzeQuestion(context: AnalysisContext): Promise<Analysi
     if (bankMatch && (bankMatch.correctAnswer || bankMatch.correctAnswers) && bankMatch.similarity >= 80) {
       const answerLetter = matchCorrectAnswerToLetter(bankMatch, context.options);
       if (answerLetter) {
-        const displayAnswer = bankMatch.correctAnswers ? bankMatch.correctAnswers.join(' | ') : bankMatch.correctAnswer || '';
-        log(`[Study Assist] INSTANT ANSWER from question bank (${bankMatch.similarity}% match): ${answerLetter}`);
+        log(`[Study Assist] INSTANT ANSWER from ${bankMatch.bankModel} (${bankMatch.similarity}% match): ${answerLetter}`);
+        const bankConflictTelemetry = bankMatch.bankConflictDetected
+          ? {
+            bankConflictDetected: true,
+            bankConflictType: bankMatch.bankConflictType,
+            bankConflictAnswerSimilarity: bankMatch.bankConflictAnswerSimilarity,
+            bankSecondaryModel: bankMatch.bankSecondaryModel,
+          }
+          : {};
         await trackUsage({
           timestamp: Date.now(),
           questionText: context.questionText.substring(0, 200),
           questionType: context.questionType,
           answer: answerLetter,
           source: "question-bank",
-          model: "questions-bank.json",
+          model: bankMatch.bankModel,
           inputTokens: 0,
           outputTokens: 0,
           responseMode: context.responseMode,
@@ -310,6 +317,7 @@ export async function analyzeQuestion(context: AnalysisContext): Promise<Analysi
           latencyMs: Date.now() - startTime,
           platform: detectPlatform(context.pageUrl),
           confidence: "HIGH",
+          ...bankConflictTelemetry,
         });
         return { success: true, result: answerLetter, source: "question-bank" };
       }
@@ -768,14 +776,22 @@ export async function analyzeQuestionStreaming(
       const answerLetter = matchCorrectAnswerToLetter(bankMatch, context.options);
       if (answerLetter) {
         const displayAnswer = bankMatch.correctAnswers ? bankMatch.correctAnswers.join(' | ') : bankMatch.correctAnswer || '';
-        log(`[Study Assist] INSTANT ANSWER (streaming) from question bank (${bankMatch.similarity}% match): ${answerLetter}`);
+        log(`[Study Assist] INSTANT ANSWER (streaming) from ${bankMatch.bankModel} (${bankMatch.similarity}% match): ${answerLetter}`);
+        const bankConflictTelemetry = bankMatch.bankConflictDetected
+          ? {
+            bankConflictDetected: true,
+            bankConflictType: bankMatch.bankConflictType,
+            bankConflictAnswerSimilarity: bankMatch.bankConflictAnswerSimilarity,
+            bankSecondaryModel: bankMatch.bankSecondaryModel,
+          }
+          : {};
         await trackUsage({
           timestamp: Date.now(),
           questionText: context.questionText.substring(0, 200),
           questionType: context.questionType,
           answer: answerLetter,
           source: "question-bank",
-          model: "questions-bank.json",
+          model: bankMatch.bankModel,
           inputTokens: 0,
           outputTokens: 0,
           responseMode: context.responseMode,
@@ -783,6 +799,7 @@ export async function analyzeQuestionStreaming(
           latencyMs: Date.now() - startTime,
           platform: detectPlatform(context.pageUrl),
           confidence: "HIGH",
+          ...bankConflictTelemetry,
         });
         const bankChunkText = `**Respuesta del banco de preguntas (${bankMatch.similarity}% coincidencia):**\n\n**${answerLetter}** — ${displayAnswer}\n\n${bankMatch.explanation || ""}`;
         try {

@@ -5,6 +5,12 @@
   "type": "module",
   "scripts": {
     "scrape": "node scrape-examenredes.js",
-    "scrape:test": "node scrape-examenredes.js --test"
+    "scrape:test": "node scrape-examenredes.js --test",
+    "scrape:ccna2": "node scrape-ccnadesdecero.js",
+    "scrape:ccna2:test": "node scrape-ccnadesdecero.js --test",
+    "analyze:overlap": "node analyze-bank-overlap.js"
+  },
+  "dependencies": {
+    "puppeteer": "^24.7.1"
   }
 }

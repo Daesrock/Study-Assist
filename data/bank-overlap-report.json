@@ -1,0 +1,426 @@
+{
+  "generatedAt": "2026-04-12T07:11:34.380Z",
+  "files": {
+    "primary": "data\\questions-bank.json",
+    "secondary": "data\\questions-bank-ccnadesdecero.json"
+  },
+  "totals": {
+    "primaryQuestions": 714,
+    "secondaryQuestions": 525,
+    "exactDuplicates": 61,
+    "exactConflictsRaw": 30,
+    "exactConflictsSemantic": 12,
+    "reducedFalsePositives": 18,
+    "overlapPercentOfSecondary": 11.62
+  },
+  "samples": [
+    {
+      "text": "¿Qué comando muestra información sobre la configuración de auto-MDIX para una interfaz específica?",
+      "primaryModule": "1-4",
+      "secondaryModule": "1-4",
+      "sameAnswerRaw": true,
+      "sameAnswerSemantic": true,
+      "answerSimilaritySemantic": 100,
+      "primaryAnswers": [
+        "show controllers"
+      ],
+      "secondaryAnswers": [
+        "show controllers"
+      ],
+      "primaryAnswersSemantic": [
+        "show controller"
+      ],
+      "secondaryAnswersSemantic": [
+        "show controller"
+      ]
+    },
+    {
+      "text": "Un técnico está configurando un nuevo switch Cisco 2960. ¿Cuál es el efecto de emitir el comando BranchSw# configure terminal?",
+      "primaryModule": "1-4",
+      "secondaryModule": "1-4",
+      "sameAnswerRaw": false,
+      "sameAnswerSemantic": true,
+      "answerSimilaritySemantic": 100,
+      "primaryAnswers": [
+        "ingresa al modo de configuracion global"
+      ],
+      "secondaryAnswers": [
+        "entra en el modo de configuracion global"
+      ],
+      "primaryAnswersSemantic": [
+        "entrar modo configuracion global"
+      ],
+      "secondaryAnswersSemantic": [
+        "entrar modo configuracion global"
+      ]
+    },
+    {
+      "text": "¿Qué característica describe el switching por método de corte?",
+      "primaryModule": "1-4",
+      "secondaryModule": "1-4",
+      "sameAnswerRaw": false,
+      "sameAnswerSemantic": true,
+      "answerSimilaritySemantic": 100,
+      "primaryAnswers": [
+        "las tramas se reenvian sin ninguna verificacion de errores"
+      ],
+      "secondaryAnswers": [
+        "las tramas se reenvian sin ninguna comprobacion de errores"
+      ],
+      "primaryAnswersSemantic": [
+        "trama reenvian ninguna comprobacion error"
+      ],
+      "secondaryAnswersSemantic": [
+        "trama reenvian ninguna comprobacion error"
+      ]
+    },
+    {
+      "text": "¿Qué comando muestra el tipo de encapsulación, la ID de VLAN de voz y la VLAN de modo de acceso para la interfaz Fa0/1?",
+      "primaryModule": "1-4",
+      "secondaryModule": "1-4",
+      "sameAnswerRaw": true,
+      "sameAnswerSemantic": true,
+      "answerSimilaritySemantic": 100,
+      "primaryAnswers": [
+        "show interfaces fa01 switchport"
+      ],
+      "secondaryAnswers": [
+        "show interfaces fa01 switchport"
+      ],
+      "primaryAnswersSemantic": [
+        "show interfac fa01 switchport"
+      ],
+      "secondaryAnswersSemantic": [
+        "show interfac fa01 switchport"
+      ]
+    },
+    {
+      "text": "¿Cuál es la diferencia significativa entre un hub y un switch LAN de capa 2?",
+      "primaryModule": "1-4",
+      "secondaryModule": "1-4",
+      "sameAnswerRaw": false,
+      "sameAnswerSemantic": true,
+      "answerSimilaritySemantic": 100,
+      "primaryAnswers": [
+        "un concentrador extiende un dominio de colision y un switch divide los dominios de colision"
+      ],
+      "secondaryAnswers": [
+        "un hub extiende un dominio de colision y un switch divide los dominios de colision"
+      ],
+      "primaryAnswersSemantic": [
+        "hub extiende dominio colision switch divide dominio colision"
+      ],
+      "secondaryAnswersSemantic": [
+        "hub extiende dominio colision switch divide dominio colision"
+      ]
+    },
+    {
+      "text": "¿Qué característica del switch ayuda a mantener el tráfico local y alivia la congestión de la red?",
+      "primaryModule": "1-4",
+      "secondaryModule": "1-4",
+      "sameAnswerRaw": false,
+      "sameAnswerSemantic": true,
+      "answerSimilaritySemantic": 100,
+      "primaryAnswers": [
+        "alta densidad del puerto"
+      ],
+      "secondaryAnswers": [
+        "alta densidad de puertos"
+      ],
+      "primaryAnswersSemantic": [
+        "alta densidad puerto"
+      ],
+      "secondaryAnswersSemantic": [
+        "alta densidad puerto"
+      ]
+    },
+    {
+      "text": "Un switch está configurado para ejecutar STP. ¿Qué término describe un campo que tiene un valor predeterminado de 32,768 y es el factor decisivo inicial al elegir un puente raíz?",
+      "primaryModule": "5-6",
+      "secondaryModule": "5-6",
+      "sameAnswerRaw": false,
+      "sameAnswerSemantic": true,
+      "answerSimilaritySemantic": 100,
+      "primaryAnswers": [
+        "prioridad del puente"
+      ],
+      "secondaryAnswers": [
+        "prioridad de puente"
+      ],
+      "primaryAnswersSemantic": [
+        "prioridad bridge"
+      ],
+      "secondaryAnswersSemantic": [
+        "prioridad bridge"
+      ]
+    },
+    {
+      "text": "¿Qué tres componentes se combinan para formar un ID de puente?",
+      "primaryModule": "final-exam",
+      "secondaryModule": "5-6",
+      "sameAnswerRaw": true,
+      "sameAnswerSemantic": true,
+      "answerSimilaritySemantic": 100,
+      "primaryAnswers": [
+        "direccion mac",
+        "id de sistema extendido",
+        "prioridad de puente"
+      ],
+      "secondaryAnswers": [
+        "direccion mac",
+        "id de sistema extendido",
+        "prioridad de puente"
+      ],
+      "primaryAnswersSemantic": [
+        "direccion mac",
+        "id sistema extendido",
+        "prioridad bridge"
+      ],
+      "secondaryAnswersSemantic": [
+        "direccion mac",
+        "id sistema extendido",
+        "prioridad bridge"
+      ]
+    },
+    {
+      "text": "¿Qué afirmación es verdadera con respecto al uso de PAgP para crear EtherChannels?",
+      "primaryModule": "5-6",
+      "secondaryModule": "5-6",
+      "sameAnswerRaw": true,
+      "sameAnswerSemantic": true,
+      "answerSimilaritySemantic": 100,
+      "primaryAnswers": [
+        "es propiedad de cisco"
+      ],
+      "secondaryAnswers": [
+        "es propiedad de cisco"
+      ],
+      "primaryAnswersSemantic": [
+        "es propiedad cisco"
+      ],
+      "secondaryAnswersSemantic": [
+        "es propiedad cisco"
+      ]
+    },
+    {
+      "text": "¿Cuál es el resultado de una tormenta de difusión de Capa 2?",
+      "primaryModule": "5-6",
+      "secondaryModule": "5-6",
+      "sameAnswerRaw": false,
+      "sameAnswerSemantic": false,
+      "answerSimilaritySemantic": 60,
+      "primaryAnswers": [
+        "el nuevo trafico es descartado por el switch porque no puede ser procesado"
+      ],
+      "secondaryAnswers": [
+        "el switch descarta el trafico nuevo porque no se puede procesar"
+      ],
+      "primaryAnswersSemantic": [
+        "nuevo trafico es descartado switch porque no puede ser procesado"
+      ],
+      "secondaryAnswersSemantic": [
+        "switch descarta trafico nuevo porque no puede procesar"
+      ]
+    },
+    {
+      "text": "¿Cuál es el propósito del Protocolo de árbol de expansión (STP)?",
+      "primaryModule": "5-6",
+      "secondaryModule": "5-6",
+      "sameAnswerRaw": false,
+      "sameAnswerSemantic": false,
+      "answerSimilaritySemantic": 66.67,
+      "primaryAnswers": [
+        "prevenir bucles en la capa 2"
+      ],
+      "secondaryAnswers": [
+        "previene bucles de capa 2"
+      ],
+      "primaryAnswersSemantic": [
+        "prevenir bucl capa2"
+      ],
+      "secondaryAnswersSemantic": [
+        "previene bucl capa2"
+      ]
+    },
+    {
+      "text": "¿Cuál es la ventaja de configurar un router Cisco como agente de retransmisión?",
+      "primaryModule": "7-9",
+      "secondaryModule": "7-9",
+      "sameAnswerRaw": false,
+      "sameAnswerSemantic": true,
+      "answerSimilaritySemantic": 83.33,
+      "primaryAnswers": [
+        "puede proporcionar servicios de retransmision a varios servicios udp"
+      ],
+      "secondaryAnswers": [
+        "puede proporcionar servicios de retransmision para multiples servicios udp"
+      ],
+      "primaryAnswersSemantic": [
+        "puede proporcionar servicio reenvio vario servicio udp"
+      ],
+      "secondaryAnswersSemantic": [
+        "puede proporcionar servicio reenvio multipl servicio udp"
+      ]
+    },
+    {
+      "text": "Cuando un cliente solicita una concesión de dirección inicial de un servidor DHCP, ¿por qué se envía el mensaje DHCPREQUEST como difusión?",
+      "primaryModule": "mod-7",
+      "secondaryModule": "7-9",
+      "sameAnswerRaw": false,
+      "sameAnswerSemantic": true,
+      "answerSimilaritySemantic": 92.31,
+      "primaryAnswers": [
+        "el cliente puede haber recibido ofertas de varios servidores y la difusion sirve para rechazar implicitamente esas otras ofertas"
+      ],
+      "secondaryAnswers": [
+        "el cliente puede haber recibido ofertas de varios servidores y la transmision sirve para rechazar implicitamente esas otras ofertas"
+      ],
+      "primaryAnswersSemantic": [
+        "cliente puede haber recibido oferta vario servidor difusion sirve rechazar implicitamente esa otra oferta"
+      ],
+      "secondaryAnswersSemantic": [
+        "cliente puede haber recibido oferta vario servidor transmision sirve rechazar implicitamente esa otra oferta"
+      ]
+    },
+    {
+      "text": "Un administrador emite los comandos:  Router(config)# interface g0/1  Router(config-if)# ip address dhcp  ¿Qué está tratando de lograr el administrador?",
+      "primaryModule": "mod-7",
+      "secondaryModule": "7-9",
+      "sameAnswerRaw": false,
+      "sameAnswerSemantic": true,
+      "answerSimilaritySemantic": 100,
+      "primaryAnswers": [
+        "configurar el router para obtener parametros ip de un servidor dhcpv4"
+      ],
+      "secondaryAnswers": [
+        "configurar el router para obtener los parametros ip de un servidor dhcpv4"
+      ],
+      "primaryAnswersSemantic": [
+        "configurar router obtener parametro ip servidor dhcpv4"
+      ],
+      "secondaryAnswersSemantic": [
+        "configurar router obtener parametro ip servidor dhcpv4"
+      ]
+    },
+    {
+      "text": "¿Qué componente de control de acceso, implementación o protocolo controla a quién se le permite acceder a una red?",
+      "primaryModule": "10-13",
+      "secondaryModule": "10-13",
+      "sameAnswerRaw": true,
+      "sameAnswerSemantic": true,
+      "answerSimilaritySemantic": 100,
+      "primaryAnswers": [
+        "autenticacion"
+      ],
+      "secondaryAnswers": [
+        "autenticacion"
+      ],
+      "primaryAnswersSemantic": [
+        "autenticacion"
+      ],
+      "secondaryAnswersSemantic": [
+        "autenticacion"
+      ]
+    },
+    {
+      "text": "¿Qué tipo de red inalámbrica utiliza transmisores para proporcionar cobertura en un área geográfica extensa?",
+      "primaryModule": "10-13",
+      "secondaryModule": "10-13",
+      "sameAnswerRaw": false,
+      "sameAnswerSemantic": false,
+      "answerSimilaritySemantic": 0,
+      "primaryAnswers": [
+        "wireless widearea network"
+      ],
+      "secondaryAnswers": [
+        "red de area amplia inalambrica"
+      ],
+      "primaryAnswersSemantic": [
+        "wwan"
+      ],
+      "secondaryAnswersSemantic": [
+        "red area amplia inalambrica"
+      ]
+    },
+    {
+      "text": "¿Qué método de autenticación almacena nombres de usuario y contraseñas en el router y es ideal para redes pequeñas?",
+      "primaryModule": "10-13",
+      "secondaryModule": "10-13",
+      "sameAnswerRaw": true,
+      "sameAnswerSemantic": true,
+      "answerSimilaritySemantic": 100,
+      "primaryAnswers": [
+        "aaa local"
+      ],
+      "secondaryAnswers": [
+        "aaa local"
+      ],
+      "primaryAnswersSemantic": [
+        "aaa local"
+      ],
+      "secondaryAnswersSemantic": [
+        "aaa local"
+      ]
+    },
+    {
+      "text": "¿Qué tipo de red inalámbrica es adecuada para proporcionar acceso inalámbrico a una ciudad o distrito?",
+      "primaryModule": "10-13",
+      "secondaryModule": "10-13",
+      "sameAnswerRaw": false,
+      "sameAnswerSemantic": true,
+      "answerSimilaritySemantic": 100,
+      "primaryAnswers": [
+        "wireless metropolitanarea network"
+      ],
+      "secondaryAnswers": [
+        "red inalambrica de area metropolitana"
+      ],
+      "primaryAnswersSemantic": [
+        "wman"
+      ],
+      "secondaryAnswersSemantic": [
+        "wman"
+      ]
+    },
+    {
+      "text": "¿Qué tipo de red inalámbrica utiliza transmisores de baja potencia para una red de corto alcance, generalmente de 20 a 30 pies (6 a 9 metros)?",
+      "primaryModule": "10-13",
+      "secondaryModule": "10-13",
+      "sameAnswerRaw": false,
+      "sameAnswerSemantic": true,
+      "answerSimilaritySemantic": 100,
+      "primaryAnswers": [
+        "wireless personalarea network"
+      ],
+      "secondaryAnswers": [
+        "red de area personal inalambrica"
+      ],
+      "primaryAnswersSemantic": [
+        "wpan"
+      ],
+      "secondaryAnswersSemantic": [
+        "wpan"
+      ]
+    },
+    {
+      "text": "¿Qué característica de un switch lo hace vulnerable a los ataques de salto de VLAN?",
+      "primaryModule": "10-13",
+      "secondaryModule": "10-13",
+      "sameAnswerRaw": false,
+      "sameAnswerSemantic": true,
+      "answerSimilaritySemantic": 88.89,
+      "primaryAnswers": [
+        "la funcion de puerto troncal automatico habilitada para todos los puertos de forma predeterminada"
+      ],
+      "secondaryAnswers": [
+        "la funcion de puerto de enlace troncal automatico habilitada para todos los puertos de forma predeterminada"
+      ],
+      "primaryAnswersSemantic": [
+        "funcion puerto troncal automatico habilitada todo puerto forma predeterminada"
+      ],
+      "secondaryAnswersSemantic": [
+        "funcion puerto enlace troncal automatico habilitada todo puerto forma predeterminada"
+      ]
+    }
+  ]
+}

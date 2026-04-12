@@ -142,6 +142,7 @@ chrome.runtime.onInstalled.addListener(async (details: chrome.runtime.InstalledD
       responseMode: "guided",
       autoDetect: true,
       highlightQuestions: true,
+      useMultiBank: true,
       theme: "system",
       buttonPosition: "bottom-right",
       errorLog: "",

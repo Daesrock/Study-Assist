@@ -8,7 +8,10 @@ import {
   normalizeForSearch,
   calculateSimilarity,
   isNetAcadPage,
+  findMatchingQuestion,
+  __resetQuestionBankCachesForTests,
 } from "../../src/background/modules/questionBank";
+import { mockStorage } from "../setup";
 
 describe("normalizeForSearch", () => {
   it("should lowercase text", () => {
@@ -142,5 +145,257 @@ describe("isNetAcadPage", () => {
 
   it("should return false for undefined/empty", () => {
     expect(isNetAcadPage(undefined, undefined)).toBe(false);
+  });
+});
+
+describe("findMatchingQuestion (hybrid banks)", () => {
+  beforeEach(() => {
+    __resetQuestionBankCachesForTests();
+    mockStorage.useMultiBank = true;
+    vi.restoreAllMocks();
+  });
+
+  it("should prioritize primary bank when both have high-confidence matches", async () => {
+    const primaryQuestion = "what protocol provides secure remote access to a switch";
+    const primaryBank = {
+      modules: {
+        "1-4": {
+          questions: [{
+            text: primaryQuestion,
+            textNormalized: normalizeForSearch(primaryQuestion),
+            options: ["SSH", "Telnet"],
+            correctAnswer: "SSH",
+          }],
+        },
+      },
+    };
+
+    const secondaryBank = {
+      modules: {
+        "1-4": {
+          questions: [{
+            text: primaryQuestion,
+            textNormalized: normalizeForSearch(primaryQuestion),
+            options: ["SSH", "Telnet"],
+            correctAnswer: "Telnet",
+          }],
+        },
+      },
+    };
+
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.includes("questions-bank-ccnadesdecero.json")) {
+        return { json: async () => secondaryBank };
+      }
+      return { json: async () => primaryBank };
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await findMatchingQuestion(
+      primaryQuestion,
+      "CCNA 2 - Module 1",
+      "https://www.netacad.com/test",
+    );
+
+    expect(result).not.toBeNull();
+    expect(result?.bankModel).toBe("questions-bank.json");
+    expect(result?.correctAnswer).toBe("SSH");
+  });
+
+  it("should fallback to secondary bank when primary has no match", async () => {
+    const secondaryQuestion = "which command shows vlan trunk details on a switch";
+    const primaryBank = {
+      modules: {
+        "1-4": {
+          questions: [{
+            text: "unrelated question text",
+            textNormalized: "unrelated question text",
+            options: ["A"],
+            correctAnswer: "A",
+          }],
+        },
+      },
+    };
+
+    const secondaryBank = {
+      modules: {
+        "1-4": {
+          questions: [{
+            text: secondaryQuestion,
+            textNormalized: normalizeForSearch(secondaryQuestion),
+            options: ["show interfaces trunk"],
+            correctAnswer: "show interfaces trunk",
+          }],
+        },
+      },
+    };
+
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.includes("questions-bank-ccnadesdecero.json")) {
+        return { json: async () => secondaryBank };
+      }
+      return { json: async () => primaryBank };
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await findMatchingQuestion(
+      secondaryQuestion,
+      "CCNA 2 - Module 1",
+      "https://www.netacad.com/test",
+    );
+
+    expect(result).not.toBeNull();
+    expect(result?.bankModel).toBe("questions-bank-ccnadesdecero.json");
+    expect(result?.correctAnswer).toBe("show interfaces trunk");
+  });
+
+  it("should skip lookup for non-NetAcad pages", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await findMatchingQuestion(
+      "sample question",
+      "Some random quiz",
+      "https://example.org/course",
+    );
+
+    expect(result).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("should mark duplicate as semantic-equivalent when answers only differ in wording", async () => {
+    const duplicateQuestion = "que comando entra al modo de configuracion global";
+    const primaryBank = {
+      modules: {
+        "1-4": {
+          questions: [{
+            text: duplicateQuestion,
+            textNormalized: normalizeForSearch(duplicateQuestion),
+            options: ["A"],
+            correctAnswer: "Ingresa al modo de configuracion global",
+          }],
+        },
+      },
+    };
+
+    const secondaryBank = {
+      modules: {
+        "1-4": {
+          questions: [{
+            text: duplicateQuestion,
+            textNormalized: normalizeForSearch(duplicateQuestion),
+            options: ["A"],
+            correctAnswer: "Entra en el modo de configuracion global",
+          }],
+        },
+      },
+    };
+
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.includes("questions-bank-ccnadesdecero.json")) {
+        return { json: async () => secondaryBank };
+      }
+      return { json: async () => primaryBank };
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await findMatchingQuestion(
+      duplicateQuestion,
+      "CCNA 2 - Module 1",
+      "https://www.netacad.com/test",
+    );
+
+    expect(result).not.toBeNull();
+    expect(result?.bankConflictDetected).toBe(false);
+    expect(result?.bankConflictType).toBe("semantic-equivalent");
+    expect(result?.bankConflictAnswerSimilarity).toBeGreaterThanOrEqual(80);
+  });
+
+  it("should mark duplicate as real-conflict when answers are semantically different", async () => {
+    const duplicateQuestion = "what protocol provides secure remote access to a switch";
+    const primaryBank = {
+      modules: {
+        "1-4": {
+          questions: [{
+            text: duplicateQuestion,
+            textNormalized: normalizeForSearch(duplicateQuestion),
+            options: ["SSH", "Telnet"],
+            correctAnswer: "SSH",
+          }],
+        },
+      },
+    };
+
+    const secondaryBank = {
+      modules: {
+        "1-4": {
+          questions: [{
+            text: duplicateQuestion,
+            textNormalized: normalizeForSearch(duplicateQuestion),
+            options: ["SSH", "Telnet"],
+            correctAnswer: "Telnet",
+          }],
+        },
+      },
+    };
+
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.includes("questions-bank-ccnadesdecero.json")) {
+        return { json: async () => secondaryBank };
+      }
+      return { json: async () => primaryBank };
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await findMatchingQuestion(
+      duplicateQuestion,
+      "CCNA 2 - Module 1",
+      "https://www.netacad.com/test",
+    );
+
+    expect(result).not.toBeNull();
+    expect(result?.bankModel).toBe("questions-bank.json");
+    expect(result?.bankConflictDetected).toBe(true);
+    expect(result?.bankConflictType).toBe("real-conflict");
+    expect(result?.bankConflictAnswerSimilarity).toBeLessThan(80);
+  });
+
+  it("should skip secondary bank when useMultiBank is disabled", async () => {
+    mockStorage.useMultiBank = false;
+
+    const primaryQuestion = "which command shows vlan trunk details";
+    const primaryBank = {
+      modules: {
+        "1-4": {
+          questions: [{
+            text: primaryQuestion,
+            textNormalized: normalizeForSearch(primaryQuestion),
+            options: ["show interfaces trunk"],
+            correctAnswer: "show interfaces trunk",
+          }],
+        },
+      },
+    };
+
+    const fetchMock = vi.fn(async () => ({ json: async () => primaryBank }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await findMatchingQuestion(
+      primaryQuestion,
+      "CCNA 2 - Module 1",
+      "https://www.netacad.com/test",
+    );
+
+    expect(result).not.toBeNull();
+    expect(result?.bankModel).toBe("questions-bank.json");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

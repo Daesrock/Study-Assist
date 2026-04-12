@@ -5,6 +5,14 @@
 
 import { log, questionsBank, setQuestionsBank } from "./constants.js";
 import type { QuestionsBank, MatchedQuestion } from "./constants.js";
+import { compareAnswerSetsSemantically } from "./answerEquivalences.js";
+
+const PRIMARY_BANK_FILE = "data/questions-bank.json";
+const SECONDARY_BANK_FILE = "data/questions-bank-ccnadesdecero.json";
+
+let secondaryQuestionsBank: QuestionsBank | null = null;
+let secondaryLoadAttempted = false;
+let useMultiBankCache: boolean | null = null;
 
 // ============================================
 // Questions Bank Loading
@@ -14,7 +22,7 @@ export async function loadQuestionsBank(): Promise<QuestionsBank | null> {
   if (questionsBank) return questionsBank;
 
   try {
-    const url = chrome.runtime.getURL("data/questions-bank.json");
+    const url = chrome.runtime.getURL(PRIMARY_BANK_FILE);
     const response = await fetch(url);
     const bank = await response.json() as QuestionsBank;
     setQuestionsBank(bank);
@@ -28,6 +36,54 @@ export async function loadQuestionsBank(): Promise<QuestionsBank | null> {
     console.error("[Study Assist] Failed to load questions bank:", error);
     return null;
   }
+}
+
+export async function loadSecondaryQuestionsBank(): Promise<QuestionsBank | null> {
+  if (secondaryQuestionsBank) return secondaryQuestionsBank;
+  if (secondaryLoadAttempted) return null;
+  secondaryLoadAttempted = true;
+
+  try {
+    const url = chrome.runtime.getURL(SECONDARY_BANK_FILE);
+    const response = await fetch(url);
+    const bank = await response.json() as QuestionsBank;
+    secondaryQuestionsBank = bank;
+    log(
+      "[Study Assist] Secondary questions bank loaded:",
+      Object.keys(bank.modules).length,
+      "modules",
+    );
+    return bank;
+  } catch (error) {
+    console.warn("[Study Assist] Secondary questions bank not available:", error);
+    return null;
+  }
+}
+
+async function getUseMultiBankEnabled(): Promise<boolean> {
+  if (useMultiBankCache !== null) return useMultiBankCache;
+
+  try {
+    const result = await chrome.storage.local.get(["useMultiBank"]);
+    useMultiBankCache = typeof result.useMultiBank === "boolean"
+      ? result.useMultiBank
+      : true;
+  } catch {
+    // Keep hybrid mode enabled by default if storage is unavailable.
+    useMultiBankCache = true;
+  }
+
+  return useMultiBankCache;
+}
+
+/**
+ * Test-only helper to clear in-memory bank caches between unit tests.
+ */
+export function __resetQuestionBankCachesForTests(): void {
+  setQuestionsBank(null);
+  secondaryQuestionsBank = null;
+  secondaryLoadAttempted = false;
+  useMultiBankCache = null;
 }
 
 // ============================================
@@ -106,31 +162,8 @@ export function isNetAcadPage(pageTitle: string | undefined, pageUrl: string | u
   );
 }
 
-// ============================================
-// Question Matching
-// ============================================
-
-/**
- * Find matching question in the bank (ONLY for NetAcad pages)
- */
-export async function findMatchingQuestion(
-  questionText: string,
-  moduleInfo: string | undefined,
-  pageUrl: string | undefined
-): Promise<MatchedQuestion | null> {
-  if (!isNetAcadPage(moduleInfo, pageUrl)) {
-    log("[Study Assist] Question bank: Skipped (not a NetAcad page)");
-    return null;
-  }
-
-  log("[Study Assist] Question bank: Searching...");
-
-  const bank = await loadQuestionsBank();
-  if (!bank) return null;
-
-  const normalizedQuestion = normalizeForSearch(questionText);
-
-  let modulesToSearch: string[] = [];
+function buildModulesToSearch(moduleInfo: string | undefined, bank: QuestionsBank): string[] {
+  const modulesToSearch: string[] = [];
 
   if (moduleInfo) {
     const moduleMatch = moduleInfo.match(/(\d+)[\.\-]?(\d+)?/);
@@ -157,18 +190,19 @@ export async function findMatchingQuestion(
     }
   }
 
-  if (modulesToSearch.length === 0) {
-    modulesToSearch = Object.keys(bank.modules);
-  }
+  return modulesToSearch.length > 0 ? modulesToSearch : Object.keys(bank.modules);
+}
 
+function findBestMatchInBank(
+  bank: QuestionsBank,
+  modulesToSearch: string[],
+  normalizedQuestion: string,
+  questionText: string,
+  similarityThreshold: number,
+  bankModel: "questions-bank.json" | "questions-bank-ccnadesdecero.json",
+): MatchedQuestion | null {
   let bestMatch: MatchedQuestion | null = null;
   let bestSimilarity = 0;
-
-  // Lowered threshold from 0.6 to 0.55 to improve detection for modules 10+
-  // Previously, many valid questions from modules 10-13 and 14-16 were not being matched
-  // due to slight variations in wording between the bank and actual exam questions
-  const isLongText = questionText.length > 800;
-  const SIMILARITY_THRESHOLD = isLongText ? 0.50 : 0.55;
 
   for (const moduleRange of modulesToSearch) {
     const module = bank.modules[moduleRange];
@@ -176,39 +210,207 @@ export async function findMatchingQuestion(
 
     for (const question of module.questions) {
       let similarity: number;
-      
-      // Special case: routing tables with PARTIALURLPLACEHOLDER
-      // These contain the same content but normalization destroys IP addresses (10.38.60.26 → 10386026)
-      // If both texts contain this placeholder, give high similarity automatically
+
       const pageHasPlaceholder = questionText.toLowerCase().includes("partialurlplaceholder");
       const bankHasPlaceholder = question.text.toLowerCase().includes("partialurlplaceholder");
-      
+
       if (pageHasPlaceholder && bankHasPlaceholder) {
-        // Both have routing table images - likely the same question
         similarity = 0.95;
       } else {
-        // Use the MAX of standard similarity and containment.
-        // Standard similarity works when texts are similar length.
-        // Containment works when the page has extra context (tables, code)
-        // around the actual question.
-        const stdSimilarity = calculateSimilarity(normalizedQuestion, question.textNormalized);
-        const containment = calculateContainment(normalizedQuestion, question.textNormalized);
+        const bankNormalized = question.textNormalized || normalizeForSearch(question.text);
+        const stdSimilarity = calculateSimilarity(normalizedQuestion, bankNormalized);
+        const containment = calculateContainment(normalizedQuestion, bankNormalized);
         similarity = Math.max(stdSimilarity, containment);
       }
 
-      if (similarity > bestSimilarity && similarity >= SIMILARITY_THRESHOLD) {
+      if (similarity > bestSimilarity && similarity >= similarityThreshold) {
         bestSimilarity = similarity;
         bestMatch = {
           ...question,
           moduleRange,
           similarity: Math.round(similarity * 100),
+          bankModel,
         };
       }
     }
   }
 
+  return bestMatch;
+}
+
+function getNormalizedAnswerSet(match: Pick<MatchedQuestion, "correctAnswer" | "correctAnswers">): string[] {
+  const answers = match.correctAnswers && match.correctAnswers.length > 0
+    ? match.correctAnswers
+    : match.correctAnswer
+      ? [match.correctAnswer]
+      : [];
+
+  return [...new Set(answers.map((a) => normalizeForSearch(a)).filter(Boolean))].sort();
+}
+
+interface DuplicateCheckResult {
+  duplicateScore: number;
+  answerEquivalent: boolean;
+  answerSimilarity: number;
+  normalizedPrimaryAnswers: string[];
+  normalizedSecondaryAnswers: string[];
+}
+
+function evaluateDuplicateConflict(
+  primaryMatch: MatchedQuestion,
+  secondaryMatch: MatchedQuestion,
+): DuplicateCheckResult | null {
+  const primaryText = normalizeForSearch(primaryMatch.text);
+  const secondaryText = normalizeForSearch(secondaryMatch.text);
+  const duplicateScore = Math.max(
+    calculateSimilarity(primaryText, secondaryText),
+    calculateContainment(primaryText, secondaryText),
+  );
+
+  if (duplicateScore < 0.9) return null;
+
+  const primaryAnswers = getNormalizedAnswerSet(primaryMatch);
+  const secondaryAnswers = getNormalizedAnswerSet(secondaryMatch);
+  const answerComparison = compareAnswerSetsSemantically(primaryAnswers, secondaryAnswers);
+
+  return {
+    duplicateScore,
+    answerEquivalent: answerComparison.equivalent,
+    answerSimilarity: answerComparison.similarity,
+    normalizedPrimaryAnswers: answerComparison.normalizedPrimary,
+    normalizedSecondaryAnswers: answerComparison.normalizedSecondary,
+  };
+}
+
+function logDuplicateIfNeeded(
+  primaryMatch: MatchedQuestion,
+  secondaryMatch: MatchedQuestion,
+  duplicateInfo: DuplicateCheckResult,
+): void {
+  if (!duplicateInfo.answerEquivalent) {
+    console.warn(
+      "[Study Assist] Question-bank REAL conflict detected (primary vs secondary):",
+      {
+        primaryModule: primaryMatch.moduleRange,
+        secondaryModule: secondaryMatch.moduleRange,
+        questionSimilarity: Math.round(duplicateInfo.duplicateScore * 100),
+        answerSimilarity: Math.round(duplicateInfo.answerSimilarity * 100),
+        primaryAnswers: duplicateInfo.normalizedPrimaryAnswers,
+        secondaryAnswers: duplicateInfo.normalizedSecondaryAnswers,
+      },
+    );
+    return;
+  }
+
+  log(
+    "[Study Assist] Duplicate question detected across banks (semantic-equivalent answers)",
+    {
+      primaryModule: primaryMatch.moduleRange,
+      secondaryModule: secondaryMatch.moduleRange,
+      questionSimilarity: Math.round(duplicateInfo.duplicateScore * 100),
+      answerSimilarity: Math.round(duplicateInfo.answerSimilarity * 100),
+    },
+  );
+}
+
+// ============================================
+// Question Matching
+// ============================================
+
+/**
+ * Find matching question in the bank (ONLY for NetAcad pages)
+ */
+export async function findMatchingQuestion(
+  questionText: string,
+  moduleInfo: string | undefined,
+  pageUrl: string | undefined
+): Promise<MatchedQuestion | null> {
+  if (!isNetAcadPage(moduleInfo, pageUrl)) {
+    log("[Study Assist] Question bank: Skipped (not a NetAcad page)");
+    return null;
+  }
+
+  log("[Study Assist] Question bank: Searching...");
+
+  const useMultiBank = await getUseMultiBankEnabled();
+  const primaryBank = await loadQuestionsBank();
+  const secondaryBank = useMultiBank ? await loadSecondaryQuestionsBank() : null;
+
+  if (!useMultiBank) {
+    log("[Study Assist] useMultiBank disabled: secondary bank lookup skipped");
+  }
+
+  if (!primaryBank && !secondaryBank) return null;
+
+  const normalizedQuestion = normalizeForSearch(questionText);
+
+  // Lowered threshold from 0.6 to 0.55 to improve detection for modules 10+
+  // Previously, many valid questions from modules 10-13 and 14-16 were not being matched
+  // due to slight variations in wording between the bank and actual exam questions
+  const isLongText = questionText.length > 800;
+  const SIMILARITY_THRESHOLD = isLongText ? 0.50 : 0.55;
+
+  const primaryModulesToSearch = primaryBank
+    ? buildModulesToSearch(moduleInfo, primaryBank)
+    : [];
+
+  const primaryMatch = primaryBank
+    ? findBestMatchInBank(
+      primaryBank,
+      primaryModulesToSearch,
+      normalizedQuestion,
+      questionText,
+      SIMILARITY_THRESHOLD,
+      "questions-bank.json",
+    )
+    : null;
+
+  let secondaryMatch: MatchedQuestion | null = null;
+  if (secondaryBank) {
+    const secondaryModulesToSearch = buildModulesToSearch(moduleInfo, secondaryBank);
+    secondaryMatch = findBestMatchInBank(
+      secondaryBank,
+      secondaryModulesToSearch,
+      normalizedQuestion,
+      questionText,
+      SIMILARITY_THRESHOLD,
+      "questions-bank-ccnadesdecero.json",
+    );
+  }
+
+  const duplicateInfo = primaryMatch && secondaryMatch
+    ? evaluateDuplicateConflict(primaryMatch, secondaryMatch)
+    : null;
+
+  if (primaryMatch && secondaryMatch && duplicateInfo) {
+    logDuplicateIfNeeded(primaryMatch, secondaryMatch, duplicateInfo);
+  }
+
+  let bestMatch: MatchedQuestion | null = null;
+
+  if (primaryMatch && primaryMatch.similarity >= 80) {
+    bestMatch = primaryMatch;
+  } else if (secondaryMatch && secondaryMatch.similarity >= 80) {
+    bestMatch = secondaryMatch;
+  } else if (primaryMatch && secondaryMatch) {
+    bestMatch = primaryMatch.similarity >= secondaryMatch.similarity
+      ? primaryMatch
+      : secondaryMatch;
+  } else {
+    bestMatch = primaryMatch || secondaryMatch;
+  }
+
   if (bestMatch) {
-    log(`[Study Assist] QUESTION BANK MATCH (${bestMatch.similarity}% similarity) from module ${bestMatch.moduleRange}:`);
+    if (duplicateInfo) {
+      bestMatch.bankConflictDetected = !duplicateInfo.answerEquivalent;
+      bestMatch.bankConflictType = duplicateInfo.answerEquivalent ? "semantic-equivalent" : "real-conflict";
+      bestMatch.bankConflictAnswerSimilarity = Math.round(duplicateInfo.answerSimilarity * 100);
+      bestMatch.bankSecondaryModel = bestMatch.bankModel === "questions-bank.json"
+        ? "questions-bank-ccnadesdecero.json"
+        : "questions-bank.json";
+    }
+
+    log(`[Study Assist] QUESTION BANK MATCH (${bestMatch.similarity}% similarity) from module ${bestMatch.moduleRange} (${bestMatch.bankModel}):`);
     log(`[Study Assist] Bank Q: "${bestMatch.text.substring(0, 80)}..."`);
     log(`[Study Assist] Page text length: ${questionText.length} chars`);
     log(`[Study Assist] Bank text length: ${bestMatch.text.length} chars`);

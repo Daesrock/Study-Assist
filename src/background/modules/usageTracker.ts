@@ -49,6 +49,10 @@ export interface UsageRecord {
   confidence?: string;
   deepseekReasoning?: string;
   claudeCorrection?: string;
+  bankConflictDetected?: boolean;
+  bankConflictType?: "semantic-equivalent" | "real-conflict";
+  bankConflictAnswerSimilarity?: number;
+  bankSecondaryModel?: string;
 }
 
 export interface UsageStats {

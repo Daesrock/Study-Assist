@@ -60,6 +60,7 @@ const elements = {
   addDomainBtn: document.getElementById("add-domain-btn"),
   // Image option
   sendImages: document.getElementById("send-images"),
+  useMultiBank: document.getElementById("use-multibank"),
   // DeepSeek
   useDeepSeek: document.getElementById("use-deepseek"),
   deepseekConfig: document.getElementById("deepseek-config"),
@@ -95,6 +96,7 @@ const STORAGE_KEYS = {
   CLAUDE_MODEL: "claudeModel",
   ALLOWED_DOMAINS: "allowedDomains",
   SEND_IMAGES: "sendImages",
+  USE_MULTI_BANK: "useMultiBank",
   // DeepSeek
   USE_DEEPSEEK: "useDeepSeek",
   DEEPSEEK_API_KEY: "deepseekApiKey",
@@ -134,6 +136,7 @@ async function loadSettings() {
       STORAGE_KEYS.CLAUDE_MODEL,
       STORAGE_KEYS.ALLOWED_DOMAINS,
       STORAGE_KEYS.SEND_IMAGES,
+      STORAGE_KEYS.USE_MULTI_BANK,
       STORAGE_KEYS.USE_DEEPSEEK,
       STORAGE_KEYS.DEEPSEEK_API_KEY,
       STORAGE_KEYS.DEEPSEEK_ONLY,
@@ -165,6 +168,7 @@ async function loadSettings() {
 
     // Set send images checkbox (default: false)
     elements.sendImages.checked = result[STORAGE_KEYS.SEND_IMAGES] ?? false;
+    elements.useMultiBank.checked = result[STORAGE_KEYS.USE_MULTI_BANK] ?? true;
 
     // DeepSeek settings
     const useDeepSeek = result[STORAGE_KEYS.USE_DEEPSEEK] ?? false;
@@ -215,6 +219,7 @@ function setupEventListeners() {
   elements.quickMode.addEventListener("change", saveSettings);
   elements.claudeModel.addEventListener("change", saveSettings);
   elements.sendImages.addEventListener("change", saveSettings);
+  elements.useMultiBank.addEventListener("change", saveSettings);
   elements.useDeepSeek.addEventListener("change", handleDeepSeekToggle);
   elements.deepseekOnly.addEventListener("change", handleDeepSeekOnlyToggle);
   elements.disguiseMode.addEventListener("change", handleDisguiseModeToggle);
@@ -526,6 +531,7 @@ async function saveSettings() {
       [STORAGE_KEYS.QUICK_MODE]: elements.quickMode.checked,
       [STORAGE_KEYS.CLAUDE_MODEL]: elements.claudeModel.value,
       [STORAGE_KEYS.SEND_IMAGES]: elements.sendImages.checked,
+      [STORAGE_KEYS.USE_MULTI_BANK]: elements.useMultiBank.checked,
       [STORAGE_KEYS.USE_DEEPSEEK]: elements.useDeepSeek.checked,
       [STORAGE_KEYS.DEEPSEEK_ONLY]: elements.deepseekOnly.checked,
     };

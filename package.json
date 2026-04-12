@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:smoke": "vitest run tests/detection/netacad.test.ts tests/detection/moodle.test.ts tests/background/parsing.test.ts",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "analyze:bank-overlap": "node scripts/analyze-bank-overlap.js"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.260",
