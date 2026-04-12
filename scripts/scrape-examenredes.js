@@ -49,11 +49,6 @@ const EXAMENREDES_URLS = [
     title: "Conceptos de enrutamiento y configuración",
     url: "https://examenredes.com/modulos-14-16-conceptos-de-enrutamiento-y-examen-de-configuracion-respuestas/",
   },
-  {
-    moduleRange: "14-16",
-    title: "Conceptos de enrutamiento y configuración",
-    url: "https://examenredes.com/modulos-14-16-conceptos-de-enrutamiento-y-examen-de-configuracion-respuestas/",
-  },
   // Pruebas individuales por módulo
   {
     moduleRange: "mod-1",
