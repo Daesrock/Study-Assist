@@ -60,7 +60,7 @@
     "description": "Opción modelo Opus 4.6"
   },
   "useDeepSeek": {
-    "message": "Usar DeepSeek Reasoner",
+    "message": "Usar DeepSeek",
     "description": "Etiqueta toggle DeepSeek"
   },
   "claudeAsFallback": {
@@ -278,5 +278,21 @@
   "disguiseMode": {
     "message": "Disfrazarse de uBlock Origin (modo sigiloso)",
     "description": "Etiqueta del checkbox de modo disfraz"
+  },
+  "deepseekModel": {
+    "message": "Modelo DeepSeek",
+    "description": "Etiqueta para selector de modelo DeepSeek"
+  },
+  "modelDFlash": {
+    "message": "DeepSeek V4 Flash (Rápido, Económico)",
+    "description": "Etiqueta modelo flash"
+  },
+  "modelDPro": {
+    "message": "DeepSeek V4 Pro (Potente, Preciso)",
+    "description": "Etiqueta modelo pro"
+  },
+  "deepseekThinking": {
+    "message": "Activar Modo Thinking (razonamiento profundo)",
+    "description": "Etiqueta para modo thinking"
   }
 }

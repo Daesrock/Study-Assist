@@ -143,6 +143,8 @@ chrome.runtime.onInstalled.addListener(async (details: chrome.runtime.InstalledD
       autoDetect: true,
       highlightQuestions: true,
       useMultiBank: true,
+      deepseekModel: "deepseek-v4-flash",
+      deepseekThinking: true,
       theme: "system",
       buttonPosition: "bottom-right",
       errorLog: "",

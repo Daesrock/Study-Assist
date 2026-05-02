@@ -64,6 +64,8 @@ const elements = {
   // DeepSeek
   useDeepSeek: document.getElementById("use-deepseek"),
   deepseekConfig: document.getElementById("deepseek-config"),
+  deepseekModel: document.getElementById("deepseek-model"),
+  deepseekThinking: document.getElementById("deepseek-thinking"),
   deepseekOnly: document.getElementById("deepseek-only"),
   deepseekOnlyWarnings: document.getElementById("deepseek-only-warnings"),
   deepseekApiKeyInput: document.getElementById("deepseek-api-key-input"),
@@ -100,6 +102,8 @@ const STORAGE_KEYS = {
   // DeepSeek
   USE_DEEPSEEK: "useDeepSeek",
   DEEPSEEK_API_KEY: "deepseekApiKey",
+  DEEPSEEK_MODEL: "deepseekModel",
+  DEEPSEEK_THINKING: "deepseekThinking",
   DEEPSEEK_ONLY: "deepseekOnly",
   // Disguise mode
   DISGUISE_MODE: "disguiseMode",
@@ -139,6 +143,8 @@ async function loadSettings() {
       STORAGE_KEYS.USE_MULTI_BANK,
       STORAGE_KEYS.USE_DEEPSEEK,
       STORAGE_KEYS.DEEPSEEK_API_KEY,
+      STORAGE_KEYS.DEEPSEEK_MODEL,
+      STORAGE_KEYS.DEEPSEEK_THINKING,
       STORAGE_KEYS.DEEPSEEK_ONLY,
       STORAGE_KEYS.DISGUISE_MODE,
     ]);
@@ -173,8 +179,13 @@ async function loadSettings() {
     // DeepSeek settings
     const useDeepSeek = result[STORAGE_KEYS.USE_DEEPSEEK] ?? false;
     const deepseekOnly = result[STORAGE_KEYS.DEEPSEEK_ONLY] ?? false;
+    const deepseekModel =
+      result[STORAGE_KEYS.DEEPSEEK_MODEL] ?? "deepseek-v4-flash";
+    const deepseekThinking = result[STORAGE_KEYS.DEEPSEEK_THINKING] ?? true;
     elements.useDeepSeek.checked = useDeepSeek;
     elements.deepseekConfig.style.display = useDeepSeek ? "block" : "none";
+    elements.deepseekModel.value = deepseekModel;
+    elements.deepseekThinking.checked = deepseekThinking;
     elements.deepseekOnly.checked = deepseekOnly;
     elements.deepseekOnlyWarnings.style.display = deepseekOnly
       ? "block"
@@ -221,6 +232,8 @@ function setupEventListeners() {
   elements.sendImages.addEventListener("change", saveSettings);
   elements.useMultiBank.addEventListener("change", saveSettings);
   elements.useDeepSeek.addEventListener("change", handleDeepSeekToggle);
+  elements.deepseekModel.addEventListener("change", saveSettings);
+  elements.deepseekThinking.addEventListener("change", saveSettings);
   elements.deepseekOnly.addEventListener("change", handleDeepSeekOnlyToggle);
   elements.disguiseMode.addEventListener("change", handleDisguiseModeToggle);
 
@@ -533,6 +546,8 @@ async function saveSettings() {
       [STORAGE_KEYS.SEND_IMAGES]: elements.sendImages.checked,
       [STORAGE_KEYS.USE_MULTI_BANK]: elements.useMultiBank.checked,
       [STORAGE_KEYS.USE_DEEPSEEK]: elements.useDeepSeek.checked,
+      [STORAGE_KEYS.DEEPSEEK_MODEL]: elements.deepseekModel.value,
+      [STORAGE_KEYS.DEEPSEEK_THINKING]: elements.deepseekThinking.checked,
       [STORAGE_KEYS.DEEPSEEK_ONLY]: elements.deepseekOnly.checked,
     };
 

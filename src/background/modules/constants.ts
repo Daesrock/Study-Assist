@@ -17,8 +17,11 @@ export const CLAUDE_API_BASE = "https://api.anthropic.com/v1/messages";
 export const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
 export const ANTHROPIC_VERSION = "2023-06-01";
 
-export const DEEPSEEK_API_BASE = "https://api.deepseek.com/v1/chat/completions";
-export const DEEPSEEK_REASONER_MODEL = "deepseek-reasoner";
+export const DEEPSEEK_API_BASE = "https://api.deepseek.com/chat/completions";
+
+// DeepSeek V4 Models
+export const DEEPSEEK_V4_FLASH = "deepseek-v4-flash";
+export const DEEPSEEK_V4_PRO = "deepseek-v4-pro";
 
 // ============================================
 // Mutable Shared State
@@ -100,6 +103,8 @@ export interface StorageData {
   useDeepSeek?: boolean;
   useMultiBank?: boolean;
   deepseekApiKey?: string;
+  deepseekModel?: string;
+  deepseekThinking?: boolean;
   deepseekOnly?: boolean;
   extensionActive?: boolean;
   disguiseMode?: boolean;
@@ -170,6 +175,11 @@ export interface DeepSeekRequestBody {
   model: string;
   max_tokens: number;
   messages: DeepSeekMessage[];
+  thinking?: {
+    type: "enabled" | "disabled";
+  };
+  reasoning_effort?: "low" | "medium" | "high";
+  stream?: boolean;
 }
 
 export interface DeepSeekMessage {
@@ -188,6 +198,8 @@ export interface DeepSeekApiResponse {
     prompt_tokens?: number;
     completion_tokens?: number;
     total_tokens?: number;
+    prompt_cache_hit_tokens?: number;
+    prompt_cache_miss_tokens?: number;
   };
   error?: { message: string; type?: string };
   parseError?: string;
@@ -207,6 +219,7 @@ export interface DeepSeekAnalysisResult {
   explanation?: string;
   inputTokens?: number;
   outputTokens?: number;
+  cacheHitTokens?: number;
 }
 
 export interface DeepSeekAnalysisForClaude {

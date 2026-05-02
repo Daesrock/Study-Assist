@@ -11,7 +11,8 @@ import {
   DEFAULT_MODEL,
   ANTHROPIC_VERSION,
   DEEPSEEK_API_BASE,
-  DEEPSEEK_REASONER_MODEL,
+  DEEPSEEK_V4_FLASH,
+  DEEPSEEK_V4_PRO,
   activeDeepSeekController,
   setActiveDeepSeekController,
 } from "./constants.js";
@@ -145,7 +146,7 @@ export async function testDeepSeekApiKey(apiKey: string): Promise<MessageRespons
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
-        model: DEEPSEEK_REASONER_MODEL,
+        model: DEEPSEEK_V4_FLASH,
         max_tokens: 10,
         messages: [{ role: "user", content: "Hello, respond with just OK." }],
       }),
@@ -176,6 +177,14 @@ export async function testDeepSeekApiKey(apiKey: string): Promise<MessageRespons
 
 import type { QuestionOption } from "../../types/index.js";
 
+function hasCommandLikeText(text: string): boolean {
+  return /\bconfig\b|\binterface\b|\bswitchport\b|\bip\b|\brouter\b|\bvlan\b/.test(text);
+}
+
+function getTokenCount(text: string): number {
+  return text.split(" ").filter(Boolean).length;
+}
+
 /**
  * Match a single correctAnswer text from the question bank to the option letter (A, B, C...)
  * from the current page's detected options.
@@ -186,6 +195,8 @@ function matchSingleAnswerToLetter(
   pageOptions: QuestionOption[],
 ): string | null {
   const normalizedCorrect = normalizeForSearch(correctAnswer);
+  const correctTokenCount = getTokenCount(normalizedCorrect);
+  const correctIsCommandLike = hasCommandLikeText(normalizedCorrect);
 
   // 1. Exact normalized match
   for (const opt of pageOptions) {
@@ -195,11 +206,22 @@ function matchSingleAnswerToLetter(
     }
   }
 
-  // 2. Contains match (bank answer is substring or vice versa)
+  // 2. Contains match (prefer option containing the bank answer).
+  // Avoid mapping long answers to short snippets like "ip routing".
   for (const opt of pageOptions) {
     const normalizedOpt = normalizeForSearch(opt.text);
-    if (normalizedOpt.includes(normalizedCorrect) || normalizedCorrect.includes(normalizedOpt)) {
+    if (normalizedOpt.includes(normalizedCorrect)) {
       return opt.letter;
+    }
+
+    if (normalizedCorrect.includes(normalizedOpt)) {
+      const optTokenCount = getTokenCount(normalizedOpt);
+      const lengthRatio = normalizedOpt.length / Math.max(normalizedCorrect.length, 1);
+      const tokenRatio = optTokenCount / Math.max(correctTokenCount, 1);
+      // Only accept reverse contains if texts are near-equivalent in size/content.
+      if (lengthRatio >= 0.8 || tokenRatio >= 0.8) {
+        return opt.letter;
+      }
     }
   }
 
@@ -216,11 +238,7 @@ function matchSingleAnswerToLetter(
     }
     
     // Accept match based on context
-    const hasCommandText = normalizedCorrect.includes("interface") || 
-                           normalizedCorrect.includes("router") ||
-                           normalizedCorrect.includes("switch") ||
-                           normalizedCorrect.includes("config");
-    const threshold = hasCommandText ? 0.7 : 0.8;
+    const threshold = correctIsCommandLike ? 0.7 : 0.8;
     
     if (similarity >= threshold) {
       return opt.letter;
@@ -228,7 +246,8 @@ function matchSingleAnswerToLetter(
   }
 
   // 4. If we have a decent match (>= 60%) and it's the best option, use it
-  if (bestMatch && bestMatch.similarity >= 0.6) {
+  const fallbackThreshold = correctIsCommandLike ? 0.62 : 0.6;
+  if (bestMatch && bestMatch.similarity >= fallbackThreshold) {
     log(`[Study Assist] Using best match with ${(bestMatch.similarity * 100).toFixed(1)}% similarity`);
     return bestMatch.letter;
   }
@@ -257,14 +276,25 @@ function matchCorrectAnswerToLetter(
   if (answers.length === 0) return null;
 
   const matchedLetters: string[] = [];
+  const usedLetters = new Set<string>();
 
   for (const answer of answers) {
-    const letter = matchSingleAnswerToLetter(answer, pageOptions);
+    const availableOptions = pageOptions.filter((opt) => !usedLetters.has(opt.letter));
+    const letter = matchSingleAnswerToLetter(answer, availableOptions);
     if (letter) {
       matchedLetters.push(letter);
+      usedLetters.add(letter);
     } else {
       log(`[Study Assist] Could not match correctAnswer "${answer}" to any page option`);
     }
+  }
+
+  if (answers.length > 1 && matchedLetters.length > 0 && matchedLetters.length < answers.length) {
+    console.warn("[Study Assist] Partial multi-answer match from question bank", {
+      expectedAnswers: answers.length,
+      matchedAnswers: matchedLetters.length,
+      matchedLetters: [...matchedLetters],
+    });
   }
 
   if (matchedLetters.length === 0) return null;
@@ -273,6 +303,11 @@ function matchCorrectAnswerToLetter(
   const unique = [...new Set(matchedLetters)].sort();
   return unique.join(", ");
 }
+
+export const __testOnlyApiMatching = {
+  matchSingleAnswerToLetter,
+  matchCorrectAnswerToLetter,
+};
 
 // ============================================
 // Question Analysis (Main Orchestrator)
@@ -331,13 +366,13 @@ export async function analyzeQuestion(context: AnalysisContext): Promise<Analysi
     recordRequest(context.questionText);
 
     const storageResult = await chrome.storage.local.get([
-      "claudeApiKey", "claudeModel", "useDeepSeek", "deepseekApiKey", "deepseekOnly",
+      "claudeApiKey", "claudeModel", "useDeepSeek", "deepseekApiKey", "deepseekOnly", "deepseekModel", "deepseekThinking",
     ]) as StorageData;
 
     // Decrypt API keys
     const claudeApiKey = await getDecryptedApiKey("claudeApiKey");
     const deepseekApiKey = await getDecryptedApiKey("deepseekApiKey");
-    const { claudeModel, useDeepSeek, deepseekOnly } = storageResult;
+    const { claudeModel, useDeepSeek, deepseekOnly, deepseekModel, deepseekThinking } = storageResult;
     const selectedClaudeModel = context.qaMode ? QA_CLAUDE_MODEL : (claudeModel || DEFAULT_MODEL);
     const isDeepSeekOnlyMode = useDeepSeek && deepseekOnly && deepseekApiKey;
 
@@ -370,9 +405,12 @@ export async function analyzeQuestion(context: AnalysisContext): Promise<Analysi
     }
 
     if (useDeepSeek && deepseekApiKey && !hasImages && !isMatching && !skipDeepSeek) {
-      log("[Study Assist] Using DeepSeek Reasoner...");
+      const selectedDeepSeekModel = deepseekModel || DEEPSEEK_V4_FLASH;
+      const thinkingEnabled = deepseekThinking !== false;
 
-      let deepseekResult = await analyzeWithDeepSeek(context, deepseekApiKey);
+      log(`[Study Assist] Using DeepSeek ${selectedDeepSeekModel} (thinking: ${thinkingEnabled ? "ON" : "OFF"})...`);
+
+      let deepseekResult = await analyzeWithDeepSeek(context, deepseekApiKey, selectedDeepSeekModel, thinkingEnabled);
 
       if (deepseekResult.cancelled) {
         log("[Study Assist] DeepSeek cancelled → Claude");
@@ -407,15 +445,17 @@ export async function analyzeQuestion(context: AnalysisContext): Promise<Analysi
           questionType: context.questionType,
           answer: deepseekResult.result,
           source: "deepseek",
-          model: DEEPSEEK_REASONER_MODEL,
+          model: selectedDeepSeekModel,
           inputTokens: deepseekResult.inputTokens || 0,
           outputTokens: deepseekResult.outputTokens || 0,
+          cacheHitTokens: deepseekResult.cacheHitTokens,
           responseMode: context.responseMode,
           success: true,
           latencyMs: Date.now() - startTime,
           platform: detectPlatform(context.pageUrl),
           confidence: "HIGH",
           deepseekReasoning: deepseekResult.deepseekReasoning ?? undefined,
+          deepseekThinkingEnabled: thinkingEnabled,
         });
         return deepseekResult;
       } else if (deepseekResult.success) {
@@ -429,15 +469,17 @@ export async function analyzeQuestion(context: AnalysisContext): Promise<Analysi
             questionType: context.questionType,
             answer: deepseekResult.result,
             source: "deepseek",
-            model: DEEPSEEK_REASONER_MODEL,
+            model: selectedDeepSeekModel,
             inputTokens: deepseekResult.inputTokens || 0,
             outputTokens: deepseekResult.outputTokens || 0,
+            cacheHitTokens: deepseekResult.cacheHitTokens,
             responseMode: context.responseMode,
             success: true,
             latencyMs: Date.now() - startTime,
             platform: detectPlatform(context.pageUrl),
             confidence: deepseekResult.confidence,
             deepseekReasoning: deepseekResult.deepseekReasoning ?? undefined,
+            deepseekThinkingEnabled: thinkingEnabled,
           });
           return deepseekResult;
         }
@@ -485,7 +527,9 @@ export async function analyzeQuestion(context: AnalysisContext): Promise<Analysi
 
 export async function analyzeWithDeepSeek(
   context: AnalysisContext,
-  apiKey: string
+  apiKey: string,
+  model: string = DEEPSEEK_V4_FLASH,
+  thinkingEnabled: boolean = true,
 ): Promise<DeepSeekAnalysisResult> {
   try {
     const matchedQuestion = await findMatchingQuestion(
@@ -508,9 +552,11 @@ export async function analyzeWithDeepSeek(
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
         body: JSON.stringify({
-          model: DEEPSEEK_REASONER_MODEL,
+          model,
           max_tokens: 2048,
           messages: [{ role: "user", content: prompt }],
+          thinking: { type: thinkingEnabled ? "enabled" : "disabled" },
+          reasoning_effort: "high",
         } as DeepSeekRequestBody),
         signal,
       },
@@ -537,9 +583,10 @@ export async function analyzeWithDeepSeek(
           status: response.status,
           hasImages: false,
           requestBody: {
-            model: DEEPSEEK_REASONER_MODEL,
+            model,
             max_tokens: 2048,
             messages: [{ role: "user", content: prompt }],
+            thinking: { type: thinkingEnabled ? "enabled" : "disabled" },
           },
           responseBody,
         },
@@ -597,12 +644,15 @@ export async function analyzeWithDeepSeek(
     // Extract real token counts from API response
     const apiInputTokens = responseBody?.usage?.prompt_tokens ?? 0;
     const apiOutputTokens = responseBody?.usage?.completion_tokens ?? 0;
+    const apiCacheHitTokens = responseBody?.usage?.prompt_cache_hit_tokens ?? undefined;
 
     if (DEBUG_MODE) {
-      console.log("[Study Assist] ====== DeepSeek Response ======");
+      console.log("[Study Assist] ====== DeepSeek Response =====");
+      console.log(`[Study Assist] Model: ${model} | Thinking: ${thinkingEnabled ? "ON" : "OFF"}`);
       if (reasoningContent) console.log("[Study Assist] DeepSeek REASONING:", reasoningContent);
       console.log("[Study Assist] DeepSeek ANSWER:", result);
       console.log("[Study Assist] DeepSeek TOKENS:", apiInputTokens, "+", apiOutputTokens);
+      if (apiCacheHitTokens !== undefined) console.log("[Study Assist] DeepSeek CACHE HIT:", apiCacheHitTokens);
       console.log("[Study Assist] ================================");
     }
 
@@ -611,6 +661,7 @@ export async function analyzeWithDeepSeek(
     // Attach real token counts
     parsed.inputTokens = apiInputTokens;
     parsed.outputTokens = apiOutputTokens;
+    parsed.cacheHitTokens = apiCacheHitTokens;
     return parsed;
   } catch (error) {
     setActiveDeepSeekController(null);

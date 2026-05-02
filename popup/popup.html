@@ -99,7 +99,7 @@
               alt="DeepSeek"
               class="deepseek-logo"
             />
-            <strong data-i18n="useDeepSeek">Use DeepSeek Reasoner</strong>
+            <strong data-i18n="useDeepSeek">Use DeepSeek</strong>
             <span data-i18n="claudeAsFallback">(Claude as fallback)</span>
           </label>
         </div>
@@ -109,6 +109,31 @@
             DeepSeek analyzes first. If confidence is not HIGH, Claude
             validates.
           </p>
+
+          <!-- DeepSeek Model Selector -->
+          <div class="setting-item">
+            <label for="deepseek-model" data-i18n="deepseekModel"
+              >DeepSeek Model</label
+            >
+            <select id="deepseek-model">
+              <option value="deepseek-v4-flash" data-i18n="modelDFlash">
+                DeepSeek V4 Flash (Rápido, Económico)
+              </option>
+              <option value="deepseek-v4-pro" data-i18n="modelDPro">
+                DeepSeek V4 Pro (Potente, Preciso)
+              </option>
+            </select>
+          </div>
+
+          <!-- Thinking Mode Toggle -->
+          <div class="setting-item">
+            <label>
+              <input type="checkbox" id="deepseek-thinking" checked />
+              <span data-i18n="deepseekThinking"
+                >Enable Thinking Mode (razonamiento profundo)</span
+              >
+            </label>
+          </div>
 
           <div class="setting-item deepseek-only-option">
             <label>

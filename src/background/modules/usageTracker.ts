@@ -8,20 +8,48 @@ import { log } from "./constants.js";
 // ============================================
 // Pricing (per million tokens, USD)
 // ============================================
-const PRICING: Record<string, { input: number; output: number }> = {
+interface ModelPricing {
+  input: number;       // cache miss input
+  inputCacheHit: number;
+  output: number;
+}
+
+const PRICING: Record<string, ModelPricing> = {
   // Claude Haiku
-  "claude-haiku-4-5-20251001": { input: 1.0, output: 5.0 },
+  "claude-haiku-4-5-20251001": { input: 1.0, inputCacheHit: 0.10, output: 5.0 },
 
   // Claude Sonnet
-  "claude-sonnet-4-20250514": { input: 3.0, output: 15.0 },
-  "claude-sonnet-4-6": { input: 3.0, output: 15.0 },
+  "claude-sonnet-4-6": { input: 3.0, inputCacheHit: 0.30, output: 15.0 },
 
   // Claude Opus
-  "claude-opus-4-6": { input: 5.0, output: 25.0 },
+  "claude-opus-4-6": { input: 5.0, inputCacheHit: 0.50, output: 25.0 },
 
-  // DeepSeek (thinking)
-  "deepseek-reasoner": { input: 0.28, output: 0.42 },
+  // DeepSeek V4 Flash
+  "deepseek-v4-flash": { input: 0.14, inputCacheHit: 0.0028, output: 0.28 },
+
+  // DeepSeek V4 Pro (with discount auto-expiry)
+  "deepseek-v4-pro": { input: 0.435, inputCacheHit: 0.003625, output: 0.87 },
 };
+
+/**
+ * Get effective pricing for a model, applying time-limited discounts.
+ * DeepSeek V4 Pro has a 75% discount until 2026-05-31.
+ */
+function getEffectivePricing(model: string): ModelPricing {
+  const p = PRICING[model];
+  if (!p) return { input: 1.0, inputCacheHit: 1.0, output: 5.0 };
+
+  // No discount for non-pro models
+  if (model !== "deepseek-v4-pro") return p;
+
+  // Discount expires 2026-05-31 (after that, full price applies)
+  const DISCOUNT_END = new Date("2026-06-01T00:00:00Z").getTime();
+  const now = Date.now();
+  if (now < DISCOUNT_END) return p; // Discount still active
+
+  // Full price after discount ends
+  return { input: 1.74, inputCacheHit: 0.0145, output: 3.48 };
+}
 
 // ============================================
 // Types
@@ -37,6 +65,7 @@ export interface UsageRecord {
   model: string;
   inputTokens: number;
   outputTokens: number;
+  cacheHitTokens?: number;
   costUsd: number;
   responseMode: string;
   success: boolean;
@@ -48,6 +77,7 @@ export interface UsageRecord {
   trigger?: string;
   confidence?: string;
   deepseekReasoning?: string;
+  deepseekThinkingEnabled?: boolean;
   claudeCorrection?: string;
   bankConflictDetected?: boolean;
   bankConflictType?: "semantic-equivalent" | "real-conflict";
@@ -97,9 +127,13 @@ const STORAGE_KEY = "usageRecords";
 // Cost Calculation
 // ============================================
 
-export function calculateCost(model: string, inputTokens: number, outputTokens: number): number {
-  const pricing = PRICING[model] || { input: 1.0, output: 5.0 };
-  return (inputTokens * pricing.input) / 1_000_000 + (outputTokens * pricing.output) / 1_000_000;
+export function calculateCost(model: string, inputTokens: number, outputTokens: number, cacheHitTokens?: number): number {
+  const pricing = getEffectivePricing(model);
+  const cacheMissTokens = inputTokens - (cacheHitTokens ?? 0);
+  const cacheHitCost = (Math.max(cacheHitTokens ?? 0, 0) * pricing.inputCacheHit) / 1_000_000;
+  const cacheMissCost = (Math.max(cacheMissTokens, 0) * pricing.input) / 1_000_000;
+  const outputCost = (outputTokens * pricing.output) / 1_000_000;
+  return cacheHitCost + cacheMissCost + outputCost;
 }
 
 // ============================================
@@ -109,7 +143,7 @@ export function calculateCost(model: string, inputTokens: number, outputTokens: 
 export async function trackUsage(
   record: Omit<UsageRecord, "id" | "costUsd">,
 ): Promise<UsageRecord> {
-  const cost = calculateCost(record.model, record.inputTokens, record.outputTokens);
+  const cost = calculateCost(record.model, record.inputTokens, record.outputTokens, record.cacheHitTokens);
   const fullRecord: UsageRecord = {
     ...record,
     id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,

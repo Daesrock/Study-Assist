@@ -56,7 +56,7 @@
     "description": "Opus 4.6 model option"
   },
   "useDeepSeek": {
-    "message": "Use DeepSeek Reasoner",
+    "message": "Use DeepSeek",
     "description": "DeepSeek toggle label"
   },
   "claudeAsFallback": {
@@ -274,5 +274,21 @@
   "disguiseMode": {
     "message": "Disguise as uBlock Origin (stealth mode)",
     "description": "Disguise mode checkbox label"
+  },
+  "deepseekModel": {
+    "message": "DeepSeek Model",
+    "description": "Label for DeepSeek model selector"
+  },
+  "modelDFlash": {
+    "message": "DeepSeek V4 Flash (Fast, Cheap)",
+    "description": "Option label for flash model"
+  },
+  "modelDPro": {
+    "message": "DeepSeek V4 Pro (Powerful, Accurate)",
+    "description": "Option label for pro model"
+  },
+  "deepseekThinking": {
+    "message": "Enable Thinking Mode (deep reasoning)",
+    "description": "Label for thinking mode toggle"
   }
 }
