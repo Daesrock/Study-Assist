@@ -1617,7 +1617,8 @@ async function extractMoodleMatchQuestion(questionEl: Element): Promise<Detected
   const questionNumber = qnoEl ? parseInt(qnoEl.textContent?.trim() || "1") : 1;
 
   const qtextEl = questionEl.querySelector(".qtext");
-  const questionText = qtextEl?.textContent?.trim() || "";
+  // Normalize: collapse whitespace, remove excessive line breaks
+  const questionText = (qtextEl?.textContent || "").replace(/\s+/g, " ").trim();
 
   if (!questionText) return null;
 
@@ -1629,7 +1630,8 @@ async function extractMoodleMatchQuestion(questionEl: Element): Promise<Detected
 
   for (const [rowIndex, row] of Array.from(rows).entries()) {
     const textCell = row.querySelector("td.text");
-    const conceptText = textCell?.textContent?.trim() || "";
+    // Normalize whitespace — collapsed to single space, no leading/trailing
+    const conceptText = (textCell?.textContent || "").replace(/\s+/g, " ").trim();
 
     if (conceptText) {
       categories.push({
@@ -1648,7 +1650,7 @@ async function extractMoodleMatchQuestion(questionEl: Element): Promise<Detected
           if (value > 0) { // Skip the "Elegir..." placeholder (value="0")
             matchingOptions.push({
               index: value,
-              text: opt.textContent?.trim() || "",
+              text: (opt.textContent || "").replace(/\s+/g, " ").trim(),
             });
           }
         }

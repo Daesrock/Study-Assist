@@ -38,7 +38,17 @@ export async function streamClaudeResponse(
   maxTokens: number,
   callbacks: StreamCallbacks,
   signal?: AbortSignal,
+  thinking?: { type: string },
 ): Promise<StreamResult> {
+  const body: Record<string, unknown> = {
+    model,
+    max_tokens: maxTokens,
+    messages,
+    stream: true,
+  };
+  if (thinking) {
+    body.thinking = thinking;
+  }
   const response = await fetch(CLAUDE_API_BASE, {
     method: "POST",
     headers: {
@@ -47,12 +57,7 @@ export async function streamClaudeResponse(
       "anthropic-version": ANTHROPIC_VERSION,
       "anthropic-dangerous-direct-browser-access": "true",
     },
-    body: JSON.stringify({
-      model,
-      max_tokens: maxTokens,
-      messages,
-      stream: true,
-    }),
+    body: JSON.stringify(body),
     signal,
   });
 

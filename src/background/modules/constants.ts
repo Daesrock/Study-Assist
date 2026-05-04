@@ -106,6 +106,7 @@ export interface StorageData {
   deepseekModel?: string;
   deepseekThinking?: boolean;
   deepseekOnly?: boolean;
+  claudeThinking?: boolean;
   extensionActive?: boolean;
   disguiseMode?: boolean;
   responseMode?: string;
@@ -130,6 +131,9 @@ export interface ClaudeRequestBody {
   model: string;
   max_tokens: number;
   messages: ClaudeMessage[];
+  thinking?: {
+    type: "enabled" | "disabled" | "adaptive";
+  };
 }
 
 export interface ClaudeMessage {

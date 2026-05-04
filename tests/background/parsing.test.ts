@@ -212,6 +212,29 @@ CONFIDENCE: HIGH`;
       expect(result.confidence).toBe("LOW");
     });
 
+    it("should strip trailing CONFIDENCE text from numerical answer", () => {
+      const response = "ANSWER: 3\nCONFIDENCE: HIGH";
+      const result = parseDeepSeekResponse(
+        response,
+        mcqContext({ questionType: "numerical", options: undefined }),
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.result).toBe("3");
+      expect(result.confidence).toBe("HIGH");
+    });
+
+    it("should parse bare numeric response without ANSWER prefix", () => {
+      const response = "3\nCONFIDENCE: MEDIUM";
+      const result = parseDeepSeekResponse(
+        response,
+        mcqContext({ questionType: "numerical", options: undefined }),
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.result).toBe("3");
+    });
+
     it("should parse select-missing-words mapping", () => {
       const response = "ANSWER: [[1]]=HTTP, [[2]]=80\nCONFIDENCE: MEDIUM";
       const result = parseDeepSeekResponse(
@@ -284,6 +307,36 @@ ANSWER: C`;
     expect(
       extractClaudeQuickAnswer("Resultado final\nANSWER: 32", "numerical"),
     ).toBe("32");
+  });
+
+  it("should strip trailing CONFIDENCE text from numerical quick answer", () => {
+    expect(
+      extractClaudeQuickAnswer("ANSWER: 3\nCONFIDENCE: HIGH", "numerical"),
+    ).toBe("3");
+  });
+
+  it("should handle bare numerical response without ANSWER prefix", () => {
+    expect(
+      extractClaudeQuickAnswer("3\nCONFIDENCE", "numerical"),
+    ).toBe("3");
+  });
+
+  it("should normalize 'A and C' format to comma-separated", () => {
+    expect(
+      extractClaudeQuickAnswer("ANSWER: A and C"),
+    ).toBe("A,C");
+  });
+
+  it("should normalize 'A y C' format to comma-separated", () => {
+    expect(
+      extractClaudeQuickAnswer("ANSWER: A y C"),
+    ).toBe("A,C");
+  });
+
+  it("should normalize 'A / C' format to comma-separated", () => {
+    expect(
+      extractClaudeQuickAnswer("ANSWER: A / C"),
+    ).toBe("A,C");
   });
 
   it("should extract select-missing-words mapping when questionType is select-missing-words", () => {

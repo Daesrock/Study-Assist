@@ -54,6 +54,7 @@ const elements = {
   highlightQuestions: document.getElementById("highlight-questions"),
   quickMode: document.getElementById("quick-mode"),
   claudeModel: document.getElementById("claude-model"),
+  claudeThinking: document.getElementById("claude-thinking"),
   // Domain management
   domainsList: document.getElementById("domains-list"),
   newDomainInput: document.getElementById("new-domain-input"),
@@ -96,6 +97,7 @@ const STORAGE_KEYS = {
   HIGHLIGHT_QUESTIONS: "highlightQuestions",
   QUICK_MODE: "quickMode",
   CLAUDE_MODEL: "claudeModel",
+  CLAUDE_THINKING: "claudeThinking",
   ALLOWED_DOMAINS: "allowedDomains",
   SEND_IMAGES: "sendImages",
   USE_MULTI_BANK: "useMultiBank",
@@ -138,6 +140,7 @@ async function loadSettings() {
       STORAGE_KEYS.HIGHLIGHT_QUESTIONS,
       STORAGE_KEYS.QUICK_MODE,
       STORAGE_KEYS.CLAUDE_MODEL,
+      STORAGE_KEYS.CLAUDE_THINKING,
       STORAGE_KEYS.ALLOWED_DOMAINS,
       STORAGE_KEYS.SEND_IMAGES,
       STORAGE_KEYS.USE_MULTI_BANK,
@@ -165,6 +168,10 @@ async function loadSettings() {
     // Set Claude model
     elements.claudeModel.value =
       result[STORAGE_KEYS.CLAUDE_MODEL] ?? "claude-haiku-4-5-20251001";
+
+    // Set Claude thinking toggle
+    elements.claudeThinking.checked =
+      result[STORAGE_KEYS.CLAUDE_THINKING] ?? false;
 
     // Set checkboxes
     elements.autoDetect.checked = result[STORAGE_KEYS.AUTO_DETECT] ?? true;
@@ -229,6 +236,7 @@ function setupEventListeners() {
   elements.highlightQuestions.addEventListener("change", saveSettings);
   elements.quickMode.addEventListener("change", saveSettings);
   elements.claudeModel.addEventListener("change", saveSettings);
+  elements.claudeThinking.addEventListener("change", saveSettings);
   elements.sendImages.addEventListener("change", saveSettings);
   elements.useMultiBank.addEventListener("change", saveSettings);
   elements.useDeepSeek.addEventListener("change", handleDeepSeekToggle);
@@ -543,6 +551,7 @@ async function saveSettings() {
       [STORAGE_KEYS.HIGHLIGHT_QUESTIONS]: elements.highlightQuestions.checked,
       [STORAGE_KEYS.QUICK_MODE]: elements.quickMode.checked,
       [STORAGE_KEYS.CLAUDE_MODEL]: elements.claudeModel.value,
+      [STORAGE_KEYS.CLAUDE_THINKING]: elements.claudeThinking.checked,
       [STORAGE_KEYS.SEND_IMAGES]: elements.sendImages.checked,
       [STORAGE_KEYS.USE_MULTI_BANK]: elements.useMultiBank.checked,
       [STORAGE_KEYS.USE_DEEPSEEK]: elements.useDeepSeek.checked,

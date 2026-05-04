@@ -6,6 +6,7 @@ dist/
 dist.zip
 study-assist-v*.zip
 AGENTS.md
+.github
 
 # IDE
 .vscode/

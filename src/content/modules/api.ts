@@ -629,21 +629,44 @@ export async function handleQuickClick(
           /^([A-J])\s*,\s*([A-J])(?:\s*,\s*([A-J]))?(?:\s*,\s*([A-J]))?(?:\s*,\s*([A-J]))?$/
         );
 
+        // Also detect "A / C" or "A and C" or "A y C" formats
+        const altMultiMatch = !multiMatch
+          ? upperResult.match(/^([A-J])\s*\/\s*([A-J])(?:\s*\/\s*([A-J]))?(?:\s*\/\s*([A-J]))?(?:\s*\/\s*([A-J]))?$/)
+          : null;
+
         let answer: string;
         let isMultiple = false;
+        let isSingleSelectMulti = false; // Single-select questions with multiple correct answers
 
-        if (multiMatch) {
-          // Multiple answers - join with comma
+        // Detect if this is a single-select (radio) question with multiple correct answers
+        if (multiMatch || altMultiMatch) {
+          const element = question.element;
+          const hasRadios = element instanceof HTMLElement
+            && element.querySelectorAll('input[type="radio"]').length > 0;
+          const hasCheckboxes = element instanceof HTMLElement
+            && element.querySelectorAll('input[type="checkbox"]').length > 0;
+
+          if (hasRadios && !hasCheckboxes) {
+            // Single-select with multiple correct answers → use A / C format
+            isSingleSelectMulti = true;
+          }
+        }
+
+        if (multiMatch || altMultiMatch) {
+          const source = multiMatch || altMultiMatch!;
           const letters = [
-            multiMatch[1],
-            multiMatch[2],
-            multiMatch[3],
-            multiMatch[4],
-            multiMatch[5],
-          ]
-            .filter(Boolean)
-            .join(",");
-          answer = letters;
+            source[1],
+            source[2],
+            source[3],
+            source[4],
+            source[5],
+          ].filter(Boolean);
+
+          if (isSingleSelectMulti) {
+            answer = letters.join(" / ");
+          } else {
+            answer = letters.join(",");
+          }
           isMultiple = true;
         } else {
           // Single answer
@@ -654,11 +677,15 @@ export async function handleQuickClick(
         quickBtn.innerHTML = `<span class="study-assist-quick-answer">${answer}</span>`;
         quickBtn.classList.add("has-answer");
         if (isMultiple) {
-          quickBtn.classList.add("multi-answer");
-          // Add extra-small class for 3+ answers
-          const answerCount = answer.split(",").length;
-          if (answerCount >= 3) {
-            quickBtn.classList.add("multi-answer-large");
+          if (isSingleSelectMulti) {
+            quickBtn.classList.add("multi-answer");
+          } else {
+            quickBtn.classList.add("multi-answer");
+            // Add extra-small class for 3+ answers
+            const answerCount = answer.split(",").length;
+            if (answerCount >= 3) {
+              quickBtn.classList.add("multi-answer-large");
+            }
           }
         }
 

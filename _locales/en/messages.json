@@ -290,5 +290,9 @@
   "deepseekThinking": {
     "message": "Enable Thinking Mode (deep reasoning)",
     "description": "Label for thinking mode toggle"
+  },
+  "claudeThinking": {
+    "message": "Enable Thinking Mode (adaptive reasoning)",
+    "description": "Label for Claude thinking mode toggle"
   }
 }

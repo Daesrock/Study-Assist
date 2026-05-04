@@ -294,5 +294,9 @@
   "deepseekThinking": {
     "message": "Activar Modo Thinking (razonamiento profundo)",
     "description": "Etiqueta para modo thinking"
+  },
+  "claudeThinking": {
+    "message": "Activar Modo Thinking (razonamiento adaptativo)",
+    "description": "Etiqueta para modo thinking de Claude"
   }
 }

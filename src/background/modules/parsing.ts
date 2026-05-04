@@ -74,11 +74,21 @@ export function parseDeepSeekResponse(
       answer = gapMatch[1].trim();
     }
   } else if (isNumerical) {
-    // Extract numerical answer: accept digits (with optional units), strip unit words
-    const numMatch = response.match(/ANSWER:\s*([\d.,]+(?:\s*\w+)?)/i);
+    // Extract numerical answer: accept digits (with optional units), strip unit words and trailing text
+    const numMatch = response.match(/ANSWER:\s*([\d.,]+)/i);
     if (numMatch) {
-      // Keep only the numeric part — strip trailing words like "bits", "km", etc.
-      answer = numMatch[1].trim().replace(/^([\d.,]+).*$/, "$1").trim();
+      // Keep only the numeric part — strip any trailing non-numeric junk
+      const rawNum = numMatch[1].trim();
+      const cleanMatch = rawNum.match(/^([\d.,]+)/);
+      answer = cleanMatch ? cleanMatch[1] : rawNum;
+    } else {
+      // Fallback: try to find any numeric value in the response (bare number case)
+      const bareNumMatch = response.match(/^[^\d]*([\d.,]+)/m);
+      if (bareNumMatch) {
+        const rawNum = bareNumMatch[1].trim();
+        const cleanMatch = rawNum.match(/^([\d.,]+)/);
+        answer = cleanMatch ? cleanMatch[1] : rawNum;
+      }
     }
   } else if (isShortAnswer) {
     // Extract free-text answer: everything after "ANSWER:" up to newline
@@ -87,9 +97,15 @@ export function parseDeepSeekResponse(
       answer = freeMatch[1].trim();
     }
   } else {
-    const answerMatch = response.match(/ANSWER:\s*([A-J](?:\s*,\s*[A-J])*)/i);
-    if (answerMatch) {
-      answer = answerMatch[1].toUpperCase().replace(/\s/g, "");
+    // Normalize "A and C", "A y C", "A / C" formats BEFORE comma check
+    const altMatch = response.match(/ANSWER:\s*([A-J])\s*(?:\/|and|y)\s*([A-J])/i);
+    if (altMatch) {
+      answer = `${altMatch[1].toUpperCase()},${altMatch[2].toUpperCase()}`;
+    } else {
+      const answerMatch = response.match(/ANSWER:\s*([A-J](?:\s*,\s*[A-J])*)/i);
+      if (answerMatch) {
+        answer = answerMatch[1].toUpperCase().replace(/\s/g, "");
+      }
     }
   }
 
@@ -124,8 +140,22 @@ export function extractClaudeQuickAnswer(result: string, questionType?: string):
 
   // Numerical answer: strip unit words, keep only the number
   if (questionType === "numerical") {
-    const numMatch = result.match(/ANSWER:\s*([\d.,]+(?:\s*\w+)?)/i);
-    if (numMatch) return numMatch[1].trim().replace(/^([\d.,]+).*$/, "$1").trim();
+    const numMatch = result.match(/ANSWER:\s*([\d.,]+)/i);
+    if (numMatch) {
+      const rawNum = numMatch[1].trim();
+      const cleanMatch = rawNum.match(/^([\d.,]+)/);
+      if (cleanMatch) return cleanMatch[1];
+    }
+    // Fallback: bare numeric response without ANSWER: prefix
+    const bareNumMatch = result.match(/^[^\d]*([\d.,]+)/m);
+    if (bareNumMatch) {
+      const rawNum = bareNumMatch[1].trim();
+      const cleanMatch = rawNum.match(/^([\d.,]+)/);
+      if (cleanMatch) return cleanMatch[1];
+    }
+    // Last resort: strip all non-numeric tokens
+    const lastResort = result.trim().replace(/[^\d.,]/g, "").trim();
+    if (lastResort && /^[\d.,]+$/.test(lastResort)) return lastResort;
     return result.trim();
   }
 
@@ -140,6 +170,12 @@ export function extractClaudeQuickAnswer(result: string, questionType?: string):
   if (tfAnswerMatch) {
     const value = tfAnswerMatch[1].toUpperCase();
     return value.startsWith("V") || value === "TRUE" ? "V" : "F";
+  }
+
+  // Normalize "A and C", "A y C", "A / C" formats BEFORE comma check
+  const altMatch = result.match(/ANSWER:\s*([A-J])\s*(?:\/|and|y)\s*([A-J])/i);
+  if (altMatch) {
+    return `${altMatch[1].toUpperCase()},${altMatch[2].toUpperCase()}`;
   }
 
   const answerMatch = result.match(/ANSWER:\s*([A-J](?:\s*,\s*[A-J])*)/i);

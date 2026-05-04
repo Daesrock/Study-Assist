@@ -34,6 +34,7 @@ import {
   buildDeepSeekPrompt,
   buildClaudeValidationPrompt,
   buildAnalysisPrompt,
+  buildMatchingPrompt,
   buildMessageContent,
 } from "./prompts.js";
 import {
@@ -307,6 +308,7 @@ function matchCorrectAnswerToLetter(
 export const __testOnlyApiMatching = {
   matchSingleAnswerToLetter,
   matchCorrectAnswerToLetter,
+  validateMatchingAnswer,
 };
 
 // ============================================
@@ -366,13 +368,13 @@ export async function analyzeQuestion(context: AnalysisContext): Promise<Analysi
     recordRequest(context.questionText);
 
     const storageResult = await chrome.storage.local.get([
-      "claudeApiKey", "claudeModel", "useDeepSeek", "deepseekApiKey", "deepseekOnly", "deepseekModel", "deepseekThinking",
+      "claudeApiKey", "claudeModel", "useDeepSeek", "deepseekApiKey", "deepseekOnly", "deepseekModel", "deepseekThinking", "claudeThinking",
     ]) as StorageData;
 
     // Decrypt API keys
     const claudeApiKey = await getDecryptedApiKey("claudeApiKey");
     const deepseekApiKey = await getDecryptedApiKey("deepseekApiKey");
-    const { claudeModel, useDeepSeek, deepseekOnly, deepseekModel, deepseekThinking } = storageResult;
+    const { claudeModel, useDeepSeek, deepseekOnly, deepseekModel, deepseekThinking, claudeThinking } = storageResult;
     const selectedClaudeModel = context.qaMode ? QA_CLAUDE_MODEL : (claudeModel || DEFAULT_MODEL);
     const isDeepSeekOnlyMode = useDeepSeek && deepseekOnly && deepseekApiKey;
 
@@ -504,7 +506,7 @@ export async function analyzeQuestion(context: AnalysisContext): Promise<Analysi
     // When falling back to Claude after DeepSeek attempt, let Claude track its own latency.
     // Only pass original startTime if Claude is the primary (no DeepSeek attempt was made).
     const claudeStartTime = deepseekAnalysisForClaude ? Date.now() : startTime;
-    const claudeResponse = await analyzeWithClaude(context, claudeApiKey!, selectedClaudeModel, deepseekAnalysisForClaude, claudeStartTime, claudeFallbackReason);
+    const claudeResponse = await analyzeWithClaude(context, claudeApiKey!, selectedClaudeModel, deepseekAnalysisForClaude, claudeStartTime, claudeFallbackReason, claudeThinking, isMatching);
 
     // Add status flags to response for visual feedback
     if (deepseekRetried) claudeResponse.deepseekRetried = true;
@@ -674,6 +676,90 @@ export async function analyzeWithDeepSeek(
 }
 
 // ============================================
+// Matching Answer Validation
+// ============================================
+
+interface MatchingValidationResult {
+  valid: boolean;
+  reason?: string;
+  answer?: string; // normalized answer
+}
+
+/**
+ * Validate a matching answer against the expected structure from the context.
+ * Checks that every category is answered exactly once with a valid option index.
+ */
+function validateMatchingAnswer(
+  result: string,
+  context: AnalysisContext,
+): MatchingValidationResult {
+  if (!context.categories || !context.matchingOptions) {
+    return { valid: true }; // Can't validate without structure — accept
+  }
+
+  const categoryLetters = context.categories.map((c) => c.letter);
+  const validIndices = new Set(context.matchingOptions.map((o) => o.index));
+
+  // Extract pairs from response — try ANSWER: prefix first, then bare pairs
+  let pairs: string[] = [];
+  const answerMatch = result.match(/ANSWER:\s*([A-Z]-\d[\s,]*)+/i);
+  if (answerMatch) {
+    const pairsMatch = answerMatch[0].match(/[A-Z]-\d/gi);
+    if (pairsMatch) pairs = pairsMatch.map((p) => p.toUpperCase());
+  }
+
+  if (pairs.length === 0) {
+    // Try bare pairs in the whole response
+    const allPairs = result.match(/[A-Z]-\d/gi);
+    if (allPairs && allPairs.length >= 2) {
+      pairs = allPairs.map((p) => p.toUpperCase());
+    }
+  }
+
+  if (pairs.length === 0) {
+    return { valid: false, reason: "No matching pairs found in response" };
+  }
+
+  // Check every required category is answered
+  const answeredCategories = new Set(pairs.map((p) => p.split("-")[0]));
+  const categorySet = new Set(categoryLetters);
+
+  // Catch duplicates: more pairs than distinct categories, or same count but
+  // duplicate letters (e.g., A appears twice, B never appears)
+  if (pairs.length > categoryLetters.length ||
+      (pairs.length === categoryLetters.length && answeredCategories.size < categoryLetters.length)) {
+    return { valid: false, reason: "Answer has duplicate or unexpected categories" };
+  }
+
+  // Catch missing categories
+  for (const letter of categoryLetters) {
+    if (!answeredCategories.has(letter)) {
+      return { valid: false, reason: `Missing answer for category ${letter}` };
+    }
+  }
+
+  // Catch unexpected extra categories (e.g. answer has letter that doesn't exist)
+  for (const letter of answeredCategories) {
+    if (!categorySet.has(letter)) {
+      return { valid: false, reason: `Unexpected category ${letter} in answer` };
+    }
+  }
+
+  // Check every target index is in range
+  for (const pair of pairs) {
+    const targetNum = parseInt(pair.split("-")[1]);
+    if (!validIndices.has(targetNum)) {
+      return { valid: false, reason: `Option index ${targetNum} is not in the available options` };
+    }
+  }
+
+  // Normalize: sort by category letter, return clean answer
+  const normalized = pairs.sort().join(", ");
+
+  return { valid: true, answer: normalized };
+}
+
+// ============================================
 // Claude Analysis
 // ============================================
 
@@ -684,6 +770,8 @@ export async function analyzeWithClaude(
   deepseekAnalysis: DeepSeekAnalysisForClaude | null = null,
   startTime: number = Date.now(),
   fallbackReasonOverride?: string,
+  claudeThinkingEnabled?: boolean,
+  matchingQuestion?: boolean,
 ): Promise<AnalysisResponse> {
   let matchedQuestion = null;
   if (!deepseekAnalysis) {
@@ -710,9 +798,18 @@ export async function analyzeWithClaude(
   const hasImages = context.images && context.images.length > 0;
   const maxTokens = deepseekAnalysis ? 2048 : 1024;
 
-  log("[Study Assist] Claude config:", { maxTokens, hasImages, isMultipleAnswer, hasDeepSeekAnalysis: !!deepseekAnalysis });
+  log("[Study Assist] Claude config:", { maxTokens, hasImages, isMultipleAnswer, hasDeepSeekAnalysis: !!deepseekAnalysis, claudeThinking: claudeThinkingEnabled });
+
+  const isMatchingQuestion = matchingQuestion || context.questionType === "matching";
+  const shouldUseThinking = claudeThinkingEnabled === true;
 
   const messages: ClaudeMessage[] = [{ role: "user", content: messageContent }];
+
+  // Build request body — matching forces "enabled", general uses "adaptive"
+  const requestBody: Record<string, unknown> = { model, max_tokens: maxTokens, messages };
+  if (shouldUseThinking) {
+    requestBody.thinking = { type: isMatchingQuestion ? "enabled" : "adaptive" };
+  }
 
   const response = await fetchWithRetry(
     CLAUDE_API_BASE,
@@ -724,7 +821,7 @@ export async function analyzeWithClaude(
         "anthropic-version": ANTHROPIC_VERSION,
         "anthropic-dangerous-direct-browser-access": "true",
       },
-      body: JSON.stringify({ model, max_tokens: maxTokens, messages } as ClaudeRequestBody),
+      body: JSON.stringify(requestBody as unknown as ClaudeRequestBody),
     },
     2,
     45000,
@@ -770,6 +867,65 @@ export async function analyzeWithClaude(
   if (!result) return { success: false, error: "No response generated." };
 
   log("[Study Assist] Claude response:", result);
+
+  // Validate matching answers structurally
+  if ((isMatching || context.questionType === "matching") && !deepseekAnalysis) {
+    const validation = validateMatchingAnswer(result, context);
+    if (!validation.valid) {
+      log(`[Study Assist] Matching validation failed: ${validation.reason}. Retrying with stricter prompt...`);
+      // Build a stricter prompt that demands structural output
+      const strictPrompt = buildMatchingPrompt(context) + `
+
+YOUR PREVIOUS RESPONSE WAS REJECTED because: ${validation.reason}
+
+PLEASE RESPOND AGAIN with the CORRECT matches. Only output the match pairs — no extra text.`;
+      const strictMessageContent = buildMessageContent(strictPrompt, context.images);
+      const strictMessages: ClaudeMessage[] = [{ role: "user", content: strictMessageContent }];
+
+      // Build request body with thinking
+      const strictRequestBody: Record<string, unknown> = { model, max_tokens: maxTokens, messages: strictMessages };
+      if (shouldUseThinking) {
+        strictRequestBody.thinking = { type: "enabled" }; // Force enabled for retry
+      }
+
+      const retryResponse = await fetchWithRetry(
+        CLAUDE_API_BASE,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": apiKey,
+            "anthropic-version": ANTHROPIC_VERSION,
+            "anthropic-dangerous-direct-browser-access": "true",
+          },
+          body: JSON.stringify(strictRequestBody as unknown as ClaudeRequestBody),
+        },
+        2,
+        45000,
+      );
+
+      if (retryResponse.ok) {
+        let retryBody: ClaudeApiResponse | null = null;
+        try { retryBody = await retryResponse.clone().json() as ClaudeApiResponse; } catch { /* keep null */ }
+        const retryResult = retryBody?.content?.[0]?.text;
+        if (retryResult) {
+          const retryValidation = validateMatchingAnswer(retryResult, context);
+          if (retryValidation.valid && retryValidation.answer) {
+            log("[Study Assist] Matching retry successful:", retryValidation.answer);
+            result = retryResult;
+          } else if (retryValidation.answer) {
+            // Structural pass but accept anyway with normalized answer
+            log("[Study Assist] Matching retry partially valid, accepting:", retryValidation.answer);
+            result = retryResult;
+          }
+        }
+      }
+      // Note: if retry also fails, we continue with original result so user sees something
+    } else if (validation.answer && validation.answer !== result.trim()) {
+      // Answer is valid but could be normalized — use the clean version
+      result = validation.answer;
+    }
+  }
 
   // Use real token counts from Claude API response, fall back to estimates
   const realInputTokens = responseBody?.usage?.input_tokens ?? Math.ceil((prompt?.length || 0) / 4);
@@ -871,8 +1027,10 @@ export async function analyzeQuestionStreaming(
     recordRequest(context.questionText);
 
     const claudeApiKey = await getDecryptedApiKey("claudeApiKey");
-    const storageResult = await chrome.storage.local.get(["claudeModel"]) as StorageData;
+    const storageResult = await chrome.storage.local.get(["claudeModel", "claudeThinking"]) as StorageData;
     const model = context.qaMode ? QA_CLAUDE_MODEL : (storageResult.claudeModel || DEFAULT_MODEL);
+    const claudeThinkingEnabled = storageResult.claudeThinking === true;
+    const isMatchingQuestion = context.questionType === "matching";
 
     if (!claudeApiKey) {
       port.postMessage({ type: "STREAM_ERROR", error: "Claude API key not configured." });
@@ -885,6 +1043,12 @@ export async function analyzeQuestionStreaming(
     const messageContent = buildMessageContent(prompt, context.images);
     const maxTokens = 1024;
     const messages: ClaudeMessage[] = [{ role: "user", content: messageContent }];
+
+    // Build request body with thinking for streaming
+    const requestBody: Record<string, unknown> = { model, max_tokens: maxTokens, messages };
+    if (claudeThinkingEnabled) {
+      requestBody.thinking = { type: isMatchingQuestion ? "enabled" : "adaptive" };
+    }
 
     port.postMessage({ type: "STREAM_STATUS", status: "started" });
 
@@ -915,6 +1079,8 @@ export async function analyzeQuestionStreaming(
           } catch { /* port disconnected */ }
         },
       },
+      undefined,
+      requestBody.thinking as { type: string } | undefined,
     );
 
     // Track usage with real token counts from streaming
