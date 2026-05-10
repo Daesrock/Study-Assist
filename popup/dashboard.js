@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Study Assist — Dashboard Script
  * Developer-oriented control panel with routing metrics,
  * token intelligence, last-response inspector, and dev mode.
@@ -1492,6 +1492,16 @@ function renderRecordDetailPage(r, idx, history, devMode, apiData) {
           : ""
       }
 
+      ${
+        r.claudeThinking
+          ? `
+      <!-- Claude Thinking -->
+      <div class="dp-section">
+        <div class="dp-section-label" style="color:var(--color-claude);">🤔 Razonamiento Claude</div>
+        <pre class="dp-trace">${escapeHtml(r.claudeThinking)}</pre>
+      </div>`
+          : ""
+      }
       ${
         r.claudeCorrection
           ? `

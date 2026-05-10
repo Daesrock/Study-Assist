@@ -15,12 +15,14 @@ export interface StreamCallbacks {
   onInputTokens: (count: number) => void;
   onComplete: (outputTokens: number) => void;
   onError: (error: string) => void;
+  onThinking?: (thinking: string) => void;
 }
 
 export interface StreamResult {
   fullText: string;
   inputTokens: number;
   outputTokens: number;
+  thinkingText?: string;
 }
 
 // ============================================
@@ -76,6 +78,7 @@ export async function streamClaudeResponse(
   const reader = response.body!.getReader();
   const decoder = new TextDecoder();
   let fullText = "";
+  let thinkingText = "";
   let inputTokens = 0;
   let outputTokens = 0;
   let buffer = "";
@@ -113,6 +116,9 @@ export async function streamClaudeResponse(
               if (delta?.type === "text_delta" && typeof delta.text === "string") {
                 fullText += delta.text;
                 callbacks.onChunk(delta.text);
+              } else if (delta?.type === "thinking_delta" && typeof delta.thinking === "string") {
+                thinkingText += delta.thinking;
+                callbacks.onThinking?.(delta.thinking);
               }
               break;
             }
@@ -146,5 +152,5 @@ export async function streamClaudeResponse(
     throw error;
   }
 
-  return { fullText, inputTokens, outputTokens };
+  return { fullText, inputTokens, outputTokens, thinkingText: thinkingText || undefined };
 }

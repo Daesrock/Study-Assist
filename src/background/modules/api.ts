@@ -874,6 +874,8 @@ export async function analyzeWithClaude(
   }
 
   const textBlock = responseBody?.content?.find(block => block.type === "text");
+  const thinkingBlock = responseBody?.content?.find(block => block.type === "thinking");
+  const claudeThinking = thinkingBlock?.thinking;
   let result = textBlock?.text;
   if (!result) return { success: false, error: "No response generated." };
 
@@ -961,6 +963,7 @@ PLEASE RESPOND AGAIN with the CORRECT matches. Only output the match pairs — n
     fallbackReason,
     confidence: deepseekAnalysis?.confidence,
     deepseekReasoning: deepseekAnalysis?.reasoning ?? undefined,
+    claudeThinking: claudeThinking || undefined,
   });
 
   // For quick mode, extract the final answer
@@ -1071,6 +1074,7 @@ export async function analyzeQuestionStreaming(
 
     port.postMessage({ type: "STREAM_STATUS", status: "started" });
 
+    let claudeThinkingText = "";
     const result = await streamClaudeResponse(
       claudeApiKey,
       model,
@@ -1097,6 +1101,9 @@ export async function analyzeQuestionStreaming(
             port.postMessage({ type: "STREAM_ERROR", error });
           } catch { /* port disconnected */ }
         },
+        onThinking(thinking: string) {
+          claudeThinkingText += thinking;
+        },
       },
       undefined,
       requestBody.thinking as { type: string } | undefined,
@@ -1116,6 +1123,7 @@ export async function analyzeQuestionStreaming(
       success: true,
       latencyMs: Date.now() - startTime,
       platform: detectPlatform(context.pageUrl),
+      claudeThinking: claudeThinkingText || result.thinkingText || undefined,
     });
 
     port.postMessage({

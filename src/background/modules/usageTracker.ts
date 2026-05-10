@@ -79,6 +79,7 @@ export interface UsageRecord {
   deepseekReasoning?: string;
   deepseekThinkingEnabled?: boolean;
   claudeCorrection?: string;
+  claudeThinking?: string;
   bankConflictDetected?: boolean;
   bankConflictType?: "semantic-equivalent" | "real-conflict";
   bankConflictAnswerSimilarity?: number;
