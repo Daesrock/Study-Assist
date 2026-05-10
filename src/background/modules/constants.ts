@@ -17,6 +17,23 @@ export const CLAUDE_API_BASE = "https://api.anthropic.com/v1/messages";
 export const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
 export const ANTHROPIC_VERSION = "2023-06-01";
 
+// ============================================
+// Thinking Mode Helpers
+// ============================================
+
+export const THINKING_MIN_OUTPUT_TOKENS = 1024;
+
+export function isAdaptiveThinkingModel(model: string): boolean {
+  return model.includes("sonnet-4-6") || model.includes("opus-4-6") || model.includes("opus-4-7") || model.includes("mythos");
+}
+
+export function getClaudeThinkingConfig(model: string): { type: string; budget_tokens?: number } {
+  if (isAdaptiveThinkingModel(model)) {
+    return { type: "adaptive" };
+  }
+  return { type: "enabled", budget_tokens: 1024 };
+}
+
 export const DEEPSEEK_API_BASE = "https://api.deepseek.com/chat/completions";
 
 // DeepSeek V4 Models

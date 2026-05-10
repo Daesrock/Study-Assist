@@ -15,6 +15,8 @@ import {
   DEEPSEEK_V4_PRO,
   activeDeepSeekController,
   setActiveDeepSeekController,
+  THINKING_MIN_OUTPUT_TOKENS,
+  getClaudeThinkingConfig,
 } from "./constants.js";
 import type {
   StorageData,
@@ -796,19 +798,27 @@ export async function analyzeWithClaude(
   const isQuickMode = context.responseMode === "quick";
   const isMatching = context.questionType === "matching";
   const hasImages = context.images && context.images.length > 0;
-  const maxTokens = deepseekAnalysis ? 2048 : 1024;
+  let maxTokens = deepseekAnalysis ? 2048 : 1024;
 
   log("[Study Assist] Claude config:", { maxTokens, hasImages, isMultipleAnswer, hasDeepSeekAnalysis: !!deepseekAnalysis, claudeThinking: claudeThinkingEnabled });
 
-  const isMatchingQuestion = matchingQuestion || context.questionType === "matching";
   const shouldUseThinking = claudeThinkingEnabled === true;
+
+  if (shouldUseThinking) {
+    const thinkingConfig = getClaudeThinkingConfig(model);
+    const budget = thinkingConfig.budget_tokens || 0;
+    const minMaxTokens = budget + THINKING_MIN_OUTPUT_TOKENS;
+    if (maxTokens < minMaxTokens) {
+      maxTokens = minMaxTokens;
+    }
+  }
 
   const messages: ClaudeMessage[] = [{ role: "user", content: messageContent }];
 
-  // Build request body — matching forces "enabled", general uses "adaptive"
+  // Build request body — model-aware: adaptive for Sonnet/Opus 4.6+, enabled for Haiku 4.5
   const requestBody: Record<string, unknown> = { model, max_tokens: maxTokens, messages };
   if (shouldUseThinking) {
-    requestBody.thinking = { type: isMatchingQuestion ? "enabled" : "adaptive", budget_tokens: 1024 };
+    requestBody.thinking = getClaudeThinkingConfig(model);
   }
 
   const response = await fetchWithRetry(
@@ -886,7 +896,7 @@ PLEASE RESPOND AGAIN with the CORRECT matches. Only output the match pairs — n
       // Build request body with thinking
       const strictRequestBody: Record<string, unknown> = { model, max_tokens: maxTokens, messages: strictMessages };
       if (shouldUseThinking) {
-        strictRequestBody.thinking = { type: "enabled", budget_tokens: 1024 }; // Force enabled for retry
+        strictRequestBody.thinking = getClaudeThinkingConfig(model);
       }
 
       const retryResponse = await fetchWithRetry(
@@ -1032,7 +1042,6 @@ export async function analyzeQuestionStreaming(
     const storageResult = await chrome.storage.local.get(["claudeModel", "claudeThinking"]) as StorageData;
     const model = context.qaMode ? QA_CLAUDE_MODEL : (storageResult.claudeModel || DEFAULT_MODEL);
     const claudeThinkingEnabled = storageResult.claudeThinking === true;
-    const isMatchingQuestion = context.questionType === "matching";
 
     if (!claudeApiKey) {
       port.postMessage({ type: "STREAM_ERROR", error: "Claude API key not configured." });
@@ -1043,13 +1052,21 @@ export async function analyzeQuestionStreaming(
 
     const prompt = buildAnalysisPrompt(context, matchedQuestion);
     const messageContent = buildMessageContent(prompt, context.images);
-    const maxTokens = 1024;
+    let maxTokens = 1024;
+    const thinkingConfig = claudeThinkingEnabled ? getClaudeThinkingConfig(model) : null;
+    if (thinkingConfig) {
+      const budget = thinkingConfig.budget_tokens || 0;
+      const minMaxTokens = budget + THINKING_MIN_OUTPUT_TOKENS;
+      if (maxTokens < minMaxTokens) {
+        maxTokens = minMaxTokens;
+      }
+    }
     const messages: ClaudeMessage[] = [{ role: "user", content: messageContent }];
 
-    // Build request body with thinking for streaming
+    // Build request body with model-aware thinking for streaming
     const requestBody: Record<string, unknown> = { model, max_tokens: maxTokens, messages };
-    if (claudeThinkingEnabled) {
-      requestBody.thinking = { type: isMatchingQuestion ? "enabled" : "adaptive", budget_tokens: 1024 };
+    if (thinkingConfig) {
+      requestBody.thinking = thinkingConfig;
     }
 
     port.postMessage({ type: "STREAM_STATUS", status: "started" });
