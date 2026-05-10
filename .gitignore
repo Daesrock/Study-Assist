@@ -30,3 +30,4 @@ npm-debug.log*
 # Environment files
 .env
 .env.local
+.opencode
