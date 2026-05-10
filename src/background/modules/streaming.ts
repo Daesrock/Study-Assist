@@ -38,7 +38,7 @@ export async function streamClaudeResponse(
   maxTokens: number,
   callbacks: StreamCallbacks,
   signal?: AbortSignal,
-  thinking?: { type: string },
+  thinking?: { type: string; budget_tokens?: number },
 ): Promise<StreamResult> {
   const body: Record<string, unknown> = {
     model,

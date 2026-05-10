@@ -808,7 +808,7 @@ export async function analyzeWithClaude(
   // Build request body — matching forces "enabled", general uses "adaptive"
   const requestBody: Record<string, unknown> = { model, max_tokens: maxTokens, messages };
   if (shouldUseThinking) {
-    requestBody.thinking = { type: isMatchingQuestion ? "enabled" : "adaptive" };
+    requestBody.thinking = { type: isMatchingQuestion ? "enabled" : "adaptive", budget_tokens: 1024 };
   }
 
   const response = await fetchWithRetry(
@@ -863,7 +863,8 @@ export async function analyzeWithClaude(
     return handleApiError(response.status, responseBody);
   }
 
-  let result = responseBody?.content?.[0]?.text;
+  const textBlock = responseBody?.content?.find(block => block.type === "text");
+  let result = textBlock?.text;
   if (!result) return { success: false, error: "No response generated." };
 
   log("[Study Assist] Claude response:", result);
@@ -885,7 +886,7 @@ PLEASE RESPOND AGAIN with the CORRECT matches. Only output the match pairs — n
       // Build request body with thinking
       const strictRequestBody: Record<string, unknown> = { model, max_tokens: maxTokens, messages: strictMessages };
       if (shouldUseThinking) {
-        strictRequestBody.thinking = { type: "enabled" }; // Force enabled for retry
+        strictRequestBody.thinking = { type: "enabled", budget_tokens: 1024 }; // Force enabled for retry
       }
 
       const retryResponse = await fetchWithRetry(
@@ -907,7 +908,8 @@ PLEASE RESPOND AGAIN with the CORRECT matches. Only output the match pairs — n
       if (retryResponse.ok) {
         let retryBody: ClaudeApiResponse | null = null;
         try { retryBody = await retryResponse.clone().json() as ClaudeApiResponse; } catch { /* keep null */ }
-        const retryResult = retryBody?.content?.[0]?.text;
+        const retryTextBlock = retryBody?.content?.find(block => block.type === "text");
+        const retryResult = retryTextBlock?.text;
         if (retryResult) {
           const retryValidation = validateMatchingAnswer(retryResult, context);
           if (retryValidation.valid && retryValidation.answer) {
@@ -1047,7 +1049,7 @@ export async function analyzeQuestionStreaming(
     // Build request body with thinking for streaming
     const requestBody: Record<string, unknown> = { model, max_tokens: maxTokens, messages };
     if (claudeThinkingEnabled) {
-      requestBody.thinking = { type: isMatchingQuestion ? "enabled" : "adaptive" };
+      requestBody.thinking = { type: isMatchingQuestion ? "enabled" : "adaptive", budget_tokens: 1024 };
     }
 
     port.postMessage({ type: "STREAM_STATUS", status: "started" });

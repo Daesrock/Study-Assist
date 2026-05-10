@@ -133,6 +133,7 @@ export interface ClaudeRequestBody {
   messages: ClaudeMessage[];
   thinking?: {
     type: "enabled" | "disabled" | "adaptive";
+    budget_tokens?: number;
   };
 }
 
@@ -165,7 +166,7 @@ export interface ClaudeImageSourceUrl {
 }
 
 export interface ClaudeApiResponse {
-  content?: Array<{ type: string; text?: string }>;
+  content?: Array<{ type: string; text?: string; thinking?: string; signature?: string }>;
   usage?: {
     input_tokens?: number;
     output_tokens?: number;
