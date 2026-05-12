@@ -15,7 +15,6 @@ import {
   DEEPSEEK_V4_PRO,
   activeDeepSeekController,
   setActiveDeepSeekController,
-  THINKING_MIN_OUTPUT_TOKENS,
   getClaudeThinkingConfig,
 } from "./constants.js";
 import type {
@@ -317,7 +316,7 @@ export const __testOnlyApiMatching = {
 // Question Analysis (Main Orchestrator)
 // ============================================
 
-export async function analyzeQuestion(context: AnalysisContext): Promise<AnalysisResponse> {
+export async function analyzeQuestion(context: AnalysisContext, onStatus?: (status: string) => void): Promise<AnalysisResponse> {
   const startTime = Date.now();
 
   try {
@@ -425,6 +424,7 @@ export async function analyzeQuestion(context: AnalysisContext): Promise<Analysi
           claudeFallback = true;
         } else {
           log("[Study Assist] DeepSeek failed, retrying...");
+          onStatus?.("DEEPSEEK_RETRY");
           deepseekRetried = true; // Mark that we're retrying
           await new Promise((r) => setTimeout(r, 1000));
           deepseekResult = await analyzeWithDeepSeek(context, deepseekApiKey);
@@ -432,6 +432,7 @@ export async function analyzeQuestion(context: AnalysisContext): Promise<Analysi
 
         if (!deepseekResult.success && !deepseekResult.cancelled) {
           log("[Study Assist] DeepSeek failed → Claude fallback");
+          onStatus?.("CLAUDING_FALLBACK");
           claudeFallbackReason = "deepseek_error";
           claudeFallback = true; // Mark Claude as fallback
           if (isDeepSeekOnlyMode) {
@@ -489,6 +490,7 @@ export async function analyzeQuestion(context: AnalysisContext): Promise<Analysi
         }
 
         log(`[Study Assist] DeepSeek ${deepseekResult.confidence} → Claude validation`);
+        onStatus?.("CLAUDING_VALIDATING");
         deepseekAnalysisForClaude = {
           answer: deepseekResult.result!,
           confidence: deepseekResult.confidence!,
@@ -564,8 +566,8 @@ export async function analyzeWithDeepSeek(
         } as DeepSeekRequestBody),
         signal,
       },
-      2,
-      60000,
+      0,
+      thinkingEnabled ? 120000 : 60000,
     );
 
     let responseBody: DeepSeekApiResponse | null = null;
@@ -704,15 +706,15 @@ function validateMatchingAnswer(
 
   // Extract pairs from response — try ANSWER: prefix first, then bare pairs
   let pairs: string[] = [];
-  const answerMatch = result.match(/ANSWER:\s*([A-Z]-\d[\s,]*)+/i);
+  const answerMatch = result.match(/ANSWER:\s*([A-Z]-\d+[\s,]*)+/i);
   if (answerMatch) {
-    const pairsMatch = answerMatch[0].match(/[A-Z]-\d/gi);
+    const pairsMatch = answerMatch[0].match(/[A-Z]-\d+/gi);
     if (pairsMatch) pairs = pairsMatch.map((p) => p.toUpperCase());
   }
 
   if (pairs.length === 0) {
     // Try bare pairs in the whole response
-    const allPairs = result.match(/[A-Z]-\d/gi);
+    const allPairs = result.match(/[A-Z]-\d+/gi);
     if (allPairs && allPairs.length >= 2) {
       pairs = allPairs.map((p) => p.toUpperCase());
     }
@@ -805,12 +807,7 @@ export async function analyzeWithClaude(
   const shouldUseThinking = claudeThinkingEnabled === true;
 
   if (shouldUseThinking) {
-    const thinkingConfig = getClaudeThinkingConfig(model);
-    const budget = thinkingConfig.budget_tokens || 0;
-    const minMaxTokens = budget + THINKING_MIN_OUTPUT_TOKENS;
-    if (maxTokens < minMaxTokens) {
-      maxTokens = minMaxTokens;
-    }
+    maxTokens = 4096;
   }
 
   const messages: ClaudeMessage[] = [{ role: "user", content: messageContent }];
@@ -1056,20 +1053,13 @@ export async function analyzeQuestionStreaming(
     const prompt = buildAnalysisPrompt(context, matchedQuestion);
     const messageContent = buildMessageContent(prompt, context.images);
     let maxTokens = 1024;
-    const thinkingConfig = claudeThinkingEnabled ? getClaudeThinkingConfig(model) : null;
-    if (thinkingConfig) {
-      const budget = thinkingConfig.budget_tokens || 0;
-      const minMaxTokens = budget + THINKING_MIN_OUTPUT_TOKENS;
-      if (maxTokens < minMaxTokens) {
-        maxTokens = minMaxTokens;
-      }
-    }
+    if (claudeThinkingEnabled) maxTokens = 4096;
     const messages: ClaudeMessage[] = [{ role: "user", content: messageContent }];
 
     // Build request body with model-aware thinking for streaming
     const requestBody: Record<string, unknown> = { model, max_tokens: maxTokens, messages };
-    if (thinkingConfig) {
-      requestBody.thinking = thinkingConfig;
+    if (claudeThinkingEnabled) {
+      requestBody.thinking = getClaudeThinkingConfig(model);
     }
 
     port.postMessage({ type: "STREAM_STATUS", status: "started" });

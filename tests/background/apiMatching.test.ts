@@ -152,4 +152,51 @@ describe("validateMatchingAnswer", () => {
     expect(result.valid).toBe(true);
     expect(result.answer).toBe("A-1, B-2, C-3");
   });
+
+  it("should accept matching answer with multi-digit indices (10+)", () => {
+    const ctx = makeMatchingContext({
+      matchingOptions: [
+        { index: 10, text: "Option ten" },
+        { index: 5, text: "Option five" },
+        { index: 23, text: "Option twenty-three" },
+      ],
+    });
+    const result = validateMatchingAnswer(
+      "ANSWER: A-10, B-5, C-23",
+      ctx,
+    );
+    expect(result.valid).toBe(true);
+    expect(result.answer).toBe("A-10, B-5, C-23");
+  });
+
+  it("should reject matching answer when multi-digit index is out of range", () => {
+    const ctx = makeMatchingContext({
+      matchingOptions: [
+        { index: 1, text: "Option one" },
+        { index: 10, text: "Option ten" },
+        { index: 3, text: "Option three" },
+      ],
+    });
+    const result = validateMatchingAnswer(
+      "ANSWER: A-99, B-10, C-3",
+      ctx,
+    );
+    expect(result.valid).toBe(false);
+    expect(result.reason).toContain("not in the available options");
+  });
+
+  it("should accept bare multi-digit matching pairs without ANSWER prefix", () => {
+    const ctx = makeMatchingContext({
+      matchingOptions: [
+        { index: 10, text: "Option ten" },
+        { index: 20, text: "Option twenty" },
+        { index: 30, text: "Option thirty" },
+      ],
+    });
+    const result = validateMatchingAnswer(
+      "A-10, B-20, C-30",
+      ctx,
+    );
+    expect(result.valid).toBe(true);
+  });
 });
