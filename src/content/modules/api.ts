@@ -534,9 +534,16 @@ export async function handleQuickClick(
         : [],
     });
 
-    const response: AnalysisResponse = await chrome.runtime.sendMessage({
-      type: "ANALYZE_QUESTION",
-      context: context,
+    const response: AnalysisResponse = await new Promise((resolve) => {
+      const port = chrome.runtime.connect({ name: "quick-analysis" });
+      port.onMessage.addListener((msg: { type: string; status?: string; result?: AnalysisResponse }) => {
+        if (msg.type === "STATUS" && msg.status) {
+          showQuickEmoji(msg.status);
+        } else if (msg.type === "RESULT" && msg.result) {
+          resolve(msg.result);
+        }
+      });
+      port.postMessage({ type: "ANALYZE_QUESTION", context });
     });
 
     // Clear slow connection timer
@@ -552,17 +559,7 @@ export async function handleQuickClick(
     }
 
     quickBtn.classList.remove("loading", "slow-connection");
-    state.isRequestInProgress = false; // Release lock after API response
-
-    // Show visual feedback for DeepSeek retries/fallback (only when using Claude as fallback)
-    // Don't show if Claude was used directly (skipDeepSeek) or if using question bank
-    if (response.deepseekRetried && !response.claudeFallback && response.success) {
-      // DeepSeek was retried but succeeded on second attempt
-      showTemporaryBadge("⚠️ Reintentado", 2000);
-    } else if (response.claudeFallback && response.success) {
-      // Claude was used as fallback after DeepSeek failed
-      showTemporaryBadge("🔄 Claude fallback", 2500);
-    }
+    state.isRequestInProgress = false;
 
     if (response.success && response.result) {
       const result = response.result.trim();
@@ -624,14 +621,14 @@ export async function handleQuickClick(
         }
 
         // Check for multiple answers (e.g., "A,D" or "A, D" or "B,C,E" or "A,E,G")
-        // Support letters A-J (up to 10 options)
+        // Support letters A-Z (up to 26 options)
         const multiMatch = upperResult.match(
-          /^([A-J])\s*,\s*([A-J])(?:\s*,\s*([A-J]))?(?:\s*,\s*([A-J]))?(?:\s*,\s*([A-J]))?$/
+          /^([A-Z])\s*,\s*([A-Z])(?:\s*,\s*([A-Z]))?(?:\s*,\s*([A-Z]))?(?:\s*,\s*([A-Z]))?$/
         );
 
         // Also detect "A / C" or "A and C" or "A y C" formats
         const altMultiMatch = !multiMatch
-          ? upperResult.match(/^([A-J])\s*\/\s*([A-J])(?:\s*\/\s*([A-J]))?(?:\s*\/\s*([A-J]))?(?:\s*\/\s*([A-J]))?$/)
+          ? upperResult.match(/^([A-Z])\s*\/\s*([A-Z])(?:\s*\/\s*([A-Z]))?(?:\s*\/\s*([A-Z]))?(?:\s*\/\s*([A-Z]))?$/)
           : null;
 
         let answer: string;
@@ -670,7 +667,7 @@ export async function handleQuickClick(
           isMultiple = true;
         } else {
           // Single answer
-          const singleMatch = upperResult.match(/\b([A-J])\b/);
+          const singleMatch = upperResult.match(/\b([A-Z])\b/);
           answer = singleMatch ? singleMatch[1] : "?";
         }
 
@@ -899,51 +896,24 @@ export async function analyzeQuestion(
 // Visual Feedback Helpers
 // ============================================
 
+const STATUS_EMOJIS: Record<string, string> = {
+  DEEPSEEK_RETRY: "⚠️",
+  CLAUDING_FALLBACK: "🔄",
+  CLAUDING_VALIDATING: "🔍",
+};
+
 /**
- * Show a temporary badge near the SA button for error/retry feedback
- * @param text - Text to display in the badge
- * @param duration - How long to show the badge (ms)
+ * Show an emoji on the SA button during processing to indicate pipeline status.
+ * The emoji is replaced by the actual answer when the final RESULT arrives.
  */
-function showTemporaryBadge(text: string, duration: number): void {
-  const container = document.getElementById("study-assist-quick-container");
-  if (!container) return;
-
-  // Remove any existing badge
-  const existingBadge = document.getElementById("study-assist-status-badge");
-  if (existingBadge) {
-    existingBadge.remove();
-  }
-
-  // Create new badge
-  const badge = document.createElement("div");
-  badge.id = "study-assist-status-badge";
-  badge.className = "study-assist-status-badge";
-  badge.textContent = text;
-  badge.style.cssText = `
-    position: absolute;
-    top: -40px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(255, 152, 0, 0.95);
-    color: white;
-    padding: 6px 12px;
-    border-radius: 8px;
-    font-size: 11px;
-    font-weight: 600;
-    white-space: nowrap;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-    z-index: 10000001;
-    animation: study-assist-badge-slide-in 0.3s ease-out;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-  `;
-
-  container.appendChild(badge);
-
-  // Remove after duration
-  setTimeout(() => {
-    badge.style.animation = "study-assist-badge-slide-out 0.3s ease-in";
-    setTimeout(() => {
-      badge.remove();
-    }, 300);
-  }, duration);
+function showQuickEmoji(status: string): void {
+  const btn = document.getElementById("study-assist-quick");
+  if (!btn) return;
+  const emoji = STATUS_EMOJIS[status];
+  if (emoji) btn.innerHTML = `<span>${emoji}</span>`;
 }
+
+export const __testOnlyQuickMode = {
+  showQuickEmoji,
+  STATUS_EMOJIS,
+};
