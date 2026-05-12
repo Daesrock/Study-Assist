@@ -106,7 +106,16 @@
         </ul>
       </section>
 
-      <section class="card note">
+      <section class="card">
+        <h2>__MSG_howtoEmojiTitle__</h2>
+        <ul>
+          <li>__MSG_howtoEmojiRetry__</li>
+          <li>__MSG_howtoEmojiFallback__</li>
+          <li>__MSG_howtoEmojiValidate__</li>
+        </ul>
+      </section>
+
+      <section class="card">
         <h2>Notas importantes</h2>
         <ul>
           <li>Verifica siempre las respuestas; úsalo como ayuda de estudio.</li>
@@ -120,5 +129,22 @@
         </ul>
       </section>
     </main>
+    <script>
+      (function () {
+        var walk = function (node) {
+          if (node.nodeType === 3) {
+            node.nodeValue = node.nodeValue.replace(
+              /__MSG_(\w+)__/g,
+              function (_, key) {
+                return chrome.i18n.getMessage(key) || key;
+              }
+            );
+          } else if (node.nodeType === 1 && node.nodeName !== "SCRIPT") {
+            for (var i = 0; i < node.childNodes.length; i++) walk(node.childNodes[i]);
+          }
+        };
+        walk(document.body);
+      })();
+    </script>
   </body>
 </html>
