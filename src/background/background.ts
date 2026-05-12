@@ -112,10 +112,29 @@ chrome.runtime.onMessage.addListener(
 );
 
 // ============================================
-// Port-based Streaming (full mode only)
+// Port-based Messaging (streaming + quick analysis)
 // ============================================
 
 chrome.runtime.onConnect.addListener((port) => {
+  if (port.name === "quick-analysis") {
+    port.onMessage.addListener(async (msg: { context: import("../types/index.js").AnalysisContext }) => {
+      try {
+        const result = await analyzeQuestion(msg.context, (status: string) => {
+          try { port.postMessage({ type: "STATUS", status }); } catch { /* port disconnected */ }
+        });
+        try { port.postMessage({ type: "RESULT", result }); } catch { /* port disconnected */ }
+      } catch (error) {
+        try {
+          port.postMessage({ type: "STATUS", status: "ERROR" });
+          port.postMessage({ type: "RESULT", result: { success: false, error: (error as Error).message } });
+        } catch {
+          // Port may have been disconnected
+        }
+      }
+    });
+    return;
+  }
+
   if (port.name !== "stream-analysis") return;
 
   port.onMessage.addListener(async (msg: { context: import("../types/index.js").AnalysisContext }) => {
