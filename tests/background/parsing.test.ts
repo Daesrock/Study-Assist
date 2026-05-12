@@ -179,6 +179,36 @@ CONFIDENCE: HIGH`;
       expect(result.result).toBe("A-1, B-2");
     });
 
+    it("should parse matching with multi-digit indices (10+)", () => {
+      const response = "ANSWER: A-10, B-5, C-2, D-7, E-6, F-9, G-3, H-4, I-8, J-1\nCONFIDENCE: HIGH";
+      const result = parseDeepSeekResponse(response, matchingContext());
+
+      expect(result.success).toBe(true);
+      expect(result.result).toBe("A-10, B-5, C-2, D-7, E-6, F-9, G-3, H-4, I-8, J-1");
+    });
+
+    it("should parse matching with double-digit indices (12, 15, etc.)", () => {
+      const response = "ANSWER: A-12, B-3, C-15\nCONFIDENCE: MEDIUM";
+      const result = parseDeepSeekResponse(response, matchingContext());
+
+      expect(result.success).toBe(true);
+      expect(result.result).toBe("A-12, B-3, C-15");
+    });
+
+    it("should extract multi-digit matching pairs from response body as fallback", () => {
+      const response = `Let me analyze each protocol...
+HTTP uses port 80, SSH uses port 22.
+
+Therefore:
+A-10, B-2
+
+CONFIDENCE: HIGH`;
+      const result = parseDeepSeekResponse(response, matchingContext());
+
+      expect(result.success).toBe(true);
+      expect(result.result).toBe("A-10, B-2");
+    });
+
     it("should fail when no matching pairs found", () => {
       const response = "I'm not sure about this matching question.\nCONFIDENCE: LOW";
       const result = parseDeepSeekResponse(response, matchingContext());

@@ -35,19 +35,19 @@ export function parseDeepSeekResponse(
   let answer: string | null = null;
 
   if (isMatching) {
-    const answerMatch = response.match(/ANSWER:\s*([A-Z]-\d[\s,]*)+/i);
+    const answerMatch = response.match(/ANSWER:\s*([A-Z]-\d+[\s,]*)+/i);
     if (answerMatch) {
-      const pairsMatch = answerMatch[0].match(/[A-Z]-\d/gi);
+      const pairsMatch = answerMatch[0].match(/[A-Z]-\d+/gi);
       if (pairsMatch) {
         answer = pairsMatch.join(", ").toUpperCase();
       }
     }
 
     if (!answer) {
-      const allPairs = response.match(/([A-Z]-\d[\s,\n]*){2,}/gi);
+      const allPairs = response.match(/([A-Z]-\d+[\s,\n]*){2,}/gi);
       if (allPairs && allPairs.length > 0) {
         const lastBlock = allPairs[allPairs.length - 1];
-        const pairs = lastBlock.match(/[A-Z]-\d/gi);
+        const pairs = lastBlock.match(/[A-Z]-\d+/gi);
         if (pairs && pairs.length >= 2) {
           answer = pairs.join(", ").toUpperCase();
         }
