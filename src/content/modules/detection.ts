@@ -1332,19 +1332,79 @@ export async function detectMoodleQuestion(): Promise<DetectedQuestion | null> {
   }
 
   // Route to correct extractor based on question type
-  if (bestQuestion.classList.contains("match")) {
-    return await extractMoodleMatchQuestion(bestQuestion);
+  return await extractMoodleQuestionFromElement(bestQuestion);
+}
+
+/**
+ * Route a Moodle question element to its type-specific extractor.
+ * Shared by detectMoodleQuestion (singular) and detectVisibleQuestions (plural).
+ */
+export async function extractMoodleQuestionFromElement(
+  questionEl: Element,
+): Promise<DetectedQuestion | null> {
+  if (questionEl.classList.contains("match")) {
+    return await extractMoodleMatchQuestion(questionEl);
   }
-  if (bestQuestion.classList.contains("shortanswer")) {
-    return await extractMoodleShortAnswerQuestion(bestQuestion, "short-answer");
+  if (questionEl.classList.contains("shortanswer")) {
+    return await extractMoodleShortAnswerQuestion(questionEl, "short-answer");
   }
-  if (bestQuestion.classList.contains("numerical")) {
-    return await extractMoodleShortAnswerQuestion(bestQuestion, "numerical");
+  if (questionEl.classList.contains("numerical")) {
+    return await extractMoodleShortAnswerQuestion(questionEl, "numerical");
   }
-  if (bestQuestion.classList.contains("gapselect")) {
-    return await extractMoodleSelectMissingWords(bestQuestion);
+  if (questionEl.classList.contains("gapselect")) {
+    return await extractMoodleSelectMissingWords(questionEl);
   }
-  return await extractMoodleQuestionData(bestQuestion);
+  return await extractMoodleQuestionData(questionEl);
+}
+
+/**
+ * Detect ALL Moodle questions currently visible in the viewport,
+ * ordered top-to-bottom. Used by QuickMode multi-answer when a
+ * Moodle page shows more than one question at once.
+ * Returns an empty array when none are visible.
+ */
+export async function detectVisibleQuestions(): Promise<DetectedQuestion[]> {
+  const moodleQuestions = document.querySelectorAll(
+    ".que.multichoice, .que.truefalse, .que.match, .que.shortanswer, .que.numerical, .que.gapselect",
+  );
+
+  if (moodleQuestions.length === 0) {
+    return [];
+  }
+
+  // Collect in-viewport elements with their vertical position
+  const visible: { el: Element; top: number }[] = [];
+  let hasSizedElements = false;
+  for (const questionEl of moodleQuestions) {
+    const rect = questionEl.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) continue;
+    hasSizedElements = true;
+
+    const isInViewport = rect.top < window.innerHeight && rect.bottom > 0;
+    if (!isInViewport) continue;
+
+    visible.push({ el: questionEl, top: rect.top });
+  }
+
+  // Fallback for zero-dimension contexts (iframes, jsdom): document order
+  if (!hasSizedElements) {
+    const results: DetectedQuestion[] = [];
+    for (const questionEl of moodleQuestions) {
+      const question = await extractMoodleQuestionFromElement(questionEl);
+      if (question) results.push(question);
+    }
+    return results;
+  }
+
+  // Top-to-bottom order
+  visible.sort((a, b) => a.top - b.top);
+
+  const results: DetectedQuestion[] = [];
+  for (const { el } of visible) {
+    const question = await extractMoodleQuestionFromElement(el);
+    if (question) results.push(question);
+  }
+  return results;
 }
 
 /**
