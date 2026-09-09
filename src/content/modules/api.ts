@@ -21,6 +21,7 @@ import type {
 import { log, state, DEBUG_MODE } from "./state.js";
 import {
   detectVisibleQuestion,
+  detectVisibleQuestions,
   findVisibleQuestionNumber,
   frameHasQuizContent,
   waitForQuizContent,
@@ -50,7 +51,7 @@ function mapTrueFalseAnswer(result: string, options: { letter: string; text: str
   if (/\b(V|TRUE|VERDADERO)\b/.test(normalized)) return "V";
   if (/\b(F|FALSE|FALSO)\b/.test(normalized)) return "F";
 
-  const singleLetter = normalized.match(/\b([A-J])\b/)?.[1];
+  const singleLetter = normalized.match(/\b([A-Z])\b/)?.[1];
   if (singleLetter) {
     const byLetter = options.find((opt) => opt.letter.toUpperCase() === singleLetter);
     if (byLetter) {
@@ -318,17 +319,316 @@ export async function handleQuickReload(): Promise<void> {
 }
 
 // ============================================
+// Quick Mode Shared Helpers
+// ============================================
+
+/** Max chars per answer token in multi-question mode (keeps button compact) */
+export const QUICK_MULTI_TOKEN_MAXLEN = 48;
+
+/**
+ * Extract images for a single question, honoring the sendImages setting.
+ * Extracted verbatim from handleQuickClick so single and multi paths share it.
+ */
+export async function extractImagesForQuestion(
+  question: DetectedQuestion,
+): Promise<ImageData[]> {
+  let images: ImageData[] = [];
+  log("[Study Assist] sendImages setting:", state.settings.sendImages);
+
+  if (state.settings.sendImages) {
+    if (question.platform === "moodle") {
+      // For Moodle, images are already extracted in the question object
+      if (question.images && question.images.length > 0) {
+        images = [...question.images];
+        log("[Study Assist] Moodle images found:", images.length);
+      }
+      // Also add images from options (when answers are images)
+      if (question.options) {
+        for (const opt of question.options) {
+          if (opt.image) {
+            images.push({
+              ...opt.image,
+              location: `option_${opt.letter}` as "question" | "option",
+            });
+          }
+        }
+      }
+    } else if (question.element) {
+      // For NetAcad, extract from shadow DOM
+      // querySelectorAllDeep traverses shadow roots automatically
+      try {
+        log(
+          "[Study Assist] Extracting images from NetAcad element:",
+          question.element.tagName
+        );
+        images = await extractImagesAsBase64(question.element);
+        log("[Study Assist] NetAcad images extracted:", images.length);
+      } catch (imgError) {
+        console.error("[Study Assist] Image extraction error:", imgError);
+      }
+    }
+  } else {
+    log("[Study Assist] sendImages is OFF - no images will be sent");
+  }
+
+  log("[Study Assist] Total images to send:", images.length);
+  return images;
+}
+
+/**
+ * Build the quick-mode AnalysisContext for a single question.
+ * Extracted verbatim from handleQuickClick so single and multi paths share it.
+ */
+export function buildQuickContext(
+  question: DetectedQuestion,
+  images: ImageData[],
+  skipDeepSeek: boolean,
+): AnalysisContext {
+  if (question.type === "matching") {
+    // Matching question context
+    return {
+      questionText: question.text,
+      questionType: "matching",
+      matchingStyle: question.matchingStyle || "drag-drop", // "dropdown" or "drag-drop"
+      categories: question.categories,
+      matchingOptions: question.matchingOptions,
+      images: images,
+      pageTitle: document.title,
+      pageUrl: window.location.href,
+      responseMode: "quick",
+      skipDeepSeek,
+      courseName: question.courseName, // Academic course for context
+      qaMode: isQASandboxActive(),
+    };
+  } else if (question.type === "select-missing-words") {
+    return {
+      questionText: question.text,
+      questionType: "select-missing-words",
+      selectGaps: question.selectGaps,
+      selectChoices: question.selectChoices,
+      images: images,
+      pageTitle: document.title,
+      pageUrl: window.location.href,
+      responseMode: "quick",
+      skipDeepSeek,
+      courseName: question.courseName,
+      qaMode: isQASandboxActive(),
+    };
+  } else if (question.type === "short-answer" || question.type === "numerical") {
+    return {
+      questionText: question.text,
+      questionType: question.type,
+      images: images,
+      pageTitle: document.title,
+      pageUrl: window.location.href,
+      responseMode: "quick",
+      skipDeepSeek,
+      courseName: question.courseName,
+      qaMode: isQASandboxActive(),
+    };
+  } else {
+    // Regular multiple choice context
+    return {
+      questionText: question.text,
+      questionType: question.type === "true-false" ? "true-false" : "multiple-choice",
+      options: question.options,
+      images: images,
+      pageTitle: document.title,
+      pageUrl: window.location.href,
+      responseMode: "quick",
+      skipDeepSeek,
+      courseName: question.courseName, // Academic course for context
+      qaMode: isQASandboxActive(),
+    };
+  }
+}
+
+/**
+ * Send one quick-mode analysis request over the quick-analysis port.
+ * Shows pipeline status emojis on the button while waiting.
+ */
+export function sendQuickAnalysis(
+  context: AnalysisContext,
+): Promise<AnalysisResponse> {
+  return new Promise((resolve) => {
+    const port = chrome.runtime.connect({ name: "quick-analysis" });
+    port.onMessage.addListener((msg: { type: string; status?: string; result?: AnalysisResponse }) => {
+      if (msg.type === "STATUS" && msg.status) {
+        showQuickEmoji(msg.status);
+      } else if (msg.type === "RESULT" && msg.result) {
+        resolve(msg.result);
+      }
+    });
+    port.postMessage({ type: "ANALYZE_QUESTION", context });
+  });
+}
+
+/**
+ * Reduce a raw API result to the short display token for one question.
+ * Mirrors the single-question display branches below (matching pairs,
+ * true-false V/F mapping, MCQ letter extraction, free-text passthrough).
+ * Used by multi-question mode; the single path keeps its inline rendering.
+ */
+export function formatQuickToken(
+  question: DetectedQuestion,
+  rawResult: string,
+): string {
+  const result = rawResult.trim();
+  if (question.type === "matching" || question.type === "select-missing-words") {
+    return result.toUpperCase().trim().slice(0, QUICK_MULTI_TOKEN_MAXLEN);
+  }
+  if (question.type === "short-answer" || question.type === "numerical") {
+    const displayAnswer = result || "?";
+    return displayAnswer.length > QUICK_MULTI_TOKEN_MAXLEN
+      ? displayAnswer.slice(0, QUICK_MULTI_TOKEN_MAXLEN - 1) + "…"
+      : displayAnswer;
+  }
+
+  const upperResult = result.toUpperCase();
+
+  if (question.type === "true-false") {
+    return mapTrueFalseAnswer(result, question.options || []);
+  }
+
+  // Multiple answers (e.g., "A,D" or "A / C")
+  const multiMatch = upperResult.match(
+    /^([A-Z])\s*,\s*([A-Z])(?:\s*,\s*([A-Z]))?(?:\s*,\s*([A-Z]))?(?:\s*,\s*([A-Z]))?$/
+  );
+  const altMultiMatch = !multiMatch
+    ? upperResult.match(/^([A-Z])\s*\/\s*([A-Z])(?:\s*\/\s*([A-Z]))?(?:\s*\/\s*([A-Z]))?(?:\s*\/\s*([A-Z]))?$/)
+    : null;
+
+  if (multiMatch || altMultiMatch) {
+    const source = multiMatch || altMultiMatch!;
+    const letters = [
+      source[1],
+      source[2],
+      source[3],
+      source[4],
+      source[5],
+    ].filter(Boolean);
+    return letters.join(",");
+  }
+
+  const singleMatch = upperResult.match(/\b([A-Z])\b/);
+  return singleMatch ? singleMatch[1] : "?";
+}
+
+/**
+ * QuickMode multi-question flow: analyze each visible question sequentially
+ * and render "QNUM:TOKEN" pairs vertically, reusing the matching-answer
+ * button style (no new CSS needed).
+ */
+export async function handleQuickMulti(
+  questions: DetectedQuestion[],
+  callbacks: QuickClickCallbacks = {
+    detectVisibleQuestion,
+    startQuestionChangeObserver,
+  },
+): Promise<void> {
+  const quickBtn = document.getElementById("study-assist-quick");
+  if (!quickBtn) return;
+  const container = document.getElementById("study-assist-quick-container");
+
+  // Capture the one-shot force-Claude flag once for the whole batch
+  const forceClaude = state.skipDeepSeek;
+  state.skipDeepSeek = false;
+
+  const pairs: string[] = [];
+  let anySuccess = false;
+
+  for (let i = 0; i < questions.length; i++) {
+    const q = questions[i];
+    if (state.requestCancelled) {
+      log("[Study Assist] Multi request cancelled, stopping batch");
+      break;
+    }
+
+    log("[Study Assist] Multi analyzing question:", {
+      index: i + 1,
+      total: questions.length,
+      questionNumber: q.questionNumber,
+      questionType: q.type,
+    });
+
+    try {
+      const images = await extractImagesForQuestion(q);
+      const context = buildQuickContext(q, images, forceClaude);
+      const response = await sendQuickAnalysis(context);
+
+      if (state.requestCancelled) {
+        log("[Study Assist] Multi request cancelled, ignoring response");
+        break;
+      }
+
+      const num = q.questionNumber ?? i + 1;
+      if (response.success && response.result) {
+        anySuccess = true;
+        pairs.push(`${num}:${formatQuickToken(q, response.result)}`);
+      } else {
+        pairs.push(`${num}:?`);
+      }
+    } catch (error) {
+      console.error("[Study Assist] Multi analysis error:", error);
+      const num = q.questionNumber ?? i + 1;
+      pairs.push(`${num}:?`);
+    }
+  }
+
+  // Clear slow connection timer
+  if (state.slowConnectionTimer) {
+    clearTimeout(state.slowConnectionTimer);
+    state.slowConnectionTimer = null;
+  }
+
+  // Check if request was cancelled while waiting
+  if (state.requestCancelled) {
+    log("[Study Assist] Multi request was cancelled, ignoring response");
+    return;
+  }
+
+  quickBtn.classList.remove("loading", "slow-connection");
+  state.isRequestInProgress = false;
+
+  if (!anySuccess || pairs.length === 0) {
+    quickBtn.innerHTML = `<span>!</span>`;
+    setTimeout(() => {
+      quickBtn.innerHTML = `<span>SA</span>`;
+    }, 2000);
+    return;
+  }
+
+  // Render vertically with the matching-answer style (white-space: pre-line)
+  quickBtn.innerHTML = `<span class="study-assist-quick-answer study-assist-matching-answer">${pairs.join("\n")}</span>`;
+  quickBtn.classList.add("has-answer", "matching-answer");
+  if (container) container.classList.add("matching-mode");
+
+  // Track the topmost answered question so the change observer resets on page nav
+  state.lastAnsweredQuestionNum = questions[0].questionNumber ?? null;
+
+  const observerFn =
+    callbacks.startQuestionChangeObserver ?? startQuestionChangeObserver;
+  observerFn();
+
+  // Mark as valid answer - block new requests until reload
+  state.hasValidAnswer = true;
+}
+
+// ============================================
 // Quick Click Handler
 // ============================================
 
 /**
  * Main quick click handler - handles SA button clicks
- * Detects question, sends to API, and displays answer
+ * Detects question, sends to API, and displays answer.
+ * Automatically switches to multi-question mode when more than
+ * one question is visible on screen.
  */
 export async function handleQuickClick(
   e?: MouseEvent,
   callbacks: QuickClickCallbacks = {
     detectVisibleQuestion,
+    detectVisibleQuestions,
     startQuestionChangeObserver,
   }
 ): Promise<void> {
@@ -412,109 +712,23 @@ export async function handleQuickClick(
     return;
   }
 
+  // Multi-question mode: when more than one question is visible on screen
+  // (e.g., Moodle pages showing several questions at once), answer all of
+  // them sequentially. Single-question pages keep the flow below unchanged.
+  const detectAllFn = callbacks.detectVisibleQuestions ?? detectVisibleQuestions;
+  const visibleQuestions = await detectAllFn();
+  if (visibleQuestions.length > 1) {
+    log("[Study Assist] Multi-question page detected:", visibleQuestions.length);
+    await handleQuickMulti(visibleQuestions, callbacks);
+    return;
+  }
+
   // Get quick answer from API
   try {
-    // Extract images - use different methods based on platform
-    let images: ImageData[] = [];
-    log("[Study Assist] sendImages setting:", state.settings.sendImages);
+    const images = await extractImagesForQuestion(question);
 
-    if (state.settings.sendImages) {
-      if (question.platform === "moodle") {
-        // For Moodle, images are already extracted in the question object
-        if (question.images && question.images.length > 0) {
-          images = [...question.images];
-          log("[Study Assist] Moodle images found:", images.length);
-        }
-        // Also add images from options (when answers are images)
-        if (question.options) {
-          for (const opt of question.options) {
-            if (opt.image) {
-              images.push({
-                ...opt.image,
-                location: `option_${opt.letter}` as "question" | "option",
-              });
-            }
-          }
-        }
-      } else if (question.element) {
-        // For NetAcad, extract from shadow DOM
-        // querySelectorAllDeep traverses shadow roots automatically
-        try {
-          log(
-            "[Study Assist] Extracting images from NetAcad element:",
-            question.element.tagName
-          );
-          images = await extractImagesAsBase64(question.element);
-          log("[Study Assist] NetAcad images extracted:", images.length);
-        } catch (imgError) {
-          console.error("[Study Assist] Image extraction error:", imgError);
-        }
-      }
-    } else {
-      log("[Study Assist] sendImages is OFF - no images will be sent");
-    }
-
-    log("[Study Assist] Total images to send:", images.length);
-
-    // Build context based on question type
-    let context: AnalysisContext;
-    if (question.type === "matching") {
-      // Matching question context
-      context = {
-        questionText: question.text,
-        questionType: "matching",
-        matchingStyle: question.matchingStyle || "drag-drop", // "dropdown" or "drag-drop"
-        categories: question.categories,
-        matchingOptions: question.matchingOptions,
-        images: images,
-        pageTitle: document.title,
-        pageUrl: window.location.href,
-        responseMode: "quick",
-        skipDeepSeek: state.skipDeepSeek,
-        courseName: question.courseName, // Academic course for context
-        qaMode: isQASandboxActive(),
-      };
-    } else if (question.type === "select-missing-words") {
-      context = {
-        questionText: question.text,
-        questionType: "select-missing-words",
-        selectGaps: question.selectGaps,
-        selectChoices: question.selectChoices,
-        images: images,
-        pageTitle: document.title,
-        pageUrl: window.location.href,
-        responseMode: "quick",
-        skipDeepSeek: state.skipDeepSeek,
-        courseName: question.courseName,
-        qaMode: isQASandboxActive(),
-      };
-    } else if (question.type === "short-answer" || question.type === "numerical") {
-      context = {
-        questionText: question.text,
-        questionType: question.type,
-        images: images,
-        pageTitle: document.title,
-        pageUrl: window.location.href,
-        responseMode: "quick",
-        skipDeepSeek: state.skipDeepSeek,
-        courseName: question.courseName,
-        qaMode: isQASandboxActive(),
-      };
-    } else {
-      // Regular multiple choice context
-      context = {
-        questionText: question.text,
-        questionType: question.type === "true-false" ? "true-false" : "multiple-choice",
-        options: question.options,
-        images: images,
-        pageTitle: document.title,
-        pageUrl: window.location.href,
-        responseMode: "quick",
-        skipDeepSeek: state.skipDeepSeek,
-        courseName: question.courseName, // Academic course for context
-        qaMode: isQASandboxActive(),
-      };
-    }
+    // Build context based on question type (shared with multi-question mode)
+    const context = buildQuickContext(question, images, state.skipDeepSeek);
 
     // Reset skipDeepSeek flag after use
     state.skipDeepSeek = false;
@@ -534,17 +748,7 @@ export async function handleQuickClick(
         : [],
     });
 
-    const response: AnalysisResponse = await new Promise((resolve) => {
-      const port = chrome.runtime.connect({ name: "quick-analysis" });
-      port.onMessage.addListener((msg: { type: string; status?: string; result?: AnalysisResponse }) => {
-        if (msg.type === "STATUS" && msg.status) {
-          showQuickEmoji(msg.status);
-        } else if (msg.type === "RESULT" && msg.result) {
-          resolve(msg.result);
-        }
-      });
-      port.postMessage({ type: "ANALYZE_QUESTION", context });
-    });
+    const response: AnalysisResponse = await sendQuickAnalysis(context);
 
     // Clear slow connection timer
     if (state.slowConnectionTimer) {
@@ -916,4 +1120,10 @@ function showQuickEmoji(status: string): void {
 export const __testOnlyQuickMode = {
   showQuickEmoji,
   STATUS_EMOJIS,
+  formatQuickToken,
+  buildQuickContext,
+  extractImagesForQuestion,
+  sendQuickAnalysis,
+  handleQuickMulti,
+  QUICK_MULTI_TOKEN_MAXLEN,
 };
