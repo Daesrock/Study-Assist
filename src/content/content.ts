@@ -250,6 +250,7 @@ type QAScenarioType =
   | "moodle-numerical"
   | "moodle-gapselect"
   | "moodle-quiz"
+  | "moodle-multi"
   | "netacad-mcq"
   | "netacad-matching"
   | "netacad-quiz";
@@ -575,6 +576,54 @@ function injectNetAcadQuiz(target: HTMLElement): void {
   }
 
   attachQANavigation(target);
+}
+
+/**
+ * Moodle page with SEVERAL questions visible at once (no pagination).
+ * Mirrors a real educa-t exam page: all .que blocks are rendered together
+ * so SHIFT answers every visible question (multi-question QuickMode).
+ */
+function injectMoodleMulti(target: HTMLElement): void {
+  target.innerHTML = `
+    <div class="qa-block">
+      <h3>Moodle Simulado — Varias preguntas visibles</h3>
+      <p class="qa-tip">Las 3 preguntas están visibles a la vez. Usa <strong>SHIFT</strong> para responderlas todas (ej. <strong>4:V, 5:B, 6:C</strong>).</p>
+      <div class="que truefalse">
+        <div class="info"><h3 class="no">Pregunta <span class="qno">4</span></h3></div>
+        <div class="qtext">La seguridad activa se utiliza dia a dia para evitar cualquier tipo de ataque.</div>
+        <div class="answer">
+          <div class="r0">
+            <input type="radio" name="qa_multi_4" value="1" id="qa_multi_4_true" />
+            <label for="qa_multi_4_true" class="ms-1">Verdadero</label>
+          </div>
+          <div class="r1">
+            <input type="radio" name="qa_multi_4" value="0" id="qa_multi_4_false" />
+            <label for="qa_multi_4_false" class="ms-1">Falso</label>
+          </div>
+        </div>
+      </div>
+      <div class="que multichoice">
+        <div class="info"><h3 class="no">Pregunta <span class="qno">5</span></h3></div>
+        <div class="qtext">Consiste en asegurar que los recursos del sistema se utilicen como se decidio.</div>
+        <div class="answer">
+          <div class="r0"><span class="answernumber">a.</span><div class="flex-fill">Base de datos</div></div>
+          <div class="r1"><span class="answernumber">b.</span><div class="flex-fill">Seguridad Informatica</div></div>
+          <div class="r0"><span class="answernumber">c.</span><div class="flex-fill">Derecho Informatico</div></div>
+          <div class="r1"><span class="answernumber">d.</span><div class="flex-fill">Auditoria Informatica</div></div>
+        </div>
+      </div>
+      <div class="que multichoice">
+        <div class="info"><h3 class="no">Pregunta <span class="qno">6</span></h3></div>
+        <div class="qtext">Las acciones de esta fase deben darse regularmente para lograr resultados favorables.</div>
+        <div class="answer">
+          <div class="r0"><span class="answernumber">a.</span><div class="flex-fill">Verificar</div></div>
+          <div class="r1"><span class="answernumber">b.</span><div class="flex-fill">Hacer</div></div>
+          <div class="r0"><span class="answernumber">c.</span><div class="flex-fill">Actuar</div></div>
+          <div class="r1"><span class="answernumber">d.</span><div class="flex-fill">Planificar</div></div>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function injectMoodleQuiz(target: HTMLElement): void {
@@ -919,6 +968,8 @@ function injectQAScenario(scenario: QAScenarioType): void {
     injectNetAcadQuiz(content);
   } else if (scenario === "moodle-quiz") {
     injectMoodleQuiz(content);
+  } else if (scenario === "moodle-multi") {
+    injectMoodleMulti(content);
   } else {
     injectNetAcadMatching(content);
   }
@@ -1093,3 +1144,7 @@ window.addEventListener("study-assist-navigate", () => {
 });
 
 initialize();
+
+export const __testOnlyQA = {
+  injectMoodleMulti,
+};
