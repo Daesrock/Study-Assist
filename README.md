@@ -39,7 +39,7 @@ The following Moodle question types are recognised by the platform but not yet d
 ### 1) Clone and build
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/Daesrock/Study-Assist.git
 cd study-assist-extension
 npm install
 npm run build
