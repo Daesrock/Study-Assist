@@ -735,6 +735,7 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
           <button class="btn" id="qa-moodle-shortanswer-btn" data-tooltip="Respuesta corta libre">Short Answer</button>
           <button class="btn" id="qa-moodle-numerical-btn" data-tooltip="Respuesta numérica">Numerical</button>
           <button class="btn" id="qa-moodle-gapselect-btn" data-tooltip="Selecciona palabras faltantes con dropdowns">Gap Select</button>
+          <button class="btn" id="qa-moodle-multi-btn" data-tooltip="Varias preguntas visibles a la vez (responde todas con SHIFT)">Multi</button>
           <button class="btn btn-accent" id="qa-moodle-quiz-btn" data-tooltip="Quiz completo con navegación">🎯 Quiz Real</button>
         </div>
       </div>
@@ -1104,6 +1105,13 @@ function bindDynamicEvents(history, devMode) {
   if (qaMoodleGapSelectBtn) {
     qaMoodleGapSelectBtn.addEventListener("click", () =>
       runQAScenario("moodle-gapselect"),
+    );
+  }
+
+  const qaMoodleMultiBtn = document.getElementById("qa-moodle-multi-btn");
+  if (qaMoodleMultiBtn) {
+    qaMoodleMultiBtn.addEventListener("click", () =>
+      runQAScenario("moodle-multi"),
     );
   }
 
