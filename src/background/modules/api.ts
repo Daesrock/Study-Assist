@@ -45,7 +45,7 @@ import { trackUsage, calculateCost } from "./usageTracker.js";
 import { checkRateLimit, recordRequest } from "./rateLimiter.js";
 import { streamClaudeResponse } from "./streaming.js";
 import { runProvider } from "./llm/execute.js";
-import { getRoles, resolveRole, canPresetHandle } from "./llm/profiles.js";
+import { getRoles, resolveRole, canPresetHandle, ensureProviderConfig } from "./llm/profiles.js";
 import type { ResolvedRole } from "./llm/profiles.js";
 import { getPreset } from "./llm/registry.js";
 import type { ProviderPreset } from "./llm/contract.js";
@@ -436,6 +436,9 @@ export async function analyzeQuestion(context: AnalysisContext, onStatus?: (stat
     const skipPrimary = context.skipDeepSeek === true;
 
     // Resolve the configured pipeline roles (primary → validator).
+    // Lazily self-heal the provider config in case the lifecycle migration
+    // did not run (unpacked reloads / MV3 worker wake-ups).
+    await ensureProviderConfig();
     const roles = await getRoles();
     const primary = await resolveRole(roles.primary);
     const validator = await resolveRole(roles.validator);

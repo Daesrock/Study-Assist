@@ -5,6 +5,10 @@
  * (keyed by preset id) and the pipeline roles in `roles`. A schema
  * migration seeds both from the legacy per-provider keys without deleting
  * them (safe rollback).
+ *
+ * The migration is also run lazily via `ensureProviderConfig()` so the
+ * pipeline never depends on `onInstalled`/`onStartup` firing (unreliable
+ * on unpacked reloads and MV3 service-worker wake-ups).
  */
 
 import type {
@@ -23,6 +27,12 @@ const SCHEMA_KEY = "schemaVersion";
 export const CURRENT_SCHEMA_VERSION = 2;
 
 export const DEFAULT_ROLES: ProviderRoles = { primary: null, validator: null };
+
+/** Legacy storage keys, used as a fallback while the popup still writes them. */
+const LEGACY_KEY_MAP: Record<string, string> = {
+  anthropic: "claudeApiKey",
+  deepseek: "deepseekApiKey",
+};
 
 // ============================================
 // Profiles
@@ -47,10 +57,28 @@ export async function saveProfile(
   await chrome.storage.local.set({ [PROFILES_KEY]: profiles });
 }
 
-/** Decrypted API key for a provider, or null. Handles plain-text migration. */
+/**
+ * Decrypted API key for a provider, or null.
+ * - Prefers the profile key.
+ * - Falls back to the legacy key while the popup still writes it.
+ * - Transparently migrates plain-text values to encrypted.
+ */
 export async function getProviderKey(presetId: string): Promise<string | null> {
   const profile = await getProfile(presetId);
-  const stored = profile?.apiKey;
+  let stored = profile?.apiKey;
+
+  if (!stored) {
+    const legacyName = LEGACY_KEY_MAP[presetId];
+    if (legacyName) {
+      const legacy = (await chrome.storage.local.get([legacyName])) as Record<string, unknown>;
+      const value = legacy[legacyName] as string | undefined;
+      if (value) {
+        stored = isPlainTextKey(value) ? await encryptApiKey(value) : value;
+        await saveProfile(presetId, { apiKey: stored });
+      }
+    }
+  }
+
   if (!stored) return null;
 
   if (isPlainTextKey(stored)) {
@@ -145,11 +173,15 @@ export async function migrateProviderConfig(): Promise<void> {
     "deepseekThinking",
   ])) as Record<string, unknown>;
 
-  if (stored[SCHEMA_KEY] === CURRENT_SCHEMA_VERSION) return;
-
   const profiles =
     (stored[PROFILES_KEY] as Record<string, ProviderProfile>) ?? {};
   const roles = (stored[ROLES_KEY] as ProviderRoles) ?? { ...DEFAULT_ROLES };
+
+  const schemaCurrent = stored[SCHEMA_KEY] === CURRENT_SCHEMA_VERSION;
+  const rolesEmpty = !roles.primary && !roles.validator;
+
+  // Self-healing: skip only when the schema is current AND roles exist.
+  if (schemaCurrent && !rolesEmpty) return;
 
   const claudeKey = stored["claudeApiKey"] as string | undefined;
   const deepseekKey = stored["deepseekApiKey"] as string | undefined;
@@ -174,7 +206,7 @@ export async function migrateProviderConfig(): Promise<void> {
   }
 
   // Seed roles only when the user hasn't assigned any yet.
-  if (!roles.primary && !roles.validator) {
+  if (rolesEmpty) {
     const useDeepSeek = stored["useDeepSeek"] === true;
     const deepseekOnly = stored["deepseekOnly"] === true;
     const claudeModel =
@@ -198,4 +230,20 @@ export async function migrateProviderConfig(): Promise<void> {
     [ROLES_KEY]: roles,
     [SCHEMA_KEY]: CURRENT_SCHEMA_VERSION,
   });
+}
+
+let ensurePromise: Promise<void> | null = null;
+
+/**
+ * Run the provider migration at most once per service-worker lifetime.
+ * Safe to call on every analysis; never throws.
+ */
+export function ensureProviderConfig(): Promise<void> {
+  if (!ensurePromise) {
+    ensurePromise = migrateProviderConfig().catch((error) => {
+      console.error("[Study Assist] ensureProviderConfig error:", error);
+      ensurePromise = null; // allow a later retry
+    });
+  }
+  return ensurePromise;
 }
