@@ -23,12 +23,10 @@ import type {
   ClaudeRequestBody,
   ClaudeMessage,
   ClaudeApiResponse,
-  DeepSeekRequestBody,
   DeepSeekApiResponse,
   DeepSeekAnalysisResult,
   DeepSeekAnalysisForClaude,
 } from "./constants.js";
-import { fetchWithRetry } from "./fetchUtils.js";
 import { logError } from "./fetchUtils.js";
 import { findMatchingQuestion, normalizeForSearch, calculateSimilarity, calculateContainment } from "./questionBank.js";
 import {
@@ -47,6 +45,17 @@ import { getDecryptedApiKey } from "./crypto.js";
 import { trackUsage, calculateCost } from "./usageTracker.js";
 import { checkRateLimit, recordRequest } from "./rateLimiter.js";
 import { streamClaudeResponse } from "./streaming.js";
+import { llmRequest } from "./llm/transport.js";
+import {
+  buildOpenAiChatRequest,
+  parseOpenAiChatResponse,
+  describeOpenAiError,
+} from "./llm/openaiCompat.js";
+import {
+  buildAnthropicMessagesRequest,
+  parseAnthropicMessagesResponse,
+} from "./llm/anthropic.js";
+import { getPreset, ANTHROPIC_PRESET_ID, DEEPSEEK_PRESET_ID } from "./llm/registry.js";
 
 const QA_CLAUDE_MODEL = "claude-haiku-4-5-20251001";
 
@@ -552,23 +561,25 @@ export async function analyzeWithDeepSeek(
     setActiveDeepSeekController(controller);
     const signal = controller.signal;
 
-    const response = await fetchWithRetry(
-      DEEPSEEK_API_BASE,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({
-          model,
-          max_tokens: 2048,
-          messages: [{ role: "user", content: prompt }],
-          thinking: { type: thinkingEnabled ? "enabled" : "disabled" },
-          reasoning_effort: "high",
-        } as DeepSeekRequestBody),
-        signal,
-      },
-      0,
-      thinkingEnabled ? 120000 : 60000,
-    );
+    const deepseekPreset = getPreset(DEEPSEEK_PRESET_ID);
+    const deepseekRequest = buildOpenAiChatRequest({
+      baseUrl: deepseekPreset.baseUrl,
+      apiKey,
+      model,
+      messages: [{ role: "user", content: prompt }],
+      maxTokens: 2048,
+      thinking: thinkingEnabled,
+      reasoningEffort: "high",
+      reasoningKind: deepseekPreset.reasoningKind,
+      signal,
+    });
+
+    const response = await llmRequest({
+      url: deepseekRequest.url,
+      init: deepseekRequest.init,
+      retries: 0,
+      timeout: thinkingEnabled ? 120000 : 60000,
+    });
 
     let responseBody: DeepSeekApiResponse | null = null;
     try {
@@ -603,54 +614,28 @@ export async function analyzeWithDeepSeek(
       const status = response.status;
       const errorMsg = responseBody?.error?.message || "";
 
-      // Non-retryable errors: skip retry and go directly to Claude fallback
-      const nonRetryableStatuses = [400, 401, 402, 422, 429, 503];
-      const skipRetry = nonRetryableStatuses.includes(status);
-
-      let errorDescription: string;
-      switch (status) {
-        case 400:
-          errorDescription = `DeepSeek: Invalid request format. ${errorMsg}`;
-          break;
-        case 401:
-          errorDescription = `DeepSeek: Authentication failed. Check your API key.`;
-          break;
-        case 402:
-          errorDescription = `DeepSeek: Insufficient balance. Please top up your account.`;
-          break;
-        case 422:
-          errorDescription = `DeepSeek: Invalid parameters. ${errorMsg}`;
-          break;
-        case 429:
-          errorDescription = `DeepSeek: Rate limit reached. Switching to Claude.`;
-          break;
-        case 500:
-          errorDescription = `DeepSeek: Server error. ${errorMsg}`;
-          break;
-        case 503:
-          errorDescription = `DeepSeek: Server overloaded. Switching to Claude.`;
-          break;
-        default:
-          errorDescription = `DeepSeek API Error (${status}): ${errorMsg}`;
-          break;
-      }
+      const { error: errorDescription, skipRetry } = describeOpenAiError(
+        status,
+        errorMsg,
+        "DeepSeek",
+      );
 
       log(`[Study Assist] DeepSeek error ${status}${skipRetry ? " (non-retryable)" : ""}: ${errorDescription}`);
       return { success: false, error: errorDescription, skipRetry };
     }
 
-    const message = responseBody?.choices?.[0]?.message;
-    const reasoningContent = message?.reasoning_content || null;
-    const result = message?.content;
+    const parsedWire = parseOpenAiChatResponse(responseBody);
+    const reasoningContent = parsedWire.reasoning;
+    const result = parsedWire.text;
 
     if (!result) {
       return { success: false, error: "No response from DeepSeek" };
     }
 
     // Extract real token counts from API response
-    const apiInputTokens = responseBody?.usage?.prompt_tokens ?? 0;
-    const apiOutputTokens = responseBody?.usage?.completion_tokens ?? 0;
-    const apiCacheHitTokens = responseBody?.usage?.prompt_cache_hit_tokens ?? undefined;
+    const apiInputTokens = parsedWire.usage.inputTokens;
+    const apiOutputTokens = parsedWire.usage.outputTokens;
+    const apiCacheHitTokens = parsedWire.usage.cacheHitTokens;
 
     if (DEBUG_MODE) {
       console.log("[Study Assist] ====== DeepSeek Response =====");
@@ -813,26 +798,22 @@ export async function analyzeWithClaude(
   const messages: ClaudeMessage[] = [{ role: "user", content: messageContent }];
 
   // Build request body — model-aware: adaptive for Sonnet/Opus 4.6+, enabled for Haiku 4.5
-  const requestBody: Record<string, unknown> = { model, max_tokens: maxTokens, messages };
-  if (shouldUseThinking) {
-    requestBody.thinking = getClaudeThinkingConfig(model);
-  }
+  const anthropicPreset = getPreset(ANTHROPIC_PRESET_ID);
+  const claudeRequest = buildAnthropicMessagesRequest({
+    baseUrl: anthropicPreset.baseUrl,
+    apiKey,
+    model,
+    messages,
+    maxTokens,
+    thinking: shouldUseThinking ? getClaudeThinkingConfig(model) : undefined,
+  });
 
-  const response = await fetchWithRetry(
-    CLAUDE_API_BASE,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": ANTHROPIC_VERSION,
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify(requestBody as unknown as ClaudeRequestBody),
-    },
-    2,
-    45000,
-  );
+  const response = await llmRequest({
+    url: claudeRequest.url,
+    init: claudeRequest.init,
+    retries: 2,
+    timeout: 45000,
+  });
 
   let responseBody: ClaudeApiResponse | null = null;
   try {
@@ -870,10 +851,9 @@ export async function analyzeWithClaude(
     return handleApiError(response.status, responseBody);
   }
 
-  const textBlock = responseBody?.content?.find(block => block.type === "text");
-  const thinkingBlock = responseBody?.content?.find(block => block.type === "thinking");
-  const claudeThinking = thinkingBlock?.thinking;
-  let result = textBlock?.text;
+  const parsedClaude = parseAnthropicMessagesResponse(responseBody);
+  const claudeThinking = parsedClaude.reasoning;
+  let result = parsedClaude.text;
   if (!result) return { success: false, error: "No response generated." };
 
   log("[Study Assist] Claude response:", result);
@@ -893,32 +873,26 @@ PLEASE RESPOND AGAIN with the CORRECT matches. Only output the match pairs — n
       const strictMessages: ClaudeMessage[] = [{ role: "user", content: strictMessageContent }];
 
       // Build request body with thinking
-      const strictRequestBody: Record<string, unknown> = { model, max_tokens: maxTokens, messages: strictMessages };
-      if (shouldUseThinking) {
-        strictRequestBody.thinking = getClaudeThinkingConfig(model);
-      }
+      const strictRequest = buildAnthropicMessagesRequest({
+        baseUrl: anthropicPreset.baseUrl,
+        apiKey,
+        model,
+        messages: strictMessages,
+        maxTokens,
+        thinking: shouldUseThinking ? getClaudeThinkingConfig(model) : undefined,
+      });
 
-      const retryResponse = await fetchWithRetry(
-        CLAUDE_API_BASE,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-api-key": apiKey,
-            "anthropic-version": ANTHROPIC_VERSION,
-            "anthropic-dangerous-direct-browser-access": "true",
-          },
-          body: JSON.stringify(strictRequestBody as unknown as ClaudeRequestBody),
-        },
-        2,
-        45000,
-      );
+      const retryResponse = await llmRequest({
+        url: strictRequest.url,
+        init: strictRequest.init,
+        retries: 2,
+        timeout: 45000,
+      });
 
       if (retryResponse.ok) {
         let retryBody: ClaudeApiResponse | null = null;
         try { retryBody = await retryResponse.clone().json() as ClaudeApiResponse; } catch { /* keep null */ }
-        const retryTextBlock = retryBody?.content?.find(block => block.type === "text");
-        const retryResult = retryTextBlock?.text;
+        const retryResult = parseAnthropicMessagesResponse(retryBody).text;
         if (retryResult) {
           const retryValidation = validateMatchingAnswer(retryResult, context);
           if (retryValidation.valid && retryValidation.answer) {

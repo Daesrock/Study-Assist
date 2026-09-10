@@ -27,7 +27,8 @@ export async function logError(logObj: ErrorLogObject): Promise<void> {
 export function fetchWithTimeout(
   url: string,
   options: FetchOptionsWithSignal,
-  timeout: number = 30000
+  timeout: number = 30000,
+  fetchFn: typeof fetch = fetch
 ): Promise<Response> {
   const timeoutController = new AbortController();
   const timeoutId = setTimeout(() => timeoutController.abort(), timeout);
@@ -50,7 +51,7 @@ export function fetchWithTimeout(
 
   const { signal: _, ...optionsWithoutSignal } = options;
 
-  return fetch(url, {
+  return fetchFn(url, {
     ...optionsWithoutSignal,
     signal: combinedSignal,
   }).finally(() => clearTimeout(timeoutId));
@@ -64,13 +65,14 @@ export async function fetchWithRetry(
   url: string,
   options: FetchOptionsWithSignal,
   maxRetries: number = 2,
-  timeout: number = 30000
+  timeout: number = 30000,
+  fetchFn: typeof fetch = fetch
 ): Promise<Response> {
   let lastError: Error | undefined;
 
   for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
     try {
-      return await fetchWithTimeout(url, options, timeout);
+      return await fetchWithTimeout(url, options, timeout, fetchFn);
     } catch (error) {
       lastError = error as Error;
       if ((error as Error).name === "AbortError") {
