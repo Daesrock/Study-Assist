@@ -11,6 +11,7 @@ import {
   canPresetHandle,
   getRoles,
   getProviderKey,
+  ensureProviderConfig,
   CURRENT_SCHEMA_VERSION,
 } from "../../src/background/modules/llm/profiles";
 import { getPreset, OPENAI_PRESET_ID } from "../../src/background/modules/llm/registry";
@@ -88,6 +89,20 @@ describe("migrateProviderConfig", () => {
     expect(roles.primary.provider).toBe("openai");
     expect(mockStorage.providerProfiles).toBeUndefined();
   });
+
+  it("self-heals: re-seeds roles when the schema is current but roles are empty", async () => {
+    Object.assign(mockStorage, {
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+      claudeApiKey: "enc-claude",
+      claudeModel: "claude-opus-4-6",
+    });
+
+    await migrateProviderConfig();
+
+    const roles = mockStorage.roles as { primary: unknown; validator: unknown };
+    expect(roles.primary).toEqual({ provider: "anthropic", model: "claude-opus-4-6" });
+    expect(roles.validator).toEqual({ provider: "anthropic", model: "claude-opus-4-6" });
+  });
 });
 
 describe("resolveRole", () => {
@@ -150,5 +165,28 @@ describe("getProviderKey", () => {
   it("returns the stored key value", async () => {
     mockStorage.providerProfiles = { openai: { apiKey: "enc-openai" } };
     expect(await getProviderKey("openai")).toBe("enc-openai");
+  });
+
+  it("falls back to the legacy key and persists it into the profile", async () => {
+    mockStorage.claudeApiKey = "enc-legacy-claude";
+
+    const key = await getProviderKey("anthropic");
+
+    expect(key).toBe("enc-legacy-claude");
+    const profiles = mockStorage.providerProfiles as Record<string, { apiKey?: string }>;
+    expect(profiles.anthropic.apiKey).toBe("enc-legacy-claude");
+  });
+});
+
+describe("ensureProviderConfig", () => {
+  beforeEach(clearStorage);
+
+  it("seeds roles lazily when they are empty", async () => {
+    mockStorage.claudeApiKey = "enc-claude";
+
+    await ensureProviderConfig();
+
+    const roles = mockStorage.roles as { primary: { provider: string } | null };
+    expect(roles.primary?.provider).toBe("anthropic");
   });
 });
