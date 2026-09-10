@@ -130,6 +130,32 @@ export interface StorageData {
   autoDetect?: boolean;
   highlightQuestions?: boolean;
   errorLog?: string;
+  // Generalized provider configuration (Step B)
+  providerProfiles?: Record<string, ProviderProfile>;
+  roles?: ProviderRoles;
+  schemaVersion?: number;
+}
+
+/** Per-provider configuration, keyed by preset id. */
+export interface ProviderProfile {
+  /** AES-GCM encrypted API key. */
+  apiKey?: string;
+  /** Last detected model ids from the provider catalog. */
+  models?: string[];
+  /** Epoch ms of the last catalog sync. */
+  lastSync?: number;
+  /** Whether thinking/reasoning mode is enabled for this provider. */
+  thinking?: boolean;
+}
+
+export interface RoleAssignment {
+  provider: string;
+  model: string;
+}
+
+export interface ProviderRoles {
+  primary: RoleAssignment | null;
+  validator: RoleAssignment | null;
 }
 
 export interface MessageResponse {
@@ -256,6 +282,7 @@ export type ExtensionMessageType =
   | "TOGGLE_EXTENSION"
   | "TEST_API_KEY"
   | "TEST_DEEPSEEK_API_KEY"
+  | "TEST_PROVIDER_KEY"
   | "ANALYZE_QUESTION"
   | "CANCEL_DEEPSEEK"
   | "TOGGLE_DISGUISE_MODE"
@@ -272,6 +299,7 @@ export interface ExtensionMessage {
   active?: boolean;
   apiKey?: string;
   enabled?: boolean;
+  provider?: string;
   context?: import("../../types/index").AnalysisContext;
   url?: string;
   keyType?: string;

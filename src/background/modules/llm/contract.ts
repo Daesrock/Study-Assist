@@ -71,6 +71,7 @@ export type ReasoningKind =
 
 export interface ProviderCapabilities {
   images: boolean;
+  matching: boolean;
   reasoning: boolean;
 }
 
@@ -86,6 +87,8 @@ export interface ProviderPreset {
   /** Accepted API key prefixes, used for validation. */
   keyPrefixes: string[];
   reasoningKind: ReasoningKind;
+  /** Default thinking/reasoning state for this provider. */
+  defaultThinking: boolean;
   capabilities: ProviderCapabilities;
   /** Shipped fallback models when the live catalog is unavailable. */
   defaultModels: string[];

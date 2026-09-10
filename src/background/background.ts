@@ -6,10 +6,11 @@
 import { log, activeDeepSeekController, setActiveDeepSeekController } from "./modules/constants.js";
 import type { ExtensionMessage, MessageResponse } from "./modules/constants.js";
 import type { AnalysisResponse } from "../types/index.js";
-import { analyzeQuestion, analyzeQuestionStreaming, testApiKey, testDeepSeekApiKey } from "./modules/api.js";
+import { analyzeQuestion, analyzeQuestionStreaming, testApiKey, testDeepSeekApiKey, testProviderKey } from "./modules/api.js";
 import { handleToggleExtension, handleDisguiseMode, restoreDisguiseMode } from "./modules/extensionState.js";
 import { encryptAndSaveKey } from "./modules/crypto.js";
 import { getUsageStats, getRecentHistory, clearUsageData, getStorageInfo, trimHistory, updateStorageBadge } from "./modules/usageTracker.js";
+import { migrateProviderConfig } from "./modules/llm/profiles.js";
 
 // ============================================
 // Message Handler
@@ -28,6 +29,9 @@ async function handleMessage(
 
     case "TEST_DEEPSEEK_API_KEY":
       return testDeepSeekApiKey(message.apiKey ?? "");
+
+    case "TEST_PROVIDER_KEY":
+      return testProviderKey(message.provider ?? "anthropic", message.apiKey ?? "");
 
     case "ANALYZE_QUESTION":
       return analyzeQuestion(message.context!);
@@ -172,9 +176,19 @@ chrome.runtime.onInstalled.addListener(async (details: chrome.runtime.InstalledD
   }
   await restoreDisguiseMode();
   await updateStorageBadge();
+  try {
+    await migrateProviderConfig();
+  } catch (error) {
+    console.error("[Study Assist] Provider migration error:", error);
+  }
 });
 
 chrome.runtime.onStartup.addListener(async () => {
+  try {
+    await migrateProviderConfig();
+  } catch (error) {
+    console.error("[Study Assist] Provider migration error:", error);
+  }
   await restoreDisguiseMode();
   await updateStorageBadge();
 });

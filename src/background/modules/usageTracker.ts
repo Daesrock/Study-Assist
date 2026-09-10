@@ -61,7 +61,11 @@ export interface UsageRecord {
   questionText: string;
   questionType: string;
   answer?: string;
-  source: "deepseek" | "claude" | "question-bank";
+  source: "deepseek" | "claude" | "openai" | "question-bank";
+  /** Preset id of the provider that produced the answer (Step B). */
+  provider?: string;
+  /** Pipeline role that produced the answer (Step B). */
+  role?: "primary" | "validator";
   model: string;
   inputTokens: number;
   outputTokens: number;

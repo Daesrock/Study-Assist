@@ -39,23 +39,16 @@ import {
 import {
   parseDeepSeekResponse,
   extractClaudeQuickAnswer,
-  handleApiError,
 } from "./parsing.js";
 import { getDecryptedApiKey } from "./crypto.js";
 import { trackUsage, calculateCost } from "./usageTracker.js";
 import { checkRateLimit, recordRequest } from "./rateLimiter.js";
 import { streamClaudeResponse } from "./streaming.js";
-import { llmRequest } from "./llm/transport.js";
-import {
-  buildOpenAiChatRequest,
-  parseOpenAiChatResponse,
-  describeOpenAiError,
-} from "./llm/openaiCompat.js";
-import {
-  buildAnthropicMessagesRequest,
-  parseAnthropicMessagesResponse,
-} from "./llm/anthropic.js";
-import { getPreset, ANTHROPIC_PRESET_ID, DEEPSEEK_PRESET_ID } from "./llm/registry.js";
+import { runProvider } from "./llm/execute.js";
+import { getRoles, resolveRole, canPresetHandle } from "./llm/profiles.js";
+import type { ResolvedRole } from "./llm/profiles.js";
+import { getPreset } from "./llm/registry.js";
+import type { ProviderPreset } from "./llm/contract.js";
 
 const QA_CLAUDE_MODEL = "claude-haiku-4-5-20251001";
 
@@ -86,6 +79,16 @@ function detectPlatform(pageUrl?: string): string {
   if (url.includes("example.com")) return "qa-manual";
   
   return "other";
+}
+
+/**
+ * Map a provider preset to the legacy UsageRecord.source value used by the
+ * dashboard until Step B2 switches it to provider/role.
+ */
+function legacySource(preset: ProviderPreset): "claude" | "deepseek" | "openai" {
+  if (preset.dialect === "anthropic" || preset.id === "anthropic") return "claude";
+  if (preset.id === "deepseek") return "deepseek";
+  return "openai";
 }
 
 // ============================================
@@ -178,6 +181,57 @@ export async function testDeepSeekApiKey(apiKey: string): Promise<MessageRespons
     return { success: false, error: `DeepSeek Error (${response.status}): ${errorMessage}` };
   } catch (error) {
     console.error("[Study Assist] DeepSeek API test error:", error);
+    return { success: false, error: `Exception: ${(error as Error).message}` };
+  }
+}
+
+// ============================================
+// Generic Provider Key Testing (Step B)
+// ============================================
+
+export async function testProviderKey(
+  providerId: string,
+  apiKey: string,
+): Promise<MessageResponse> {
+  let preset: ProviderPreset;
+  try {
+    preset = getPreset(providerId);
+  } catch {
+    return { success: false, error: `Unknown provider: ${providerId}` };
+  }
+
+  if (!apiKey) return { success: false, error: "Missing API key" };
+
+  try {
+    const run = await runProvider({
+      preset,
+      apiKey,
+      model: preset.defaultModels[0],
+      content: "Hello, respond with just OK to confirm.",
+      maxTokens: 10,
+      thinking: false,
+      retries: 0,
+      timeout: 30000,
+    });
+
+    await logError({
+      type: "testProviderKey",
+      url: run.url,
+      status: run.status ?? undefined,
+      responseBody: run.raw,
+    });
+
+    if (run.result.success) return { success: true };
+
+    if (run.status === 429) {
+      return { success: true, warning: "API key is valid but rate limited. It will work when the limit resets." };
+    }
+
+    return {
+      success: false,
+      error: run.result.error?.message || `API Error (${run.status ?? "network"})`,
+    };
+  } catch (error) {
     return { success: false, error: `Exception: ${(error as Error).message}` };
   }
 }
@@ -377,155 +431,159 @@ export async function analyzeQuestion(context: AnalysisContext, onStatus?: (stat
     }
     recordRequest(context.questionText);
 
-    const storageResult = await chrome.storage.local.get([
-      "claudeApiKey", "claudeModel", "useDeepSeek", "deepseekApiKey", "deepseekOnly", "deepseekModel", "deepseekThinking", "claudeThinking",
-    ]) as StorageData;
-
-    // Decrypt API keys
-    const claudeApiKey = await getDecryptedApiKey("claudeApiKey");
-    const deepseekApiKey = await getDecryptedApiKey("deepseekApiKey");
-    const { claudeModel, useDeepSeek, deepseekOnly, deepseekModel, deepseekThinking, claudeThinking } = storageResult;
-    const selectedClaudeModel = context.qaMode ? QA_CLAUDE_MODEL : (claudeModel || DEFAULT_MODEL);
-    const isDeepSeekOnlyMode = useDeepSeek && deepseekOnly && deepseekApiKey;
-
-    if (!claudeApiKey && !isDeepSeekOnlyMode) {
-      return { success: false, error: "Claude API key not configured." };
-    }
-
-    const hasImages = context.images && context.images.length > 0;
+    const hasImages = !!(context.images && context.images.length > 0);
     const isMatching = context.questionType === "matching";
-    const skipDeepSeek = context.skipDeepSeek === true;
+    const skipPrimary = context.skipDeepSeek === true;
 
-    if (skipDeepSeek) {
-      log("[Study Assist] CTRL+SHIFT: Using Claude directly");
-      if (isDeepSeekOnlyMode) {
-        return { success: false, error: "⚠️ DeepSeek Only mode: CTRL+SHIFT (use Claude) is not available. Disable 'DeepSeek Only' or press CTRL without SHIFT." };
-      }
+    // Resolve the configured pipeline roles (primary → validator).
+    const roles = await getRoles();
+    const primary = await resolveRole(roles.primary);
+    const validator = await resolveRole(roles.validator);
+
+    if (!primary && !validator) {
+      return { success: false, error: "No provider configured. Add an API key in the dashboard." };
     }
 
-    let deepseekAnalysisForClaude: DeepSeekAnalysisForClaude | null = null;
-    let claudeFallbackReason: string | undefined;
-    let deepseekRetried = false; // Track if DeepSeek was retried
-    let claudeFallback = false; // Track if Claude is used as fallback after DeepSeek failure
+    const canHandle = (
+      resolved: ResolvedRole | null,
+    ): resolved is ResolvedRole =>
+      !!resolved && canPresetHandle(resolved.preset, hasImages, isMatching);
 
-    if (isDeepSeekOnlyMode && hasImages) {
-      return { success: false, error: "⚠️ DeepSeek Only mode: Images are not supported. Disable 'DeepSeek Only' to use Claude for image questions." };
+    const effectivePrimary = !skipPrimary && canHandle(primary) ? primary : null;
+    const effectiveValidator = canHandle(validator) ? validator : null;
+
+    if (!effectivePrimary && !effectiveValidator) {
+      const reason = hasImages ? "images" : isMatching ? "matching questions" : "this request";
+      return { success: false, error: `No configured provider supports ${reason}.` };
     }
 
-    if (isDeepSeekOnlyMode && isMatching) {
-      return { success: false, error: "⚠️ DeepSeek Only mode: Matching questions are not supported. Disable 'DeepSeek Only' to use Claude for matching questions." };
+    let primaryAnalysisForValidator: DeepSeekAnalysisForClaude | null = null;
+    let fallbackReason: string | undefined;
+    let primaryRetried = false;
+    let validatorFallback = false;
+
+    if (!effectivePrimary && effectiveValidator) {
+      fallbackReason = hasImages ? "images" : isMatching ? "matching" : undefined;
+      log("[Study Assist] Primary unavailable/incapable → validator handles the request");
     }
 
-    if (useDeepSeek && deepseekApiKey && !hasImages && !isMatching && !skipDeepSeek) {
-      const selectedDeepSeekModel = deepseekModel || DEEPSEEK_V4_FLASH;
-      const thinkingEnabled = deepseekThinking !== false;
+    if (skipPrimary) {
+      log("[Study Assist] CTRL+SHIFT: using validator directly");
+    }
 
-      log(`[Study Assist] Using DeepSeek ${selectedDeepSeekModel} (thinking: ${thinkingEnabled ? "ON" : "OFF"})...`);
+    if (effectivePrimary) {
+      let primaryResult = await analyzeWithPrimary(context, effectivePrimary);
 
-      let deepseekResult = await analyzeWithDeepSeek(context, deepseekApiKey, selectedDeepSeekModel, thinkingEnabled);
-
-      if (deepseekResult.cancelled) {
-        log("[Study Assist] DeepSeek cancelled → Claude");
-        if (isDeepSeekOnlyMode) return { success: false, error: "Analysis cancelled." };
-      } else if (!deepseekResult.success) {
-        if (deepseekResult.skipRetry) {
-          log(`[Study Assist] DeepSeek failed (non-retryable) → Claude fallback: ${deepseekResult.error}`);
-          claudeFallback = true;
+      if (primaryResult.cancelled) {
+        log("[Study Assist] Primary cancelled");
+        if (!effectiveValidator) {
+          return { success: false, error: "Analysis cancelled." };
+        }
+      } else if (!primaryResult.success) {
+        if (primaryResult.skipRetry) {
+          log(`[Study Assist] Primary failed (non-retryable) → validator fallback: ${primaryResult.error}`);
+          validatorFallback = true;
         } else {
-          log("[Study Assist] DeepSeek failed, retrying...");
+          log("[Study Assist] Primary failed, retrying...");
           onStatus?.("DEEPSEEK_RETRY");
-          deepseekRetried = true; // Mark that we're retrying
+          primaryRetried = true;
           await new Promise((r) => setTimeout(r, 1000));
-          deepseekResult = await analyzeWithDeepSeek(context, deepseekApiKey);
+          primaryResult = await analyzeWithPrimary(context, effectivePrimary);
         }
 
-        if (!deepseekResult.success && !deepseekResult.cancelled) {
-          log("[Study Assist] DeepSeek failed → Claude fallback");
+        if (!primaryResult.success && !primaryResult.cancelled) {
+          log("[Study Assist] Primary failed → validator fallback");
           onStatus?.("CLAUDING_FALLBACK");
-          claudeFallbackReason = "deepseek_error";
-          claudeFallback = true; // Mark Claude as fallback
-          if (isDeepSeekOnlyMode) {
-            return { success: false, error: `⚠️ DeepSeek Only mode: ${deepseekResult.error || "API failed after retry. No Claude fallback available."}` };
+          fallbackReason = "primary_error";
+          validatorFallback = true;
+          if (!effectiveValidator) {
+            return { success: false, error: primaryResult.error || "Primary API failed and no validator is available." };
           }
         }
       }
 
-      if (deepseekResult.success && deepseekResult.confidence === "HIGH") {
-        log("[Study Assist] DeepSeek HIGH → Answer:", deepseekResult.result);
-        // Track usage with real token counts from DeepSeek API
+      if (primaryResult.success && primaryResult.confidence === "HIGH") {
+        log("[Study Assist] Primary HIGH → Answer:", primaryResult.result);
         await trackUsage({
           timestamp: Date.now(),
           questionText: context.questionText.substring(0, 200),
           questionType: context.questionType,
-          answer: deepseekResult.result,
-          source: "deepseek",
-          model: selectedDeepSeekModel,
-          inputTokens: deepseekResult.inputTokens || 0,
-          outputTokens: deepseekResult.outputTokens || 0,
-          cacheHitTokens: deepseekResult.cacheHitTokens,
+          answer: primaryResult.result,
+          source: legacySource(effectivePrimary.preset),
+          provider: effectivePrimary.preset.id,
+          role: "primary",
+          model: effectivePrimary.model,
+          inputTokens: primaryResult.inputTokens || 0,
+          outputTokens: primaryResult.outputTokens || 0,
+          cacheHitTokens: primaryResult.cacheHitTokens,
           responseMode: context.responseMode,
           success: true,
           latencyMs: Date.now() - startTime,
           platform: detectPlatform(context.pageUrl),
           confidence: "HIGH",
-          deepseekReasoning: deepseekResult.deepseekReasoning ?? undefined,
-          deepseekThinkingEnabled: thinkingEnabled,
+          deepseekReasoning: primaryResult.deepseekReasoning ?? undefined,
+          deepseekThinkingEnabled: effectivePrimary.thinking,
         });
-        return deepseekResult;
-      } else if (deepseekResult.success) {
-        if (isDeepSeekOnlyMode) {
-          log(`[Study Assist] DeepSeek ${deepseekResult.confidence} → Returning (DeepSeek Only mode)`);
-          deepseekResult.explanation = `⚠️ **Low confidence (${deepseekResult.confidence})** - No Claude validation in DeepSeek Only mode.\n\n${deepseekResult.explanation || ""}`;
-          // Track usage with real token counts from DeepSeek API
+        return primaryResult;
+      } else if (primaryResult.success) {
+        if (!effectiveValidator) {
+          log(`[Study Assist] Primary ${primaryResult.confidence} → Returning (no validator)`);
+          primaryResult.explanation = `⚠️ **Low confidence (${primaryResult.confidence})** - No validator configured.\n\n${primaryResult.explanation || ""}`;
           await trackUsage({
             timestamp: Date.now(),
             questionText: context.questionText.substring(0, 200),
             questionType: context.questionType,
-            answer: deepseekResult.result,
-            source: "deepseek",
-            model: selectedDeepSeekModel,
-            inputTokens: deepseekResult.inputTokens || 0,
-            outputTokens: deepseekResult.outputTokens || 0,
-            cacheHitTokens: deepseekResult.cacheHitTokens,
+            answer: primaryResult.result,
+            source: legacySource(effectivePrimary.preset),
+            provider: effectivePrimary.preset.id,
+            role: "primary",
+            model: effectivePrimary.model,
+            inputTokens: primaryResult.inputTokens || 0,
+            outputTokens: primaryResult.outputTokens || 0,
+            cacheHitTokens: primaryResult.cacheHitTokens,
             responseMode: context.responseMode,
             success: true,
             latencyMs: Date.now() - startTime,
             platform: detectPlatform(context.pageUrl),
-            confidence: deepseekResult.confidence,
-            deepseekReasoning: deepseekResult.deepseekReasoning ?? undefined,
-            deepseekThinkingEnabled: thinkingEnabled,
+            confidence: primaryResult.confidence,
+            deepseekReasoning: primaryResult.deepseekReasoning ?? undefined,
+            deepseekThinkingEnabled: effectivePrimary.thinking,
           });
-          return deepseekResult;
+          return primaryResult;
         }
 
-        log(`[Study Assist] DeepSeek ${deepseekResult.confidence} → Claude validation`);
+        log(`[Study Assist] Primary ${primaryResult.confidence} → validator validation`);
         onStatus?.("CLAUDING_VALIDATING");
-        deepseekAnalysisForClaude = {
-          answer: deepseekResult.result!,
-          confidence: deepseekResult.confidence!,
-          analysis: deepseekResult.deepseekAnalysis!,
-          reasoning: deepseekResult.deepseekReasoning ?? null,
+        primaryAnalysisForValidator = {
+          answer: primaryResult.result!,
+          confidence: primaryResult.confidence!,
+          analysis: primaryResult.deepseekAnalysis!,
+          reasoning: primaryResult.deepseekReasoning ?? null,
         };
       }
-    } else if (useDeepSeek && hasImages) {
-      log("[Study Assist] Images detected → Claude (DeepSeek no soporta imágenes)");
-      claudeFallbackReason = "images";
     }
 
-    if (isDeepSeekOnlyMode) {
-      return { success: false, error: "⚠️ DeepSeek Only mode: Unable to analyze. Check your DeepSeek API key." };
+    if (!effectiveValidator) {
+      return { success: false, error: "No validator available to complete this request." };
     }
 
-    // When falling back to Claude after DeepSeek attempt, let Claude track its own latency.
-    // Only pass original startTime if Claude is the primary (no DeepSeek attempt was made).
-    const claudeStartTime = deepseekAnalysisForClaude ? Date.now() : startTime;
-    const claudeResponse = await analyzeWithClaude(context, claudeApiKey!, selectedClaudeModel, deepseekAnalysisForClaude, claudeStartTime, claudeFallbackReason, claudeThinking, isMatching);
+    // When validating/falling back after a primary attempt, let the validator
+    // track its own latency. Pass the original startTime only when the
+    // validator is primary (no primary attempt was made).
+    const validatorStartTime = primaryAnalysisForValidator ? Date.now() : startTime;
+    const validatorResponse = await analyzeWithValidator(
+      context,
+      effectiveValidator,
+      primaryAnalysisForValidator,
+      validatorStartTime,
+      fallbackReason,
+    );
 
     // Add status flags to response for visual feedback
-    if (deepseekRetried) claudeResponse.deepseekRetried = true;
-    if (claudeFallback) claudeResponse.claudeFallback = true;
+    if (primaryRetried) validatorResponse.deepseekRetried = true;
+    if (validatorFallback) validatorResponse.claudeFallback = true;
 
-    return claudeResponse;
+    return validatorResponse;
   } catch (error) {
     await logError({ type: "analyzeQuestion_exception", error: (error as Error).message, stack: (error as Error).stack });
 
@@ -540,11 +598,9 @@ export async function analyzeQuestion(context: AnalysisContext, onStatus?: (stat
 // DeepSeek Analysis
 // ============================================
 
-export async function analyzeWithDeepSeek(
+export async function analyzeWithPrimary(
   context: AnalysisContext,
-  apiKey: string,
-  model: string = DEEPSEEK_V4_FLASH,
-  thinkingEnabled: boolean = true,
+  role: ResolvedRole,
 ): Promise<DeepSeekAnalysisResult> {
   try {
     const matchedQuestion = await findMatchingQuestion(
@@ -555,112 +611,91 @@ export async function analyzeWithDeepSeek(
 
     const prompt = buildDeepSeekPrompt(context, matchedQuestion);
 
-    log("[Study Assist] Calling DeepSeek API...");
+    log(`[Study Assist] Calling ${role.preset.label} (primary)...`);
 
     const controller = new AbortController();
     setActiveDeepSeekController(controller);
-    const signal = controller.signal;
 
-    const deepseekPreset = getPreset(DEEPSEEK_PRESET_ID);
-    const deepseekRequest = buildOpenAiChatRequest({
-      baseUrl: deepseekPreset.baseUrl,
-      apiKey,
-      model,
-      messages: [{ role: "user", content: prompt }],
+    const run = await runProvider({
+      preset: role.preset,
+      apiKey: role.apiKey,
+      model: role.model,
+      content: prompt,
       maxTokens: 2048,
-      thinking: thinkingEnabled,
+      thinking: role.thinking,
       reasoningEffort: "high",
-      reasoningKind: deepseekPreset.reasoningKind,
-      signal,
-    });
-
-    const response = await llmRequest({
-      url: deepseekRequest.url,
-      init: deepseekRequest.init,
       retries: 0,
-      timeout: thinkingEnabled ? 120000 : 60000,
+      timeout: role.thinking ? 120000 : 60000,
+      signal: controller.signal,
     });
 
-    let responseBody: DeepSeekApiResponse | null = null;
-    try {
-      responseBody = await response.clone().json() as DeepSeekApiResponse;
-    } catch (e) {
-      responseBody = { parseError: (e as Error).message };
-    }
+    setActiveDeepSeekController(null);
 
-    await logError({ type: "analyzeWithDeepSeek", status: response.status, responseBody });
+    await logError({
+      type: "analyzeWithPrimary",
+      url: run.url,
+      status: run.status ?? undefined,
+      responseBody: run.raw,
+    });
 
     // Save full API request/response for developer mode in dashboard
     try {
       await chrome.storage.local.set({
         lastApiRequestData: {
           timestamp: Date.now(),
-          type: "analyzeWithDeepSeek",
-          url: DEEPSEEK_API_BASE,
-          status: response.status,
+          type: "analyzeWithPrimary",
+          url: run.url,
+          status: run.status,
           hasImages: false,
-          requestBody: {
-            model,
-            max_tokens: 2048,
-            messages: [{ role: "user", content: prompt }],
-            thinking: { type: thinkingEnabled ? "enabled" : "disabled" },
-          },
-          responseBody,
+          requestBody: run.requestBody,
+          responseBody: run.raw,
         },
       });
     } catch (_e) { /* silent */ }
 
-    if (!response.ok) {
-      const status = response.status;
-      const errorMsg = responseBody?.error?.message || "";
+    const result = run.result;
 
-      const { error: errorDescription, skipRetry } = describeOpenAiError(
-        status,
-        errorMsg,
-        "DeepSeek",
-      );
+    if (result.cancelled) {
+      log("[Study Assist] Primary request cancelled");
+      return { success: false, error: `${role.preset.label} cancelled`, cancelled: true };
+    }
 
-      log(`[Study Assist] DeepSeek error ${status}${skipRetry ? " (non-retryable)" : ""}: ${errorDescription}`);
+    if (!result.success) {
+      const skipRetry = result.error ? !result.error.retryable : false;
+      const errorDescription = result.error?.message || `${role.preset.label} API error`;
+      log(`[Study Assist] ${role.preset.label} error${skipRetry ? " (non-retryable)" : ""}: ${errorDescription}`);
       return { success: false, error: errorDescription, skipRetry };
     }
 
-    const parsedWire = parseOpenAiChatResponse(responseBody);
-    const reasoningContent = parsedWire.reasoning;
-    const result = parsedWire.text;
+    const reasoningContent = result.reasoning ?? null;
+    const text = result.text;
 
-    if (!result) {
-      return { success: false, error: "No response from DeepSeek" };
+    if (!text) {
+      return { success: false, error: `No response from ${role.preset.label}` };
     }
 
-    // Extract real token counts from API response
-    const apiInputTokens = parsedWire.usage.inputTokens;
-    const apiOutputTokens = parsedWire.usage.outputTokens;
-    const apiCacheHitTokens = parsedWire.usage.cacheHitTokens;
-
     if (DEBUG_MODE) {
-      console.log("[Study Assist] ====== DeepSeek Response =====");
-      console.log(`[Study Assist] Model: ${model} | Thinking: ${thinkingEnabled ? "ON" : "OFF"}`);
-      if (reasoningContent) console.log("[Study Assist] DeepSeek REASONING:", reasoningContent);
-      console.log("[Study Assist] DeepSeek ANSWER:", result);
-      console.log("[Study Assist] DeepSeek TOKENS:", apiInputTokens, "+", apiOutputTokens);
-      if (apiCacheHitTokens !== undefined) console.log("[Study Assist] DeepSeek CACHE HIT:", apiCacheHitTokens);
+      console.log(`[Study Assist] ====== ${role.preset.label} (primary) response ======`);
+      console.log(`[Study Assist] Model: ${role.model} | Thinking: ${role.thinking ? "ON" : "OFF"}`);
+      if (reasoningContent) console.log("[Study Assist] REASONING:", reasoningContent);
+      console.log("[Study Assist] ANSWER:", text);
+      console.log("[Study Assist] TOKENS:", result.usage.inputTokens, "+", result.usage.outputTokens);
       console.log("[Study Assist] ================================");
     }
 
-    setActiveDeepSeekController(null);
-    const parsed = parseDeepSeekResponse(result, context, reasoningContent);
+    const parsed = parseDeepSeekResponse(text, context, reasoningContent);
     // Attach real token counts
-    parsed.inputTokens = apiInputTokens;
-    parsed.outputTokens = apiOutputTokens;
-    parsed.cacheHitTokens = apiCacheHitTokens;
+    parsed.inputTokens = result.usage.inputTokens;
+    parsed.outputTokens = result.usage.outputTokens;
+    parsed.cacheHitTokens = result.usage.cacheHitTokens;
     return parsed;
   } catch (error) {
     setActiveDeepSeekController(null);
     if ((error as Error).name === "AbortError") {
-      log("[Study Assist] DeepSeek request cancelled");
-      return { success: false, error: "DeepSeek cancelled", cancelled: true };
+      log("[Study Assist] Primary request cancelled");
+      return { success: false, error: "Primary cancelled", cancelled: true };
     }
-    return { success: false, error: `DeepSeek error: ${(error as Error).message}` };
+    return { success: false, error: `Primary error: ${(error as Error).message}` };
   }
 }
 
@@ -752,18 +787,15 @@ function validateMatchingAnswer(
 // Claude Analysis
 // ============================================
 
-export async function analyzeWithClaude(
+export async function analyzeWithValidator(
   context: AnalysisContext,
-  apiKey: string,
-  model: string,
-  deepseekAnalysis: DeepSeekAnalysisForClaude | null = null,
+  role: ResolvedRole,
+  primaryAnalysis: DeepSeekAnalysisForClaude | null = null,
   startTime: number = Date.now(),
   fallbackReasonOverride?: string,
-  claudeThinkingEnabled?: boolean,
-  matchingQuestion?: boolean,
 ): Promise<AnalysisResponse> {
   let matchedQuestion = null;
-  if (!deepseekAnalysis) {
+  if (!primaryAnalysis) {
     matchedQuestion = await findMatchingQuestion(
       context.questionText,
       (context as AnalysisContext & { moduleInfo?: string }).moduleInfo || context.pageTitle,
@@ -771,63 +803,43 @@ export async function analyzeWithClaude(
     );
   }
 
-  const prompt = deepseekAnalysis
-    ? buildClaudeValidationPrompt(context, deepseekAnalysis)
+  const prompt = primaryAnalysis
+    ? buildClaudeValidationPrompt(context, primaryAnalysis)
     : buildAnalysisPrompt(context, matchedQuestion);
 
-  log("[Study Assist] Claude analysis...", deepseekAnalysis ? "(validating DeepSeek)" : "");
+  log("[Study Assist] Validator analysis...", primaryAnalysis ? "(validating primary)" : "");
 
   const messageContent = buildMessageContent(prompt, context.images);
 
-  const questionText = context.questionText || "";
-  const multiAnswerPattern = /elija\s*(dos|tres|cuatro|cinco|2|3|4|5)|escoja\s*(dos|tres|cuatro|cinco|2|3|4|5)|seleccione\s*(dos|tres|cuatro|cinco|2|3|4|5)|select\s*(two|three|four|five|2|3|4|5)|choose\s*(two|three|four|five|2|3|4|5)|\(\s*(dos|tres|cuatro|two|three|four|2|3|4|5)\s*opciones?\s*\)/i;
-  const isMultipleAnswer = multiAnswerPattern.test(questionText);
   const isQuickMode = context.responseMode === "quick";
   const isMatching = context.questionType === "matching";
-  const hasImages = context.images && context.images.length > 0;
-  let maxTokens = deepseekAnalysis ? 2048 : 1024;
+  const hasImages = !!(context.images && context.images.length > 0);
+  let maxTokens = primaryAnalysis ? 2048 : 1024;
 
-  log("[Study Assist] Claude config:", { maxTokens, hasImages, isMultipleAnswer, hasDeepSeekAnalysis: !!deepseekAnalysis, claudeThinking: claudeThinkingEnabled });
-
-  const shouldUseThinking = claudeThinkingEnabled === true;
+  const shouldUseThinking = role.thinking === true;
 
   if (shouldUseThinking) {
     maxTokens = 4096;
   }
 
-  const messages: ClaudeMessage[] = [{ role: "user", content: messageContent }];
+  log("[Study Assist] Validator config:", { model: role.model, maxTokens, hasImages, hasPrimaryAnalysis: !!primaryAnalysis, thinking: shouldUseThinking });
 
-  // Build request body — model-aware: adaptive for Sonnet/Opus 4.6+, enabled for Haiku 4.5
-  const anthropicPreset = getPreset(ANTHROPIC_PRESET_ID);
-  const claudeRequest = buildAnthropicMessagesRequest({
-    baseUrl: anthropicPreset.baseUrl,
-    apiKey,
-    model,
-    messages,
+  const run = await runProvider({
+    preset: role.preset,
+    apiKey: role.apiKey,
+    model: role.model,
+    content: messageContent,
     maxTokens,
-    thinking: shouldUseThinking ? getClaudeThinkingConfig(model) : undefined,
-  });
-
-  const response = await llmRequest({
-    url: claudeRequest.url,
-    init: claudeRequest.init,
+    thinking: shouldUseThinking,
     retries: 2,
     timeout: 45000,
   });
 
-  let responseBody: ClaudeApiResponse | null = null;
-  try {
-    responseBody = await response.clone().json() as ClaudeApiResponse;
-  } catch (e) {
-    responseBody = { parseError: (e as Error).message };
-  }
-
   await logError({
-    type: "analyzeWithClaude",
-    url: CLAUDE_API_BASE,
-    status: response.status,
-    statusText: response.statusText,
-    responseBody,
+    type: "analyzeWithValidator",
+    url: run.url,
+    status: run.status ?? undefined,
+    responseBody: run.raw,
     hasImages: hasImages || false,
   });
 
@@ -836,30 +848,32 @@ export async function analyzeWithClaude(
     await chrome.storage.local.set({
       lastApiRequestData: {
         timestamp: Date.now(),
-        type: "analyzeWithClaude",
-        url: CLAUDE_API_BASE,
-        status: response.status,
-        statusText: response.statusText,
+        type: "analyzeWithValidator",
+        url: run.url,
+        status: run.status,
         hasImages: hasImages || false,
-        requestBody: { model, max_tokens: maxTokens, messages },
-        responseBody,
+        requestBody: run.requestBody,
+        responseBody: run.raw,
       },
     });
   } catch (_e) { /* silent */ }
 
-  if (!response.ok) {
-    return handleApiError(response.status, responseBody);
+  const runResult = run.result;
+  if (runResult.cancelled) {
+    return { success: false, error: `${role.preset.label} cancelled` };
+  }
+  if (!runResult.success) {
+    return { success: false, error: runResult.error?.message || `${role.preset.label} API error` };
   }
 
-  const parsedClaude = parseAnthropicMessagesResponse(responseBody);
-  const claudeThinking = parsedClaude.reasoning;
-  let result = parsedClaude.text;
+  const claudeThinking = runResult.reasoning ?? undefined;
+  let result = runResult.text;
   if (!result) return { success: false, error: "No response generated." };
 
-  log("[Study Assist] Claude response:", result);
+  log("[Study Assist] Validator response:", result);
 
   // Validate matching answers structurally
-  if ((isMatching || context.questionType === "matching") && !deepseekAnalysis) {
+  if (isMatching && !primaryAnalysis) {
     const validation = validateMatchingAnswer(result, context);
     if (!validation.valid) {
       log(`[Study Assist] Matching validation failed: ${validation.reason}. Retrying with stricter prompt...`);
@@ -870,39 +884,28 @@ YOUR PREVIOUS RESPONSE WAS REJECTED because: ${validation.reason}
 
 PLEASE RESPOND AGAIN with the CORRECT matches. Only output the match pairs — no extra text.`;
       const strictMessageContent = buildMessageContent(strictPrompt, context.images);
-      const strictMessages: ClaudeMessage[] = [{ role: "user", content: strictMessageContent }];
 
-      // Build request body with thinking
-      const strictRequest = buildAnthropicMessagesRequest({
-        baseUrl: anthropicPreset.baseUrl,
-        apiKey,
-        model,
-        messages: strictMessages,
+      const retryRun = await runProvider({
+        preset: role.preset,
+        apiKey: role.apiKey,
+        model: role.model,
+        content: strictMessageContent,
         maxTokens,
-        thinking: shouldUseThinking ? getClaudeThinkingConfig(model) : undefined,
-      });
-
-      const retryResponse = await llmRequest({
-        url: strictRequest.url,
-        init: strictRequest.init,
+        thinking: shouldUseThinking,
         retries: 2,
         timeout: 45000,
       });
 
-      if (retryResponse.ok) {
-        let retryBody: ClaudeApiResponse | null = null;
-        try { retryBody = await retryResponse.clone().json() as ClaudeApiResponse; } catch { /* keep null */ }
-        const retryResult = parseAnthropicMessagesResponse(retryBody).text;
-        if (retryResult) {
-          const retryValidation = validateMatchingAnswer(retryResult, context);
-          if (retryValidation.valid && retryValidation.answer) {
-            log("[Study Assist] Matching retry successful:", retryValidation.answer);
-            result = retryResult;
-          } else if (retryValidation.answer) {
-            // Structural pass but accept anyway with normalized answer
-            log("[Study Assist] Matching retry partially valid, accepting:", retryValidation.answer);
-            result = retryResult;
-          }
+      if (retryRun.result.success && retryRun.result.text) {
+        const retryResult = retryRun.result.text;
+        const retryValidation = validateMatchingAnswer(retryResult, context);
+        if (retryValidation.valid && retryValidation.answer) {
+          log("[Study Assist] Matching retry successful:", retryValidation.answer);
+          result = retryResult;
+        } else if (retryValidation.answer) {
+          // Structural pass but accept anyway with normalized answer
+          log("[Study Assist] Matching retry partially valid, accepting:", retryValidation.answer);
+          result = retryResult;
         }
       }
       // Note: if retry also fails, we continue with original result so user sees something
@@ -912,29 +915,33 @@ PLEASE RESPOND AGAIN with the CORRECT matches. Only output the match pairs — n
     }
   }
 
-  // Use real token counts from Claude API response, fall back to estimates
-  const realInputTokens = responseBody?.usage?.input_tokens ?? Math.ceil((prompt?.length || 0) / 4);
-  const realOutputTokens = responseBody?.usage?.output_tokens ?? Math.ceil((result?.length || 0) / 4);
-  const isValidation = !!deepseekAnalysis;
-  const fallbackReason = fallbackReasonOverride || ((!deepseekAnalysis && hasImages) ? "images" : undefined);
+  // Use real token counts from the provider, fall back to estimates
+  const usage = runResult.usage;
+  const realInputTokens = usage.inputTokens || Math.ceil((prompt?.length || 0) / 4);
+  const realOutputTokens = usage.outputTokens || Math.ceil((result?.length || 0) / 4);
+  const isValidation = !!primaryAnalysis;
+  const fallbackReason = fallbackReasonOverride || ((!primaryAnalysis && hasImages) ? "images" : undefined);
   await trackUsage({
     timestamp: Date.now(),
     questionText: context.questionText.substring(0, 200),
     questionType: context.questionType,
     answer: result,
-    source: "claude",
-    model,
+    source: legacySource(role.preset),
+    provider: role.preset.id,
+    role: "validator",
+    model: role.model,
     inputTokens: realInputTokens,
     outputTokens: realOutputTokens,
+    cacheHitTokens: usage.cacheHitTokens,
     responseMode: context.responseMode,
     success: true,
     latencyMs: Date.now() - startTime,
     platform: detectPlatform(context.pageUrl),
     validated: isValidation,
     fallbackReason,
-    confidence: deepseekAnalysis?.confidence,
-    deepseekReasoning: deepseekAnalysis?.reasoning ?? undefined,
-    claudeThinking: claudeThinking || undefined,
+    confidence: primaryAnalysis?.confidence,
+    deepseekReasoning: primaryAnalysis?.reasoning ?? undefined,
+    claudeThinking: claudeThinking,
   });
 
   // For quick mode, extract the final answer
@@ -942,7 +949,7 @@ PLEASE RESPOND AGAIN with the CORRECT matches. Only output the match pairs — n
     result = extractClaudeQuickAnswer(result, context.questionType);
   }
 
-  return { success: true, result, source: "claude" };
+  return { success: true, result, source: legacySource(role.preset) };
 }
 
 // ============================================
