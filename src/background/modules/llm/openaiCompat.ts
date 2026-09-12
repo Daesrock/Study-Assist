@@ -27,6 +27,10 @@ export interface OpenAiChatRequestInput {
   thinking?: boolean;
   reasoningEffort?: "low" | "medium" | "high";
   reasoningKind?: ReasoningKind;
+  /** When true, adds `stream: true` for SSE responses. */
+  stream?: boolean;
+  /** Extra streaming options (e.g. `{ include_usage: true }` for OpenAI). */
+  streamOptions?: Record<string, unknown>;
   signal?: AbortSignal;
 }
 
@@ -54,6 +58,11 @@ export function buildOpenAiChatRequest(input: OpenAiChatRequestInput): BuiltOpen
     }
   } else if (kind === "openai-effort" && input.reasoningEffort) {
     body.reasoning_effort = input.reasoningEffort;
+  }
+
+  if (input.stream) {
+    body.stream = true;
+    if (input.streamOptions) body.stream_options = input.streamOptions;
   }
 
   return {

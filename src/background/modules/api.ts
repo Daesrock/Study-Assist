@@ -13,15 +13,11 @@ import {
   DEEPSEEK_API_BASE,
   DEEPSEEK_V4_FLASH,
   DEEPSEEK_V4_PRO,
-  activeDeepSeekController,
   setActiveDeepSeekController,
-  getClaudeThinkingConfig,
 } from "./constants.js";
 import type {
-  StorageData,
   MessageResponse,
   ClaudeRequestBody,
-  ClaudeMessage,
   ClaudeApiResponse,
   DeepSeekApiResponse,
   DeepSeekAnalysisResult,
@@ -40,18 +36,17 @@ import {
   parseDeepSeekResponse,
   extractClaudeQuickAnswer,
 } from "./parsing.js";
-import { getDecryptedApiKey } from "./crypto.js";
 import { trackUsage, estimateCost } from "./usageTracker.js";
 import { checkRateLimit, recordRequest } from "./rateLimiter.js";
-import { streamClaudeResponse } from "./streaming.js";
 import { runProvider } from "./llm/execute.js";
+import { streamProvider } from "./llm/stream.js";
+import type { StreamResult } from "./llm/stream.js";
+import { resolveModelInfo } from "./llm/pricing.js";
 import { fetchModels } from "./llm/catalog.js";
 import { getRoles, resolveRole, canRoleHandle, ensureProviderConfig, resolveQaModel, getProviderState } from "./llm/profiles.js";
 import type { ResolvedRole } from "./llm/profiles.js";
 import { getPreset } from "./llm/registry.js";
 import type { ProviderPreset } from "./llm/contract.js";
-
-const QA_CLAUDE_MODEL = "claude-haiku-4-5-20251001";
 
 // ============================================
 // Platform Detection
@@ -1174,83 +1169,119 @@ export async function analyzeQuestionStreaming(
     }
     recordRequest(context.questionText);
 
-    const claudeApiKey = await getDecryptedApiKey("claudeApiKey");
-    const storageResult = await chrome.storage.local.get(["claudeModel", "claudeThinking"]) as StorageData;
-    const model = context.qaMode ? QA_CLAUDE_MODEL : (storageResult.claudeModel || DEFAULT_MODEL);
-    const claudeThinkingEnabled = storageResult.claudeThinking === true;
+    await ensureProviderConfig();
+    const roles = await getRoles();
+    let primary = await resolveRole(roles.primary);
+    let validator = await resolveRole(roles.validator);
 
-    if (!claudeApiKey) {
-      port.postMessage({ type: "STREAM_ERROR", error: "Claude API key not configured." });
+    // QA sandbox: force the selected test model into both slots.
+    if (context.qaMode) {
+      const qaModel = await resolveQaModel();
+      if (qaModel) {
+        const qaRole = await resolveRole({
+          provider: qaModel.provider,
+          model: qaModel.model,
+        });
+        if (qaRole) {
+          primary = qaRole;
+          validator = qaRole;
+          log(`[Study Assist] QA streaming → ${qaRole.preset.label} / ${qaRole.model}`);
+        }
+      }
+    }
+
+    const hasImages = !!(context.images && context.images.length > 0);
+    const isMatching = context.questionType === "matching";
+    const order = context.skipDeepSeek ? [validator, primary] : [primary, validator];
+    const role = order.find((r) => r && canRoleHandle(r, hasImages, isMatching)) ?? null;
+
+    if (!role) {
+      const reason = hasImages ? "images" : isMatching ? "matching questions" : "this request";
+      log(`[Study Assist] Streaming aborted: no configured provider supports ${reason}`);
+      port.postMessage({ type: "STREAM_ERROR", error: `No configured provider supports ${reason}.` });
       return;
     }
 
     const matchedQuestion = bankMatch;
-
     const prompt = buildAnalysisPrompt(context, matchedQuestion);
     const messageContent = buildMessageContent(prompt, context.images);
-    let maxTokens = 1024;
-    if (claudeThinkingEnabled) maxTokens = 4096;
-    const messages: ClaudeMessage[] = [{ role: "user", content: messageContent }];
 
-    // Build request body with model-aware thinking for streaming
-    const requestBody: Record<string, unknown> = { model, max_tokens: maxTokens, messages };
-    if (claudeThinkingEnabled) {
-      requestBody.thinking = getClaudeThinkingConfig(model);
-    }
+    // Model-aware output budget. `max_tokens` is only an upper bound (billed
+    // on actual output), so we keep it generous and cap it to the model limit.
+    const info = await resolveModelInfo(role.preset.id, role.model);
+    const modelMax = info?.maxOutput ?? 0;
+    let maxTokens = 8192;
+    if (role.thinking && role.reasoning) maxTokens = 16384;
+    if (modelMax > 0 && modelMax < maxTokens) maxTokens = modelMax;
+    if (maxTokens < 2048) maxTokens = 2048;
+
+    const controller = new AbortController();
+    setActiveDeepSeekController(controller);
 
     port.postMessage({ type: "STREAM_STATUS", status: "started" });
 
-    let claudeThinkingText = "";
-    const result = await streamClaudeResponse(
-      claudeApiKey,
-      model,
-      messages,
-      maxTokens,
-      {
-        onChunk(text: string) {
-          try {
-            port.postMessage({ type: "STREAM_CHUNK", chunk: text });
-          } catch { /* port disconnected */ }
+    let thinkingText = "";
+    let result: StreamResult;
+    try {
+      result = await streamProvider(
+        {
+          preset: role.preset,
+          apiKey: role.apiKey,
+          model: role.model,
+          content: messageContent,
+          maxTokens,
+          thinking: role.thinking,
+          supportsReasoning: role.reasoning,
+          supportsAdaptiveThinking: role.adaptiveThinking,
+          reasoningEffort: "high",
+          signal: controller.signal,
         },
-        onInputTokens(count: number) {
-          try {
-            port.postMessage({ type: "STREAM_STATUS", status: "input_tokens", inputTokens: count });
-          } catch { /* port disconnected */ }
+        {
+          onChunk(text: string) {
+            try { port.postMessage({ type: "STREAM_CHUNK", chunk: text }); } catch { /* port disconnected */ }
+          },
+          onInputTokens(count: number) {
+            try { port.postMessage({ type: "STREAM_STATUS", status: "input_tokens", inputTokens: count }); } catch { /* port disconnected */ }
+          },
+          onComplete(outputTokens: number) {
+            try { port.postMessage({ type: "STREAM_STATUS", status: "complete", outputTokens }); } catch { /* port disconnected */ }
+          },
+          onError(error: string) {
+            try { port.postMessage({ type: "STREAM_ERROR", error }); } catch { /* port disconnected */ }
+          },
+          onThinking(thinking: string) {
+            thinkingText += thinking;
+          },
         },
-        onComplete(outputTokens: number) {
-          try {
-            port.postMessage({ type: "STREAM_STATUS", status: "complete", outputTokens });
-          } catch { /* port disconnected */ }
-        },
-        onError(error: string) {
-          try {
-            port.postMessage({ type: "STREAM_ERROR", error });
-          } catch { /* port disconnected */ }
-        },
-        onThinking(thinking: string) {
-          claudeThinkingText += thinking;
-        },
-      },
-      undefined,
-      requestBody.thinking as { type: string } | undefined,
-    );
+      );
+    } finally {
+      setActiveDeepSeekController(null);
+    }
 
-    // Track usage with real token counts from streaming
+    if (result.truncated) {
+      log(
+        `[Study Assist] Streaming response truncated (token limit) for ${role.preset.label}/${role.model}`,
+      );
+    }
+
     const tracked = await trackUsage({
       timestamp: Date.now(),
       questionText: context.questionText.substring(0, 200),
       questionType: context.questionType,
       answer: result.fullText.substring(0, 200),
-      source: "claude",
-      provider: "anthropic",
-      model,
+      source: legacySource(role.preset),
+      provider: role.preset.id,
+      role: role === primary ? "primary" : "validator",
+      model: role.model,
       inputTokens: result.inputTokens,
       outputTokens: result.outputTokens,
+      cacheHitTokens: result.cacheHitTokens,
+      cacheWriteTokens: result.cacheWriteTokens,
       responseMode: context.responseMode,
       success: true,
       latencyMs: Date.now() - startTime,
       platform: detectPlatform(context.pageUrl),
-      claudeThinking: claudeThinkingText || result.thinkingText || undefined,
+      claudeThinking: thinkingText || result.thinkingText || undefined,
     });
 
     port.postMessage({

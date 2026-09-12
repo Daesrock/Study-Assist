@@ -17,6 +17,8 @@ export interface AnthropicMessagesRequestInput {
   messages: ClaudeMessage[];
   maxTokens: number;
   thinking?: { type: string; budget_tokens?: number };
+  /** When true, adds `stream: true` for SSE responses. */
+  stream?: boolean;
   signal?: AbortSignal;
 }
 
@@ -37,6 +39,9 @@ export function buildAnthropicMessagesRequest(
   };
   if (input.thinking) {
     body.thinking = input.thinking;
+  }
+  if (input.stream) {
+    body.stream = true;
   }
 
   return {
@@ -88,9 +93,3 @@ export function parseAnthropicMessagesResponse(json: unknown): ParsedAnthropicRe
     },
   };
 }
-
-// Streaming wrapper: the Anthropic SSE parser currently lives in
-// `../streaming.js`; re-exported here so the orchestrator has a single
-// dialect entry point. It will move fully into this module in a later step.
-export { streamClaudeResponse as streamAnthropicMessages } from "../streaming.js";
-export type { StreamCallbacks as AnthropicStreamCallbacks } from "../streaming.js";

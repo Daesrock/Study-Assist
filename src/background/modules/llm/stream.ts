@@ -1,0 +1,335 @@
+/**
+ * Provider-agnostic streaming (SSE) for the full/overlay mode.
+ *
+ * `streamProvider` dispatches to the right dialect adapter:
+ * - Anthropic: `message_start` / `content_block_delta` / `message_delta` / `message_stop`
+ * - OpenAI-compatible: `choices[].delta` chunks, `usage`, `[DONE]`
+ *
+ * Reasoning is gated exactly like the non-streaming path: `thinking` /
+ * `reasoning_effort` are only sent when the model actually supports them.
+ */
+
+import type { ClaudeContentBlock, ClaudeMessage } from "../constants.js";
+import { getClaudeThinkingConfig, log } from "../constants.js";
+import type { ProviderPreset } from "./contract.js";
+import { llmRequest } from "./transport.js";
+import { buildAnthropicMessagesRequest } from "./anthropic.js";
+import { buildOpenAiChatRequest, describeOpenAiError } from "./openaiCompat.js";
+
+export interface StreamCallbacks {
+  onChunk: (text: string) => void;
+  onInputTokens: (count: number) => void;
+  onComplete: (outputTokens: number) => void;
+  onError: (error: string) => void;
+  onThinking?: (thinking: string) => void;
+}
+
+export interface StreamProviderOptions {
+  preset: ProviderPreset;
+  apiKey: string;
+  model: string;
+  content: string | ClaudeContentBlock[];
+  maxTokens: number;
+  thinking?: boolean;
+  supportsReasoning?: boolean;
+  supportsAdaptiveThinking?: boolean;
+  reasoningEffort?: "low" | "medium" | "high";
+  signal?: AbortSignal;
+}
+
+export interface StreamResult {
+  fullText: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheHitTokens?: number;
+  cacheWriteTokens?: number;
+  thinkingText?: string;
+  /** True when the provider stopped because of the token limit. */
+  truncated: boolean;
+}
+
+function blocksToText(content: string | ClaudeContentBlock[]): string {
+  if (typeof content === "string") return content;
+  return content
+    .filter((block): block is Extract<ClaudeContentBlock, { type: "text" }> => block.type === "text")
+    .map((block) => block.text)
+    .join("\n");
+}
+
+/** Read an SSE response body and forward each `data:` payload. */
+async function consumeSse(
+  response: Response,
+  callbacks: StreamCallbacks,
+  onData: (data: string) => void,
+): Promise<void> {
+  const body = response.body;
+  if (!body) {
+    callbacks.onError("Empty response body");
+    return;
+  }
+
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  const handleLine = (line: string) => {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("data:")) return;
+    const data = trimmed.slice(5).trim();
+    if (data) onData(data);
+  };
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+      for (const line of lines) handleLine(line);
+    }
+    if (buffer) handleLine(buffer);
+  } catch (error) {
+    if ((error as Error).name === "AbortError") throw error;
+    callbacks.onError((error as Error).message);
+    throw error;
+  }
+}
+
+async function errorMessageFromResponse(
+  response: Response,
+  fallback: string,
+): Promise<string> {
+  try {
+    const text = await response.text();
+    const parsed = JSON.parse(text) as { error?: { message?: string } };
+    return parsed.error?.message || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+async function streamAnthropic(
+  opts: StreamProviderOptions,
+  callbacks: StreamCallbacks,
+): Promise<StreamResult> {
+  const reasoning = opts.thinking === true && opts.supportsReasoning === true;
+  const messages: ClaudeMessage[] = [{ role: "user", content: opts.content }];
+  const built = buildAnthropicMessagesRequest({
+    baseUrl: opts.preset.baseUrl,
+    apiKey: opts.apiKey,
+    model: opts.model,
+    messages,
+    maxTokens: opts.maxTokens,
+    thinking: reasoning
+      ? getClaudeThinkingConfig(opts.model, opts.supportsAdaptiveThinking)
+      : undefined,
+    stream: true,
+    signal: opts.signal,
+  });
+
+  const response = await llmRequest({
+    url: built.url,
+    init: built.init,
+    retries: 0,
+    timeout: opts.thinking ? 300000 : 120000,
+  });
+
+  if (!response.ok) {
+    const message = await errorMessageFromResponse(
+      response,
+      `Anthropic API Error (${response.status})`,
+    );
+    log(`[Study Assist] Anthropic stream HTTP ${response.status}:`, message);
+    throw new Error(message);
+  }
+
+  let fullText = "";
+  let thinkingText = "";
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let cacheHitTokens: number | undefined;
+  let cacheWriteTokens: number | undefined;
+  let truncated = false;
+
+  await consumeSse(response, callbacks, (data) => {
+    let event: Record<string, unknown>;
+    try {
+      event = JSON.parse(data) as Record<string, unknown>;
+    } catch {
+      return;
+    }
+
+    switch (event.type) {
+      case "message_start": {
+        const message = event.message as { usage?: Record<string, number> } | undefined;
+        const usage = message?.usage;
+        if (usage) {
+          inputTokens = usage.input_tokens ?? 0;
+          cacheHitTokens = usage.cache_read_input_tokens;
+          cacheWriteTokens = usage.cache_creation_input_tokens;
+          if (inputTokens) callbacks.onInputTokens(inputTokens);
+        }
+        break;
+      }
+      case "content_block_delta": {
+        const delta = event.delta as Record<string, unknown> | undefined;
+        if (delta?.type === "text_delta" && typeof delta.text === "string") {
+          fullText += delta.text;
+          callbacks.onChunk(delta.text);
+        } else if (delta?.type === "thinking_delta" && typeof delta.thinking === "string") {
+          thinkingText += delta.thinking;
+          callbacks.onThinking?.(delta.thinking);
+        }
+        break;
+      }
+      case "message_delta": {
+        const usage = event.usage as Record<string, number> | undefined;
+        if (usage?.output_tokens) outputTokens = usage.output_tokens;
+        const delta = event.delta as { stop_reason?: string } | undefined;
+        if (delta?.stop_reason === "max_tokens") truncated = true;
+        break;
+      }
+      case "message_stop":
+        callbacks.onComplete(outputTokens);
+        break;
+      case "error": {
+        const error = event.error as { message?: string } | undefined;
+        callbacks.onError(error?.message || "Stream error");
+        break;
+      }
+    }
+  });
+
+  return {
+    fullText,
+    inputTokens,
+    outputTokens,
+    cacheHitTokens,
+    cacheWriteTokens,
+    thinkingText: thinkingText || undefined,
+    truncated,
+  };
+}
+
+async function streamOpenAi(
+  opts: StreamProviderOptions,
+  callbacks: StreamCallbacks,
+): Promise<StreamResult> {
+  const reasoning = opts.thinking === true && opts.supportsReasoning === true;
+  const built = buildOpenAiChatRequest({
+    baseUrl: opts.preset.baseUrl,
+    apiKey: opts.apiKey,
+    model: opts.model,
+    messages: [{ role: "user", content: blocksToText(opts.content) }],
+    maxTokens: opts.maxTokens,
+    maxTokensParam: opts.preset.maxTokensParam,
+    thinking: reasoning,
+    reasoningEffort: reasoning ? (opts.reasoningEffort ?? "high") : undefined,
+    reasoningKind: opts.preset.reasoningKind,
+    stream: true,
+    streamOptions:
+      opts.preset.id === "openai" ? { include_usage: true } : undefined,
+    signal: opts.signal,
+  });
+
+  const response = await llmRequest({
+    url: built.url,
+    init: built.init,
+    retries: 0,
+    timeout: opts.thinking ? 300000 : 120000,
+  });
+
+  if (!response.ok) {
+    const raw = await errorMessageFromResponse(response, "");
+    const { error } = describeOpenAiError(response.status, raw, opts.preset.label);
+    log(`[Study Assist] ${opts.preset.label} stream HTTP ${response.status}:`, error);
+    throw new Error(error);
+  }
+
+  let fullText = "";
+  let thinkingText = "";
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let cacheHitTokens: number | undefined;
+  let truncated = false;
+  let inputReported = false;
+
+  await consumeSse(response, callbacks, (data) => {
+    if (data === "[DONE]") return;
+
+    let event: Record<string, unknown>;
+    try {
+      event = JSON.parse(data) as Record<string, unknown>;
+    } catch {
+      return;
+    }
+
+    const usage = event.usage as
+      | {
+          prompt_tokens?: number;
+          completion_tokens?: number;
+          prompt_cache_hit_tokens?: number;
+          prompt_tokens_details?: { cached_tokens?: number };
+        }
+      | undefined;
+    if (usage) {
+      inputTokens = usage.prompt_tokens ?? inputTokens;
+      outputTokens = usage.completion_tokens ?? outputTokens;
+      cacheHitTokens =
+        usage.prompt_cache_hit_tokens ??
+        usage.prompt_tokens_details?.cached_tokens ??
+        cacheHitTokens;
+      if (inputTokens && !inputReported) {
+        inputReported = true;
+        callbacks.onInputTokens(inputTokens);
+      }
+    }
+
+    const choices = event.choices as
+      | Array<{
+          delta?: {
+            content?: string | null;
+            reasoning_content?: string | null;
+            reasoning?: string | null;
+          };
+          finish_reason?: string | null;
+        }>
+      | undefined;
+    const choice = choices?.[0];
+    if (!choice) return;
+
+    const delta = choice.delta;
+    if (typeof delta?.content === "string" && delta.content) {
+      fullText += delta.content;
+      callbacks.onChunk(delta.content);
+    }
+    const reasoningChunk = delta?.reasoning_content ?? delta?.reasoning;
+    if (typeof reasoningChunk === "string" && reasoningChunk) {
+      thinkingText += reasoningChunk;
+      callbacks.onThinking?.(reasoningChunk);
+    }
+    if (choice.finish_reason === "length") truncated = true;
+  });
+
+  callbacks.onComplete(outputTokens);
+
+  return {
+    fullText,
+    inputTokens,
+    outputTokens,
+    cacheHitTokens,
+    thinkingText: thinkingText || undefined,
+    truncated,
+  };
+}
+
+/** Stream a request through the provider's dialect. */
+export function streamProvider(
+  opts: StreamProviderOptions,
+  callbacks: StreamCallbacks,
+): Promise<StreamResult> {
+  return opts.preset.dialect === "anthropic"
+    ? streamAnthropic(opts, callbacks)
+    : streamOpenAi(opts, callbacks);
+}
