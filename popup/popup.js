@@ -299,14 +299,12 @@ function providerLabelOf(id) {
 }
 
 function modelsForProvider(providerId) {
-  const preset = PROVIDER_STATE.presets.find((p) => p.id === providerId);
   const profile = PROVIDER_STATE.profiles.find((p) => p.id === providerId);
-  if (!preset) return [];
+  if (!profile) return [];
   return [
     ...new Set([
-      ...(preset.defaultModels || []),
-      ...((profile && profile.models) || []),
-      ...((profile && profile.customModels) || []),
+      ...(profile.models || []),
+      ...(profile.customModels || []),
     ]),
   ];
 }

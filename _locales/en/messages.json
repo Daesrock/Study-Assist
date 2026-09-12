@@ -337,5 +337,6 @@
   "otherOption": { "message": "Other...", "description": "Other model option" },
   "noProviderConfigured": { "message": "Configure a provider first.", "description": "No provider warning" },
   "rolesSaved": { "message": "Saved.", "description": "Roles saved status" },
-  "providerVisionWarning": { "message": "This model cannot handle image questions.", "description": "Vision warning in popup" }
+  "providerVisionWarning": { "message": "This model cannot handle image questions.", "description": "Vision warning in popup" },
+  "providerNoKeyHint": { "message": "Save your API key to detect the available models.", "description": "Hint when no key is saved" }
 }

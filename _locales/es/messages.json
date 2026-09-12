@@ -337,5 +337,6 @@
   "otherOption": { "message": "Otro...", "description": "Opcion otro modelo" },
   "noProviderConfigured": { "message": "Configura un proveedor primero.", "description": "Aviso sin proveedor" },
   "rolesSaved": { "message": "Guardado.", "description": "Estado roles guardados" },
-  "providerVisionWarning": { "message": "Este modelo no sirve para preguntas con imagenes.", "description": "Aviso de vision en popup" }
+  "providerVisionWarning": { "message": "Este modelo no sirve para preguntas con imagenes.", "description": "Aviso de vision en popup" },
+  "providerNoKeyHint": { "message": "Guarda tu clave API para detectar los modelos disponibles.", "description": "Pista cuando no hay clave" }
 }
