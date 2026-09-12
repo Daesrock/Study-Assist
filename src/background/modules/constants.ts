@@ -142,6 +142,8 @@ export interface ProviderProfile {
   apiKey?: string;
   /** Last detected model ids from the provider catalog. */
   models?: string[];
+  /** Model ids added manually by the user. */
+  customModels?: string[];
   /** User-overridden model ids that accept image input (vision). */
   visionModels?: string[];
   /** Epoch ms of the last catalog sync. */
@@ -300,6 +302,7 @@ export type ExtensionMessageType =
   | "DELETE_PROVIDER_KEY"
   | "SET_PROVIDER_THINKING"
   | "SET_MODEL_VISION"
+  | "ADD_PROVIDER_MODEL"
   | "FETCH_PROVIDER_MODELS"
   | "SAVE_ROLES";
 

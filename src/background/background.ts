@@ -10,7 +10,7 @@ import { analyzeQuestion, analyzeQuestionStreaming, testApiKey, testDeepSeekApiK
 import { handleToggleExtension, handleDisguiseMode, restoreDisguiseMode } from "./modules/extensionState.js";
 import { encryptAndSaveKey } from "./modules/crypto.js";
 import { getUsageStats, getRecentHistory, clearUsageData, getStorageInfo, trimHistory, updateStorageBadge } from "./modules/usageTracker.js";
-import { migrateProviderConfig, getProviderState, saveProviderKey, clearProviderKey, setModelVision, saveRoles, saveProfile, getProviderKey } from "./modules/llm/profiles.js";
+import { migrateProviderConfig, getProviderState, saveProviderKey, clearProviderKey, setModelVision, addCustomModel, saveRoles, saveProfile, getProviderKey } from "./modules/llm/profiles.js";
 import { fetchModels } from "./modules/llm/catalog.js";
 import { getPreset } from "./modules/llm/registry.js";
 
@@ -149,6 +149,14 @@ async function handleMessage(
     case "SET_MODEL_VISION":
       try {
         await setModelVision(message.provider ?? "", message.model ?? "", message.vision === true);
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: (error as Error).message };
+      }
+
+    case "ADD_PROVIDER_MODEL":
+      try {
+        await addCustomModel(message.provider ?? "", message.model ?? "");
         return { success: true };
       } catch (error) {
         return { success: false, error: (error as Error).message };

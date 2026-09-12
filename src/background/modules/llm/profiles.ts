@@ -179,6 +179,7 @@ export interface PublicProviderProfile {
   hasKey: boolean;
   thinking: boolean;
   models: string[];
+  customModels: string[];
   visionModels: string[];
   lastSync: number | null;
 }
@@ -199,6 +200,7 @@ export async function getProviderState(): Promise<ProviderState> {
       hasKey: !!profile?.apiKey,
       thinking: profile?.thinking ?? preset.defaultThinking,
       models: profile?.models ?? [],
+      customModels: profile?.customModels ?? [],
       visionModels: profile?.visionModels ?? preset.visionModels,
       lastSync: profile?.lastSync ?? null,
     };
@@ -229,6 +231,16 @@ export async function setModelVision(
   if (vision) next.add(model);
   else next.delete(model);
   await saveProfile(presetId, { visionModels: [...next] });
+}
+
+/** Add a manually-entered model id to a provider. */
+export async function addCustomModel(presetId: string, model: string): Promise<void> {
+  const trimmed = model.trim();
+  if (!trimmed) return;
+  const profile = await getProfile(presetId);
+  const current = profile?.customModels ?? [];
+  if (current.includes(trimmed)) return;
+  await saveProfile(presetId, { customModels: [...current, trimmed] });
 }
 
 // ============================================
