@@ -108,6 +108,8 @@ export interface UsageStats {
   // Per-AI breakdowns
   deepseek: AiStats;
   claude: AiStats;
+  /** Per-provider breakdown keyed by preset id (falls back to `source`). */
+  byProvider: Record<string, AiStats>;
 }
 
 export interface AiStats {
@@ -223,6 +225,7 @@ export async function getUsageStats(): Promise<UsageStats> {
     todayTokens: 0,
     deepseek: emptyAi(),
     claude: emptyAi(),
+    byProvider: {},
   };
 
   let totalLatency = 0;
@@ -272,6 +275,22 @@ export async function getUsageStats(): Promise<UsageStats> {
         ai.todayInputTokens += r.inputTokens;
         ai.todayOutputTokens += r.outputTokens;
         ai.todayCostUsd += r.costUsd;
+      }
+    }
+
+    // Per-provider accumulation (excludes the local question bank)
+    if (r.source !== "question-bank") {
+      const providerId = r.provider ?? r.source;
+      const provider = stats.byProvider[providerId] ?? (stats.byProvider[providerId] = emptyAi());
+      provider.totalRequests++;
+      provider.totalInputTokens += r.inputTokens;
+      provider.totalOutputTokens += r.outputTokens;
+      provider.totalCostUsd += r.costUsd;
+      if (isToday) {
+        provider.todayRequests++;
+        provider.todayInputTokens += r.inputTokens;
+        provider.todayOutputTokens += r.outputTokens;
+        provider.todayCostUsd += r.costUsd;
       }
     }
   }

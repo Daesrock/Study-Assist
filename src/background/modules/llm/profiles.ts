@@ -112,11 +112,18 @@ export interface ResolvedRole {
   model: string;
   apiKey: string;
   thinking: boolean;
+  vision: boolean;
+}
+
+/** Effective vision-capable model list: user override, else curated. */
+export async function getEffectiveVisionModels(presetId: string): Promise<string[]> {
+  const profile = await getProfile(presetId);
+  return profile?.visionModels ?? LLM_PRESETS[presetId]?.visionModels ?? [];
 }
 
 /**
  * Whether a provider can handle a question's features (images / matching).
- * Used by the orchestrator to route around incapable providers.
+ * Matching is a provider-level capability; images depend on the model's vision.
  */
 export function canPresetHandle(
   preset: ProviderPreset,
@@ -125,6 +132,17 @@ export function canPresetHandle(
 ): boolean {
   if (hasImages && !preset.capabilities.images) return false;
   if (isMatching && !preset.capabilities.matching) return false;
+  return true;
+}
+
+/** Role-aware capability check (uses the resolved model's vision). */
+export function canRoleHandle(
+  role: ResolvedRole,
+  hasImages: boolean,
+  isMatching: boolean,
+): boolean {
+  if (hasImages && !role.vision) return false;
+  if (isMatching && !role.preset.capabilities.matching) return false;
   return true;
 }
 
@@ -146,8 +164,71 @@ export async function resolveRole(
   const profile = await getProfile(role.provider);
   const thinking = profile?.thinking ?? preset.defaultThinking;
   const model = role.model || preset.defaultModels[0];
+  const visionModels = profile?.visionModels ?? preset.visionModels;
+  const vision = visionModels.includes(model);
 
-  return { preset, model, apiKey, thinking };
+  return { preset, model, apiKey, thinking, vision };
+}
+
+// ============================================
+// Provider state (sanitized for the UI)
+// ============================================
+
+export interface PublicProviderProfile {
+  id: string;
+  hasKey: boolean;
+  thinking: boolean;
+  models: string[];
+  visionModels: string[];
+  lastSync: number | null;
+}
+
+export interface ProviderState {
+  presets: ProviderPreset[];
+  profiles: PublicProviderProfile[];
+  roles: ProviderRoles;
+}
+
+/** State for the providers page / popup. Never includes API keys. */
+export async function getProviderState(): Promise<ProviderState> {
+  const stored = await getProviderProfiles();
+  const profiles: PublicProviderProfile[] = Object.values(LLM_PRESETS).map((preset) => {
+    const profile = stored[preset.id];
+    return {
+      id: preset.id,
+      hasKey: !!profile?.apiKey,
+      thinking: profile?.thinking ?? preset.defaultThinking,
+      models: profile?.models ?? [],
+      visionModels: profile?.visionModels ?? preset.visionModels,
+      lastSync: profile?.lastSync ?? null,
+    };
+  });
+  return {
+    presets: Object.values(LLM_PRESETS),
+    profiles,
+    roles: await getRoles(),
+  };
+}
+
+/** Remove a provider's API key (keeps models/vision metadata). */
+export async function clearProviderKey(presetId: string): Promise<void> {
+  const profiles = await getProviderProfiles();
+  if (!profiles[presetId]) return;
+  delete profiles[presetId].apiKey;
+  await chrome.storage.local.set({ [PROFILES_KEY]: profiles });
+}
+
+/** Toggle whether a model accepts image input. */
+export async function setModelVision(
+  presetId: string,
+  model: string,
+  vision: boolean,
+): Promise<void> {
+  const current = await getEffectiveVisionModels(presetId);
+  const next = new Set(current);
+  if (vision) next.add(model);
+  else next.delete(model);
+  await saveProfile(presetId, { visionModels: [...next] });
 }
 
 // ============================================

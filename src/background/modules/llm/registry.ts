@@ -26,6 +26,11 @@ export const LLM_PRESETS: Record<string, ProviderPreset> = {
       "claude-sonnet-4-6",
       "claude-opus-4-6",
     ],
+    visionModels: [
+      "claude-haiku-4-5-20251001",
+      "claude-sonnet-4-6",
+      "claude-opus-4-6",
+    ],
   },
   [DEEPSEEK_PRESET_ID]: {
     id: DEEPSEEK_PRESET_ID,
@@ -37,6 +42,8 @@ export const LLM_PRESETS: Record<string, ProviderPreset> = {
     defaultThinking: true,
     capabilities: { images: false, matching: false, reasoning: true },
     defaultModels: ["deepseek-v4-flash", "deepseek-v4-pro"],
+    // DeepSeek's current models are text-only.
+    visionModels: [],
   },
   [OPENAI_PRESET_ID]: {
     id: OPENAI_PRESET_ID,
@@ -50,6 +57,8 @@ export const LLM_PRESETS: Record<string, ProviderPreset> = {
     // content blocks); images currently route to a capable validator instead.
     capabilities: { images: false, matching: true, reasoning: true },
     defaultModels: ["gpt-5.1", "gpt-5.1-mini"],
+    // Assumed vision-capable; overridable per model in the providers page.
+    visionModels: ["gpt-5.1", "gpt-5.1-mini"],
   },
 };
 

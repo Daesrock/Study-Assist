@@ -45,7 +45,7 @@ import { trackUsage, calculateCost } from "./usageTracker.js";
 import { checkRateLimit, recordRequest } from "./rateLimiter.js";
 import { streamClaudeResponse } from "./streaming.js";
 import { runProvider } from "./llm/execute.js";
-import { getRoles, resolveRole, canPresetHandle, ensureProviderConfig } from "./llm/profiles.js";
+import { getRoles, resolveRole, canRoleHandle, ensureProviderConfig } from "./llm/profiles.js";
 import type { ResolvedRole } from "./llm/profiles.js";
 import { getPreset } from "./llm/registry.js";
 import type { ProviderPreset } from "./llm/contract.js";
@@ -450,7 +450,7 @@ export async function analyzeQuestion(context: AnalysisContext, onStatus?: (stat
     const canHandle = (
       resolved: ResolvedRole | null,
     ): resolved is ResolvedRole =>
-      !!resolved && canPresetHandle(resolved.preset, hasImages, isMatching);
+      !!resolved && canRoleHandle(resolved, hasImages, isMatching);
 
     const effectivePrimary = !skipPrimary && canHandle(primary) ? primary : null;
     const effectiveValidator = canHandle(validator) ? validator : null;

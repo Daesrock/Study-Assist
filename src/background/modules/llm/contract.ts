@@ -92,6 +92,8 @@ export interface ProviderPreset {
   capabilities: ProviderCapabilities;
   /** Shipped fallback models when the live catalog is unavailable. */
   defaultModels: string[];
+  /** Curated models known to accept image input (vision). */
+  visionModels: string[];
 }
 
 /** A preset resolved with the user's chosen model for a given role. */

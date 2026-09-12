@@ -142,6 +142,8 @@ export interface ProviderProfile {
   apiKey?: string;
   /** Last detected model ids from the provider catalog. */
   models?: string[];
+  /** User-overridden model ids that accept image input (vision). */
+  visionModels?: string[];
   /** Epoch ms of the last catalog sync. */
   lastSync?: number;
   /** Whether thinking/reasoning mode is enabled for this provider. */
@@ -292,7 +294,14 @@ export type ExtensionMessageType =
   | "GET_USAGE_HISTORY"
   | "CLEAR_USAGE_DATA"
   | "GET_STORAGE_INFO"
-  | "TRIM_HISTORY";
+  | "TRIM_HISTORY"
+  | "GET_PROVIDER_STATE"
+  | "SAVE_PROVIDER_KEY"
+  | "DELETE_PROVIDER_KEY"
+  | "SET_PROVIDER_THINKING"
+  | "SET_MODEL_VISION"
+  | "FETCH_PROVIDER_MODELS"
+  | "SAVE_ROLES";
 
 export interface ExtensionMessage {
   type: ExtensionMessageType;
@@ -300,6 +309,11 @@ export interface ExtensionMessage {
   apiKey?: string;
   enabled?: boolean;
   provider?: string;
+  model?: string;
+  thinking?: boolean;
+  vision?: boolean;
+  test?: boolean;
+  roles?: ProviderRoles;
   context?: import("../../types/index").AnalysisContext;
   url?: string;
   keyType?: string;

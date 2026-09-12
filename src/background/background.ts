@@ -10,7 +10,9 @@ import { analyzeQuestion, analyzeQuestionStreaming, testApiKey, testDeepSeekApiK
 import { handleToggleExtension, handleDisguiseMode, restoreDisguiseMode } from "./modules/extensionState.js";
 import { encryptAndSaveKey } from "./modules/crypto.js";
 import { getUsageStats, getRecentHistory, clearUsageData, getStorageInfo, trimHistory, updateStorageBadge } from "./modules/usageTracker.js";
-import { migrateProviderConfig } from "./modules/llm/profiles.js";
+import { migrateProviderConfig, getProviderState, saveProviderKey, clearProviderKey, setModelVision, saveRoles, saveProfile, getProviderKey } from "./modules/llm/profiles.js";
+import { fetchModels } from "./modules/llm/catalog.js";
+import { getPreset } from "./modules/llm/registry.js";
 
 // ============================================
 // Message Handler
@@ -93,6 +95,89 @@ async function handleMessage(
       try {
         const deleted = await trimHistory({ keepLast: message.keepLast, keepDays: message.keepDays });
         return { success: true, deleted } as MessageResponse & { deleted: unknown };
+      } catch (error) {
+        return { success: false, error: (error as Error).message };
+      }
+
+    // ============================================
+    // Provider configuration (Step B)
+    // ============================================
+
+    case "GET_PROVIDER_STATE":
+      try {
+        const state = await getProviderState();
+        return { success: true, state } as MessageResponse & { state: unknown };
+      } catch (error) {
+        return { success: false, error: (error as Error).message };
+      }
+
+    case "SAVE_PROVIDER_KEY":
+      try {
+        const provider = message.provider ?? "";
+        const rawKey = message.rawKey ?? "";
+        if (!provider || !rawKey) return { success: false, error: "Missing provider or key." };
+
+        if (message.test) {
+          const result = await testProviderKey(provider, rawKey);
+          if (!result.success) return result;
+          await saveProviderKey(provider, rawKey);
+          return result;
+        }
+
+        await saveProviderKey(provider, rawKey);
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: (error as Error).message };
+      }
+
+    case "DELETE_PROVIDER_KEY":
+      try {
+        await clearProviderKey(message.provider ?? "");
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: (error as Error).message };
+      }
+
+    case "SET_PROVIDER_THINKING":
+      try {
+        await saveProfile(message.provider ?? "", { thinking: message.thinking === true });
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: (error as Error).message };
+      }
+
+    case "SET_MODEL_VISION":
+      try {
+        await setModelVision(message.provider ?? "", message.model ?? "", message.vision === true);
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: (error as Error).message };
+      }
+
+    case "SAVE_ROLES":
+      try {
+        if (!message.roles) return { success: false, error: "Missing roles." };
+        await saveRoles(message.roles);
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: (error as Error).message };
+      }
+
+    case "FETCH_PROVIDER_MODELS":
+      try {
+        const provider = message.provider ?? "";
+        const preset = getPreset(provider);
+        const apiKey = message.rawKey || (await getProviderKey(provider));
+        if (!apiKey) return { success: false, error: "No API key for provider." };
+
+        const result = await fetchModels(preset, apiKey);
+        if (result.success) {
+          await saveProfile(provider, {
+            models: result.models.map((m) => m.id),
+            lastSync: Date.now(),
+          });
+        }
+        return { success: result.success, models: result.models, error: result.error } as MessageResponse & { models: unknown };
       } catch (error) {
         return { success: false, error: (error as Error).message };
       }
