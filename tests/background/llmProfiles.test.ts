@@ -9,9 +9,13 @@ import {
   migrateProviderConfig,
   resolveRole,
   canPresetHandle,
+  canRoleHandle,
   getRoles,
   getProviderKey,
   ensureProviderConfig,
+  getProviderState,
+  clearProviderKey,
+  setModelVision,
   CURRENT_SCHEMA_VERSION,
 } from "../../src/background/modules/llm/profiles";
 import { getPreset, OPENAI_PRESET_ID } from "../../src/background/modules/llm/registry";
@@ -188,5 +192,81 @@ describe("ensureProviderConfig", () => {
 
     const roles = mockStorage.roles as { primary: { provider: string } | null };
     expect(roles.primary?.provider).toBe("anthropic");
+  });
+});
+
+describe("vision capabilities", () => {
+  beforeEach(clearStorage);
+
+  it("resolveRole derives vision from the curated list", async () => {
+    mockStorage.providerProfiles = { anthropic: { apiKey: "enc" } };
+    const anthropic = await resolveRole({
+      provider: "anthropic",
+      model: "claude-haiku-4-5-20251001",
+    });
+    expect(anthropic?.vision).toBe(true);
+
+    mockStorage.providerProfiles = { deepseek: { apiKey: "enc" } };
+    const deepseek = await resolveRole({
+      provider: "deepseek",
+      model: "deepseek-v4-flash",
+    });
+    expect(deepseek?.vision).toBe(false);
+  });
+
+  it("setModelVision toggles a model and feeds resolveRole", async () => {
+    mockStorage.providerProfiles = { deepseek: { apiKey: "enc" } };
+
+    await setModelVision("deepseek", "deepseek-v4-flash", true);
+    const withVision = await resolveRole({ provider: "deepseek", model: "deepseek-v4-flash" });
+    expect(withVision?.vision).toBe(true);
+
+    await setModelVision("deepseek", "deepseek-v4-flash", false);
+    const withoutVision = await resolveRole({ provider: "deepseek", model: "deepseek-v4-flash" });
+    expect(withoutVision?.vision).toBe(false);
+  });
+
+  it("canRoleHandle uses the model vision for images and provider capability for matching", () => {
+    const anthropic = getPreset("anthropic");
+    const noVision = { preset: anthropic, model: "m", apiKey: "k", thinking: false, vision: false };
+    const vision = { ...noVision, vision: true };
+
+    expect(canRoleHandle(noVision, true, false)).toBe(false);
+    expect(canRoleHandle(vision, true, false)).toBe(true);
+
+    const deepseek = getPreset("deepseek");
+    const ds = { preset: deepseek, model: "m", apiKey: "k", thinking: false, vision: true };
+    expect(canRoleHandle(ds, false, true)).toBe(false); // matching unsupported
+    expect(canRoleHandle(ds, false, false)).toBe(true);
+  });
+});
+
+describe("getProviderState", () => {
+  beforeEach(clearStorage);
+
+  it("never exposes the API key", async () => {
+    mockStorage.providerProfiles = { anthropic: { apiKey: "enc-secret-key", thinking: true } };
+
+    const state = await getProviderState();
+
+    expect(JSON.stringify(state)).not.toContain("enc-secret-key");
+    const anthropic = state.profiles.find((p) => p.id === "anthropic");
+    expect(anthropic?.hasKey).toBe(true);
+    expect(state.presets.length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe("clearProviderKey", () => {
+  beforeEach(clearStorage);
+
+  it("removes the key but keeps other metadata", async () => {
+    mockStorage.providerProfiles = { openai: { apiKey: "enc", models: ["m"], thinking: true } };
+
+    await clearProviderKey("openai");
+
+    const profiles = mockStorage.providerProfiles as Record<string, { apiKey?: string; models?: string[]; thinking?: boolean }>;
+    expect(profiles.openai.apiKey).toBeUndefined();
+    expect(profiles.openai.models).toEqual(["m"]);
+    expect(profiles.openai.thinking).toBe(true);
   });
 });
