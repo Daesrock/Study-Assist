@@ -16,6 +16,7 @@ import {
   getProviderState,
   clearProviderKey,
   setModelVision,
+  addCustomModel,
   CURRENT_SCHEMA_VERSION,
 } from "../../src/background/modules/llm/profiles";
 import { getPreset, OPENAI_PRESET_ID } from "../../src/background/modules/llm/registry";
@@ -268,5 +269,24 @@ describe("clearProviderKey", () => {
     expect(profiles.openai.apiKey).toBeUndefined();
     expect(profiles.openai.models).toEqual(["m"]);
     expect(profiles.openai.thinking).toBe(true);
+  });
+});
+
+describe("addCustomModel", () => {
+  beforeEach(clearStorage);
+
+  it("adds a model once and exposes it in getProviderState", async () => {
+    mockStorage.providerProfiles = { openai: { apiKey: "enc" } };
+
+    await addCustomModel("openai", "my-custom-model");
+    await addCustomModel("openai", "my-custom-model");
+    await addCustomModel("openai", "  spaced-model  ");
+
+    const profiles = mockStorage.providerProfiles as Record<string, { customModels?: string[] }>;
+    expect(profiles.openai.customModels).toEqual(["my-custom-model", "spaced-model"]);
+
+    const state = await getProviderState();
+    const openai = state.profiles.find((p) => p.id === "openai");
+    expect(openai?.customModels).toEqual(["my-custom-model", "spaced-model"]);
   });
 });
