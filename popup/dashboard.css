@@ -771,6 +771,22 @@ body {
   background: #d97706;
 }
 
+.qa-full-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  margin: 10px 0 4px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.qa-full-toggle input {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
+
 .qa-model-row {
   display: flex;
   align-items: center;

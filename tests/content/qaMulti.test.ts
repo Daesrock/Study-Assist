@@ -81,4 +81,29 @@ describe("QA moodle-multi scenario", () => {
     ).toHaveLength(3);
     expect(sendResponse).toHaveBeenCalledWith({ success: true });
   });
+
+  it("fullMode creates the full overlay (streaming path) and opens the summary", async () => {
+    const addListener = chromeRuntime.onMessage
+      .addListener as unknown as ReturnType<typeof vi.fn>;
+    const listener = addListener.mock.calls[addListener.mock.calls.length - 1][0] as (
+      message: Record<string, unknown>,
+      sender: unknown,
+      sendResponse: (r: unknown) => void,
+    ) => boolean;
+
+    const sendResponse = vi.fn();
+    listener(
+      { type: "QA_INJECT_SCENARIO", scenario: "moodle-multi", fullMode: true },
+      {},
+      sendResponse,
+    );
+    await new Promise((r) => setTimeout(r, 150));
+
+    expect(state.settings.quickMode).toBe(false);
+    expect(document.getElementById("study-assist-overlay")).not.toBeNull();
+    expect(
+      document.querySelectorAll(".study-assist-question-badge"),
+    ).toHaveLength(3);
+    expect(sendResponse).toHaveBeenCalledWith({ success: true });
+  });
 });

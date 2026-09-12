@@ -995,6 +995,7 @@ interface ContentMessage {
   result?: string;
   question?: DetectedQuestion;
   scenario?: QAScenarioType;
+  fullMode?: boolean;
 }
 
 chrome.runtime.onMessage.addListener(
@@ -1098,17 +1099,24 @@ chrome.runtime.onMessage.addListener(
         (async () => {
           try {
             const scenario = message.scenario ?? "moodle-truefalse";
+            const fullMode = message.fullMode === true;
             injectQAScenario(scenario);
 
             // Allow QA usage even if current domain is not in allowlist
             state.isDomainAllowed = true;
             state.isActive = true;
-            state.settings.quickMode = true;
+            // Full mode uses the overlay (streaming); quick mode uses the button.
+            state.settings.quickMode = !fullMode;
             state.settings.highlightQuestions = true;
 
             initKeyboardHandlers();
             initOverlayContainer();
             const detectedCount = await runQAPreview();
+
+            // Full mode: open the summary so a click runs the streaming path.
+            if (fullMode) {
+              await showQuestionsSummaryWithCallbacks();
+            }
 
             log("[Study Assist] QA preview detected questions:", detectedCount);
             sendResponse({ success: true });

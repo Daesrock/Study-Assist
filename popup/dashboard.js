@@ -854,13 +854,18 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
         <h3>Validación rápida sin entrar a un quiz real</h3>
         <ul>
           <li>Inyecta un escenario en <strong>example.com</strong>.</li>
-          <li>Usa <strong>SHIFT</strong> para quick mode o clic en badge para análisis completo.</li>
+          <li>Quick: <strong>SHIFT</strong> para analizar; Full: activa el modo de abajo y clic en la pregunta.</li>
           <li>Usa <strong>ALT+W</strong> para re-detectar y repetir pruebas.</li>
         </ul>
         <div class="qa-warning">
           ⚠️ <strong>Aviso:</strong> Estos escenarios utilizan la IA real para verificar el funcionamiento de la extensión. Se usa el modelo de prueba seleccionado abajo (por defecto, el más económico detectado) para minimizar el costo. Las peticiones aparecerán en el historial marcadas como <span class="badge badge-qa-manual" style="font-size:10px;">QA</span>.
         </div>
       </div>
+
+      <label class="qa-full-toggle">
+        <input type="checkbox" id="qa-full-mode" />
+        <span>Modo full (streaming): abre el resumen y haz clic en la pregunta para analizar</span>
+      </label>
 
       ${renderQaModelSelector()}
 
@@ -1166,13 +1171,18 @@ function bindDynamicEvents(history, devMode) {
   const runQAScenario = async (scenario) => {
     try {
       const tabId = await getUsableQATabId();
+      const fullModeEl = document.getElementById("qa-full-mode");
+      const fullMode = !!(fullModeEl && fullModeEl.checked);
       await sendQAMessageWithRetry(tabId, {
         type: "QA_INJECT_SCENARIO",
         scenario,
+        fullMode,
       });
 
       alert(
-        "Escenario QA cargado.\n\nSiguiente paso:\n1) SHIFT para quick mode\n2) Clic en badge para non-quick\n3) ALT+W para re-detección",
+        fullMode
+          ? "Escenario QA cargado (modo FULL).\n\nSe abrió el resumen: haz clic en una pregunta para analizar con streaming.\nCTRL+SHIFT fuerza el validador.\nALT+W para re-detectar."
+          : "Escenario QA cargado.\n\nSiguiente paso:\n1) SHIFT para quick mode\n2) ALT+W para re-detección",
       );
     } catch (e) {
       alert(
