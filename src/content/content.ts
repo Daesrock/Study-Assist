@@ -824,8 +824,7 @@ function injectQAScenario(scenario: QAScenarioType): void {
         padding: 16px;
         border: 2px dashed #3b82f6;
         border-radius: 12px;
-        background: #f8fafc;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+        background: #fff;
         font-family: Arial, sans-serif;
       }
       #study-assist-qa-sandbox h2 { margin: 0 0 8px; color: #1d4ed8; }
