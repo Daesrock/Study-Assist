@@ -4,6 +4,19 @@
  */
 
 /* ============================================
+   Host-page leakage protection
+   Some sites (e.g. example.com) declare `div { opacity: 0.8 }`, which would
+   wash out our UI. Keep our containers fully opaque.
+   ============================================ */
+#study-assist-overlay,
+#study-assist-overlay div,
+#study-assist-quick-container,
+#study-assist-quick-container div,
+.study-assist-question-highlight {
+  opacity: 1;
+}
+
+/* ============================================
    Quick Mode Button - Responsive positioning
    ============================================ */
 #study-assist-quick-container {
