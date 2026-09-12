@@ -246,7 +246,6 @@
    ============================================ */
 .study-assist-question-highlight {
   position: relative;
-  background-color: rgba(100, 100, 100, 0.03) !important;
   border-left: 2px solid rgba(100, 100, 100, 0.3) !important;
   padding-left: 8px !important;
   margin: 4px 0 !important;
@@ -255,7 +254,6 @@
 }
 
 .study-assist-question-highlight:hover {
-  background-color: rgba(100, 100, 100, 0.06) !important;
   box-shadow: none !important;
 }
 
