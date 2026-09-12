@@ -298,21 +298,5 @@
   "claudeThinking": {
     "message": "Enable Thinking Mode (adaptive reasoning)",
     "description": "Label for Claude thinking mode toggle"
-  },
-  "howtoEmojiTitle": {
-    "message": "SA Button Indicators (Quick Mode)",
-    "description": "Title for quick mode emoji indicators section in howto"
-  },
-  "howtoEmojiRetry": {
-    "message": "⚠️ — DeepSeek failed on first attempt, retrying.",
-    "description": "Emoji indicator for DeepSeek retry"
-  },
-  "howtoEmojiFallback": {
-    "message": "🔄 — DeepSeek failed completely, Claude is taking over.",
-    "description": "Emoji indicator for Claude fallback"
-  },
-  "howtoEmojiValidate": {
-    "message": "🔍 — DeepSeek responded with low confidence, Claude is validating.",
-    "description": "Emoji indicator for Claude validation"
   }
 }
