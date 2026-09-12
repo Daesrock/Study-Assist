@@ -17,6 +17,14 @@ let cachedDevMode = false;
 
 document.getElementById("refresh-btn").addEventListener("click", loadData);
 
+// Providers page
+const providersBtn = document.getElementById("providers-btn");
+if (providersBtn) {
+  providersBtn.addEventListener("click", () => {
+    chrome.tabs.create({ url: chrome.runtime.getURL("popup/providers.html") });
+  });
+}
+
 // Clear page results
 document
   .getElementById("clear-results-btn")
