@@ -4,6 +4,7 @@
  */
 
 import { log, logProviders, setDebugMode, activeDeepSeekController, setActiveDeepSeekController } from "./modules/constants.js";
+import { devLog, DEV_LOGGING } from "./modules/logger.js";
 import type { ExtensionMessage, MessageResponse } from "./modules/constants.js";
 import type { AnalysisResponse } from "../types/index.js";
 import { analyzeQuestion, analyzeQuestionStreaming, testApiKey, testDeepSeekApiKey, testProviderKey, testProviderConnection } from "./modules/api.js";
@@ -76,6 +77,15 @@ async function handleMessage(
 
     case "TEST_PROVIDER_KEY":
       return testProviderKey(message.provider ?? "anthropic", message.apiKey ?? "");
+
+    case "DEV_LOG":
+      devLog(
+        "content",
+        message.level ?? "log",
+        message.message ?? "",
+        message.data,
+      );
+      return { success: true };
 
     case "TEST_PROVIDER_CONNECTION":
       try {
@@ -429,9 +439,14 @@ async function loadDebugMode(): Promise<void> {
     const { debugMode } = (await chrome.storage.local.get("debugMode")) as {
       debugMode?: boolean;
     };
-    setDebugMode(debugMode === true);
+    if (typeof debugMode === "boolean") {
+      setDebugMode(debugMode);
+    } else {
+      setDebugMode(DEV_LOGGING);
+      await chrome.storage.local.set({ debugMode: DEV_LOGGING });
+    }
   } catch {
-    setDebugMode(false);
+    setDebugMode(DEV_LOGGING);
   }
 }
 

@@ -928,9 +928,27 @@ export async function handleQuickClick(
 // ============================================
 
 /**
+ * Forward a content-script log/error to the background so it lands in
+ * `logs/content.log` via the dev log server.
+ */
+function forwardDevLog(message: string, data?: unknown, level = "log"): void {
+  try {
+    const result = chrome.runtime.sendMessage({
+      type: "DEV_LOG",
+      level,
+      message,
+      data,
+    }) as unknown as Promise<unknown> | undefined;
+    if (result && typeof result.catch === "function") result.catch(() => {});
+  } catch {
+    // Ignore (no background / channel closed).
+  }
+}
+
+/**
  * Full analysis for overlay mode
  * @param question - The question object to analyze
- * @param callbacks - Optional callbacks for testing/dependency injection
+ * @param callbacks - Optional callbacks for dependency injection
  */
 export async function analyzeQuestion(
   question: DetectedQuestion,
@@ -1042,6 +1060,8 @@ export async function analyzeQuestion(
     let streamCost = 0;
 
     await new Promise<void>((resolve, reject) => {
+      let settled = false;
+
       port.onMessage.addListener((msg: Record<string, unknown>) => {
         switch (msg.type) {
           case "STREAM_CHUNK":
@@ -1057,6 +1077,7 @@ export async function analyzeQuestion(
             }
             break;
           case "STREAM_COMPLETE":
+            settled = true;
             streamInputTokens = msg.inputTokens as number || streamInputTokens;
             streamOutputTokens = msg.outputTokens as number || streamOutputTokens;
             streamCost = msg.cost as number || 0;
@@ -1068,10 +1089,18 @@ export async function analyzeQuestion(
               false,
               { inputTokens: streamInputTokens, outputTokens: streamOutputTokens, cost: streamCost },
             );
+            forwardDevLog("stream complete", {
+              questionType: question.type,
+              inputTokens: streamInputTokens,
+              outputTokens: streamOutputTokens,
+              cost: streamCost,
+            });
             resolve();
             break;
           case "STREAM_ERROR":
+            settled = true;
             hideLoading();
+            forwardDevLog("stream error", { error: msg.error, questionType: question.type }, "error");
             displayError(msg.error as string || "Error de transmisión", callbacks.showQuestionsSummary);
             reject(new Error(msg.error as string));
             break;
@@ -1079,8 +1108,10 @@ export async function analyzeQuestion(
       });
 
       port.onDisconnect.addListener(() => {
+        if (settled) return;
         if (!fullText) {
           hideLoading();
+          forwardDevLog("port disconnected before any output", { questionType: question.type }, "error");
           displayError("Conexión perdida", callbacks.showQuestionsSummary);
           reject(new Error("Puerto desconectado"));
         } else {
@@ -1092,6 +1123,7 @@ export async function analyzeQuestion(
     });
   } catch (error) {
     hideLoading();
+    forwardDevLog("full analysis failed", { error: (error as Error).message }, "error");
     displayError((error as Error).message, callbacks.showQuestionsSummary);
   }
 }

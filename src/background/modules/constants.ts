@@ -2,6 +2,8 @@
  * Background Service Worker - Constants & Shared State
  */
 
+import { devLog, DEV_LOGGING } from "./logger.js";
+
 // ============================================
 // Debug Mode
 // ============================================
@@ -9,20 +11,33 @@
  * Global debug flag, backed by the `debugMode` storage key. It is loaded on
  * service-worker start and updated on `chrome.storage.onChanged`, so the same
  * switch controls logs in both the background and the extension pages.
+ * Defaults to `DEV_LOGGING` (on while developing).
  */
-export let DEBUG_MODE = false;
+export let DEBUG_MODE = DEV_LOGGING;
 
 export function setDebugMode(enabled: boolean): void {
   DEBUG_MODE = enabled;
 }
 
+function emit(level: string, args: unknown[]): void {
+  if (!DEBUG_MODE) return;
+  console.log(...args);
+  const [first, ...rest] = args;
+  devLog(
+    "background",
+    level,
+    typeof first === "string" ? first : JSON.stringify(first),
+    rest.length ? rest : undefined,
+  );
+}
+
 export const log = (...args: unknown[]): void => {
-  if (DEBUG_MODE) console.log(...args);
+  emit("log", args);
 };
 
 /** Provider-config debug logger; silenced unless the global flag is on. */
 export const logProviders = (...args: unknown[]): void => {
-  if (DEBUG_MODE) console.log("[Study Assist][providers]", ...args);
+  emit("providers", args);
 };
 
 // ============================================
@@ -367,7 +382,8 @@ export type ExtensionMessageType =
   | "FETCH_PROVIDER_MODELS"
   | "UPDATE_MODEL_PRICES"
   | "SAVE_QA_MODEL"
-  | "SAVE_ROLES";
+  | "SAVE_ROLES"
+  | "DEV_LOG";
 
 export interface ExtensionMessage {
   type: ExtensionMessageType;
@@ -390,4 +406,9 @@ export interface ExtensionMessage {
   limit?: number;
   keepLast?: number;
   keepDays?: number;
+  /** DEV_LOG payload. */
+  level?: string;
+  message?: string;
+  data?: unknown;
+  file?: string;
 }

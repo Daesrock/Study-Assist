@@ -9,7 +9,8 @@
     "https://api.anthropic.com/*",
     "https://api.deepseek.com/*",
     "https://api.openai.com/*",
-    "https://raw.githubusercontent.com/*"
+    "https://raw.githubusercontent.com/*",
+    "http://127.0.0.1/*"
   ],
   "action": {
     "default_popup": "popup/popup.html",

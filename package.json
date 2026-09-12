@@ -9,6 +9,7 @@
     "build": "npm run validate:multi-answer && node scripts/build.js",
     "watch": "node scripts/build.js --watch",
     "dev": "node scripts/build.js --watch",
+    "dev:logs": "node scripts/dev-log-server.js",
     "package": "npm run validate:multi-answer && node scripts/package.js",
     "package:zip": "npm run validate:multi-answer && node scripts/package.js --zip",
     "release:tag": "node scripts/tag-release.js",
