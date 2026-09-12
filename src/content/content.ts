@@ -813,10 +813,17 @@ function injectMoodleQuiz(target: HTMLElement): void {
 function injectQAScenario(scenario: QAScenarioType): void {
 
   const styleId = "study-assist-qa-sandbox-style";
-  if (!document.getElementById(styleId)) {
-    const style = document.createElement("style");
+  let style = document.getElementById(styleId) as HTMLStyleElement | null;
+  if (!style) {
+    style = document.createElement("style");
     style.id = styleId;
-    style.textContent = `
+    document.head.appendChild(style);
+  }
+  // Always refresh the styles so changes apply even if the tag already exists.
+  style.textContent = `
+      /* example.com style div { opacity: 0.8 }; neutralize it inside the sandbox. */
+      #study-assist-qa-sandbox,
+      #study-assist-qa-sandbox div { opacity: 1; }
       #study-assist-qa-sandbox {
         position: relative;
         z-index: 9997;
@@ -902,8 +909,6 @@ function injectQAScenario(scenario: QAScenarioType): void {
         font-size: 13px;
       }
     `;
-    document.head.appendChild(style);
-  }
 
   const wrapper = document.createElement("section");
   wrapper.id = "study-assist-qa-sandbox";

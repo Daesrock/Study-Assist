@@ -1150,8 +1150,16 @@ function bindDynamicEvents(history, devMode) {
     });
 
     if (existingTabs.length > 0 && existingTabs[0]?.id) {
-      await chrome.tabs.update(existingTabs[0].id, { active: true });
-      return existingTabs[0].id;
+      const tabId = existingTabs[0].id;
+      await chrome.tabs.update(tabId, { active: true });
+      // Recargar para que la pestaña use siempre el content script/CSS actuales.
+      try {
+        await chrome.tabs.reload(tabId);
+      } catch {
+        // Si falla la recarga, seguimos con la pestaña tal cual.
+      }
+      await sleep(1200);
+      return tabId;
     }
 
     const qaTab = await chrome.tabs.create({
