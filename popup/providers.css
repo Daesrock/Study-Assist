@@ -39,9 +39,41 @@ body {
   margin-bottom: 4px;
 }
 
+.providers-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .providers-header p {
   color: var(--text-secondary);
-  margin-bottom: 20px;
+  margin-bottom: 12px;
+}
+
+.providers-status {
+  font-size: 12px;
+  min-height: 16px;
+  margin-bottom: 4px;
+}
+
+.providers-status.ok {
+  color: #1e8e3e;
+}
+
+.providers-status.err {
+  color: var(--danger-color);
+}
+
+.providers-error {
+  display: none;
+  background: #fce8e6;
+  color: #c5221f;
+  border: 1px solid #f5c6c3;
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  font-size: 12px;
+  margin-bottom: 12px;
 }
 
 .provider-card {
@@ -218,6 +250,42 @@ body {
   min-height: 16px;
 }
 
+.provider-summary.ok {
+  color: #1e8e3e;
+}
+
+.provider-summary.err {
+  color: var(--danger-color);
+}
+
+.provider-models-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.provider-models-legend {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.provider-selection-mode {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.selection-mode-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.auto-select {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
 .provider-models {
   display: flex;
   flex-direction: column;
@@ -243,7 +311,56 @@ body {
 .model-id {
   font-family: "Consolas", "Monaco", monospace;
   font-size: 12px;
+}
+
+.model-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   flex: 1;
+  min-width: 0;
+}
+
+.model-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.model-price {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.model-ctx {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.model-vision-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: #e6f4ea;
+  color: #1e8e3e;
+}
+
+.model-vision-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.model-vision-toggle input:not(:checked) + .model-vision-badge {
+  background: #f1f3f4;
+  color: #9aa0a6;
+}
+
+.model-include {
+  margin-right: 2px;
 }
 
 .model-badge {

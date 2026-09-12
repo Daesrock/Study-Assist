@@ -55,6 +55,80 @@ describe("runProvider — Anthropic dialect", () => {
     expect((init.headers as Record<string, string>)["x-api-key"]).toBe("sk-ant-test");
   });
 
+  it("omits thinking for models that do not support it", async () => {
+    const fetchFn = vi.fn(async () =>
+      jsonResponse({ content: [{ type: "text", text: "OK" }] }),
+    );
+    setLlmFetch(fetchFn as unknown as typeof fetch);
+
+    await runProvider({
+      preset: getPreset("anthropic"),
+      apiKey: "sk-ant-test",
+      model: "claude-3-haiku-20240307",
+      content: "Responde OK",
+      maxTokens: 2048,
+      thinking: true,
+      supportsReasoning: false,
+      retries: 0,
+    });
+
+    const [, init] = fetchFn.mock.calls[0] as unknown as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body).not.toHaveProperty("thinking");
+  });
+
+  it("includes thinking for reasoning models and returns OK", async () => {
+    const fetchFn = vi.fn(async () =>
+      jsonResponse({
+        content: [{ type: "text", text: "OK" }],
+        usage: { input_tokens: 5, output_tokens: 1 },
+      }),
+    );
+    setLlmFetch(fetchFn as unknown as typeof fetch);
+
+    const run = await runProvider({
+      preset: getPreset("anthropic"),
+      apiKey: "sk-ant-test",
+      model: "claude-haiku-4-5-20251001",
+      content: "Responde OK",
+      maxTokens: 2048,
+      thinking: true,
+      supportsReasoning: true,
+      supportsAdaptiveThinking: false,
+      retries: 0,
+    });
+
+    expect(run.result.success).toBe(true);
+    expect(run.result.text).toBe("OK");
+
+    const [, init] = fetchFn.mock.calls[0] as unknown as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body.thinking).toEqual({ type: "enabled", budget_tokens: 1024 });
+  });
+
+  it("uses adaptive thinking when the model supports it", async () => {
+    const fetchFn = vi.fn(async () =>
+      jsonResponse({ content: [{ type: "text", text: "OK" }] }),
+    );
+    setLlmFetch(fetchFn as unknown as typeof fetch);
+
+    await runProvider({
+      preset: getPreset("anthropic"),
+      apiKey: "sk-ant-test",
+      model: "claude-sonnet-4-6",
+      content: "Responde OK",
+      maxTokens: 2048,
+      thinking: true,
+      supportsReasoning: true,
+      supportsAdaptiveThinking: true,
+      retries: 0,
+    });
+
+    const [, init] = fetchFn.mock.calls[0] as unknown as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body.thinking).toEqual({ type: "adaptive" });
+  });
+
   it("maps auth errors with an Anthropic message", async () => {
     setLlmFetch((async () => jsonResponse({ error: { message: "bad key" } }, false, 401)) as unknown as typeof fetch);
 
@@ -90,6 +164,7 @@ describe("runProvider — OpenAI-compatible dialect", () => {
       content: "prompt",
       maxTokens: 2048,
       thinking: true,
+      supportsReasoning: true,
       retries: 0,
     });
 
@@ -103,6 +178,79 @@ describe("runProvider — OpenAI-compatible dialect", () => {
     const body = JSON.parse(init.body as string);
     expect(body.thinking).toEqual({ type: "enabled" });
     expect(body.reasoning_effort).toBe("high");
+  });
+
+  it("omits reasoning_effort for non-reasoning OpenAI models", async () => {
+    const fetchFn = vi.fn(async () =>
+      jsonResponse({ choices: [{ message: { content: "ok" } }] }),
+    );
+    setLlmFetch(fetchFn as unknown as typeof fetch);
+
+    await runProvider({
+      preset: getPreset("openai"),
+      apiKey: "k",
+      model: "gpt-4o",
+      content: "hi",
+      maxTokens: 2048,
+      thinking: true,
+      supportsReasoning: false,
+      retries: 0,
+    });
+
+    const [, init] = fetchFn.mock.calls[0] as unknown as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body).not.toHaveProperty("reasoning_effort");
+    expect(body).toHaveProperty("max_completion_tokens", 2048);
+    expect(body).not.toHaveProperty("max_tokens");
+  });
+
+  it("includes reasoning_effort for reasoning OpenAI models", async () => {
+    const fetchFn = vi.fn(async () =>
+      jsonResponse({ choices: [{ message: { content: "ok" } }] }),
+    );
+    setLlmFetch(fetchFn as unknown as typeof fetch);
+
+    await runProvider({
+      preset: getPreset("openai"),
+      apiKey: "k",
+      model: "gpt-5.1",
+      content: "hi",
+      maxTokens: 8192,
+      thinking: true,
+      supportsReasoning: true,
+      retries: 0,
+    });
+
+    const [, init] = fetchFn.mock.calls[0] as unknown as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body.reasoning_effort).toBe("high");
+    expect(body).toHaveProperty("max_completion_tokens", 8192);
+  });
+
+  it("returns OK and omits reasoning params for a non-reasoning model", async () => {
+    const fetchFn = vi.fn(async () =>
+      jsonResponse({ choices: [{ message: { content: "OK" } }] }),
+    );
+    setLlmFetch(fetchFn as unknown as typeof fetch);
+
+    const run = await runProvider({
+      preset: getPreset("deepseek"),
+      apiKey: "sk-test",
+      model: "deepseek-chat",
+      content: "Responde OK",
+      maxTokens: 64,
+      thinking: true,
+      supportsReasoning: false,
+      retries: 0,
+    });
+
+    expect(run.result.success).toBe(true);
+    expect(run.result.text).toBe("OK");
+
+    const [, init] = fetchFn.mock.calls[0] as unknown as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body).not.toHaveProperty("thinking");
+    expect(body).not.toHaveProperty("reasoning_effort");
   });
 
   it("marks 5xx as retryable and 4xx as non-retryable", async () => {

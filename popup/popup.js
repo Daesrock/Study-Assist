@@ -300,13 +300,18 @@ function providerLabelOf(id) {
 
 function modelsForProvider(providerId) {
   const profile = PROVIDER_STATE.profiles.find((p) => p.id === providerId);
-  if (!profile) return [];
-  return [
-    ...new Set([
-      ...(profile.models || []),
-      ...(profile.customModels || []),
-    ]),
-  ];
+  const assigned = [];
+  for (const role of [PROVIDER_STATE.roles.primary, PROVIDER_STATE.roles.validator]) {
+    if (role && role.provider === providerId && role.model) assigned.push(role.model);
+  }
+  if (!profile) return [...new Set(assigned)];
+
+  // Only models explicitly selected in the Providers page are offered, plus
+  // the model already assigned to a role (so it is never silently dropped).
+  const selected =
+    profile.selectedModels ??
+    [...(profile.models || []), ...(profile.customModels || [])];
+  return [...new Set([...selected, ...assigned])];
 }
 
 function setOptions(select, options, selectedValue) {

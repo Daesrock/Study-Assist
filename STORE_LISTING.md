@@ -27,7 +27,7 @@ Study Assist is a browser extension that uses AI to help you learn more effectiv
 
 ### Features
 
-- **AI-Powered Explanations** — Uses Claude (Anthropic) and DeepSeek APIs to deliver thoughtful, educational responses tailored to the content you're reading.
+- **AI-Powered Explanations** — Uses Anthropic, DeepSeek or OpenAI APIs to deliver thoughtful, educational responses tailored to the content you're reading.
 - **Three Learning Modes** — Guided Learning (step-by-step reasoning), Direct Explanation (clear and concise), and Hints Only (nudges you toward the answer without revealing it).
 - **User-Controlled Activation** — The extension only works on domains you explicitly allow, and only analyzes content when you activate it. No background scanning or tracking.
 - **Domain Allowlist** — You decide which websites the extension operates on. Nothing is pre-configured.
@@ -35,11 +35,11 @@ Study Assist is a browser extension that uses AI to help you learn more effectiv
 - **Usage Dashboard** — Track your API usage, costs, and session statistics locally.
 - **Multi-Language Support** — English and Spanish interfaces included.
 - **Privacy Focused** — All data stays on your device. API keys are stored locally. No telemetry, no analytics, no remote servers.
-- **Bring Your Own Keys** — You provide your own API keys from Anthropic and/or DeepSeek. The extension never stores or shares credentials externally.
+- **Bring Your Own Keys** — You provide your own API keys from Anthropic, DeepSeek and/or OpenAI. The extension never stores or shares credentials externally.
 
 ### Requirements
 
-- An API key from [Anthropic (Claude)](https://console.anthropic.com) and/or [DeepSeek](https://platform.deepseek.com).
+- An API key from [Anthropic (Claude)](https://console.anthropic.com) and/or [DeepSeek](https://platform.deepseek.com) and/or [OpenAI](https://platform.openai.com).
 - API usage costs are determined by your provider. Typical per-question cost is less than $0.01.
 
 ### Designed for Learners
@@ -50,7 +50,7 @@ Study Assist is built for students who want to deepen their understanding of mat
 
 ## Features List (Bullet Format for Store)
 
-- AI-powered explanations using Claude and DeepSeek
+- AI-powered explanations using Anthropic, DeepSeek or OpenAI
 - Three learning modes: Guided, Direct, Hints
 - Domain allowlist — you control where it runs
 - User-activated only — no background activity
@@ -64,7 +64,7 @@ Study Assist is built for students who want to deepen their understanding of mat
 
 ## Privacy Summary
 
-Study Assist does not collect, store, or transmit personal data. All settings and API keys remain on your device. The extension only communicates with AI API endpoints (Anthropic, DeepSeek) when you explicitly activate analysis, using your own API keys. No telemetry, analytics, or background network activity.
+Study Assist does not collect, store, or transmit personal data. All settings and API keys remain on your device. The extension only communicates with AI API endpoints (Anthropic, DeepSeek, OpenAI) when you explicitly activate analysis, using your own API keys. No telemetry, analytics, or background network activity.
 
 Full privacy policy: [Link to hosted PRIVACY.md]
 
@@ -80,13 +80,15 @@ Full privacy policy: [Link to hosted PRIVACY.md]
 | `scripting`                           | Injects the content script that detects and highlights questions on allowed domains.                                                                                                                                                                                                         |
 | `host_permissions: api.anthropic.com` | Sends analysis requests to the Anthropic Claude API using your own API key.                                                                                                                                                                                                                  |
 | `host_permissions: api.deepseek.com`  | Sends analysis requests to the DeepSeek API using your own API key.                                                                                                                                                                                                                          |
+| `host_permissions: api.openai.com`    | Sends analysis requests to the OpenAI API using your own API key.                                                                                                                                                                                                                            |
+| `host_permissions: raw.githubusercontent.com` | Fetches the public LiteLLM model-price catalog to display model costs and vision capabilities. No user data, page content, or API keys are sent.                                                                                                                                    |
 | `content_scripts: <all_urls>`         | The content script checks the current domain against your personal allowlist. If the domain is not allowed, the script exits immediately without reading or modifying the page. This broad match is necessary because the allowlist is user-defined and cannot be predicted at install time. |
 
 ---
 
 ## Single Purpose Description (250 characters max)
 
-Provides AI-powered study explanations for questions on user-allowed web pages using Claude and DeepSeek APIs with user-provided keys.
+Provides AI-powered study explanations for questions on user-allowed web pages using Anthropic, DeepSeek or OpenAI APIs with user-provided keys.
 
 ---
 

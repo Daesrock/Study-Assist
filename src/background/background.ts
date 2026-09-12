@@ -3,20 +3,62 @@
  * Routes messages and manages lifecycle events
  */
 
-import { log, activeDeepSeekController, setActiveDeepSeekController } from "./modules/constants.js";
+import { log, logProviders, setDebugMode, activeDeepSeekController, setActiveDeepSeekController } from "./modules/constants.js";
 import type { ExtensionMessage, MessageResponse } from "./modules/constants.js";
 import type { AnalysisResponse } from "../types/index.js";
-import { analyzeQuestion, analyzeQuestionStreaming, testApiKey, testDeepSeekApiKey, testProviderKey } from "./modules/api.js";
+import { analyzeQuestion, analyzeQuestionStreaming, testApiKey, testDeepSeekApiKey, testProviderKey, testProviderConnection } from "./modules/api.js";
 import { handleToggleExtension, handleDisguiseMode, restoreDisguiseMode } from "./modules/extensionState.js";
 import { encryptAndSaveKey } from "./modules/crypto.js";
 import { getUsageStats, getRecentHistory, clearUsageData, getStorageInfo, trimHistory, updateStorageBadge } from "./modules/usageTracker.js";
-import { migrateProviderConfig, getProviderState, saveProviderKey, clearProviderKey, setModelVision, addCustomModel, saveRoles, saveProfile, getProviderKey } from "./modules/llm/profiles.js";
+import { migrateProviderConfig, getProviderState, saveProviderKey, clearProviderKey, setModelVision, setModelSelected, setSelectionMode, addCustomModel, saveRoles, saveProfile, getProviderKey, applyDetectedModels, saveQaModel } from "./modules/llm/profiles.js";
 import { fetchModels } from "./modules/llm/catalog.js";
 import { getPreset } from "./modules/llm/registry.js";
+import { getPriceIndex, lookupModelInfo, refreshPrices } from "./modules/llm/pricing.js";
 
 // ============================================
 // Message Handler
 // ============================================
+
+/** Success response that always carries the fresh, sanitized provider state. */
+async function withState(
+  extra: Record<string, unknown> = {},
+): Promise<MessageResponse & { state: unknown }> {
+  return { success: true, ...extra, state: await getProviderState() };
+}
+
+interface DetectedModel {
+  id: string;
+  price?: unknown;
+}
+
+/**
+ * Single `/models` call that validates a key, stores the catalog and returns
+ * the detected models enriched with LiteLLM price/capability metadata.
+ */
+async function detectProviderModels(
+  provider: string,
+  apiKey: string,
+): Promise<{ success: boolean; models: DetectedModel[]; error?: string }> {
+  const preset = getPreset(provider);
+  const result = await fetchModels(preset, apiKey);
+  if (!result.success) {
+    return { success: false, models: [], error: result.error };
+  }
+
+  const index = await getPriceIndex();
+  const candidates = result.models.map((model) => ({
+    id: model.id,
+    created: model.created,
+    info: lookupModelInfo(index, provider, model.id),
+  }));
+  await applyDetectedModels(provider, candidates);
+
+  const models = result.models.map((model) => {
+    const price = lookupModelInfo(index, provider, model.id);
+    return price ? { id: model.id, price } : { id: model.id };
+  });
+  return { success: true, models };
+}
 
 async function handleMessage(
   message: ExtensionMessage,
@@ -34,6 +76,16 @@ async function handleMessage(
 
     case "TEST_PROVIDER_KEY":
       return testProviderKey(message.provider ?? "anthropic", message.apiKey ?? "");
+
+    case "TEST_PROVIDER_CONNECTION":
+      try {
+        return (await testProviderConnection(
+          message.provider ?? "",
+          message.model,
+        )) as MessageResponse;
+      } catch (error) {
+        return { success: false, error: (error as Error).message };
+      }
 
     case "ANALYZE_QUESTION":
       return analyzeQuestion(message.context!);
@@ -105,8 +157,7 @@ async function handleMessage(
 
     case "GET_PROVIDER_STATE":
       try {
-        const state = await getProviderState();
-        return { success: true, state } as MessageResponse & { state: unknown };
+        return await withState();
       } catch (error) {
         return { success: false, error: (error as Error).message };
       }
@@ -117,15 +168,27 @@ async function handleMessage(
         const rawKey = message.rawKey ?? "";
         if (!provider || !rawKey) return { success: false, error: "Missing provider or key." };
 
+        let warning: string | undefined;
+        let models: DetectedModel[] | undefined;
+
+        // Validate + detect in a single /models request.
         if (message.test) {
-          const result = await testProviderKey(provider, rawKey);
-          if (!result.success) return result;
-          await saveProviderKey(provider, rawKey);
-          return result;
+          const outcome = await detectProviderModels(provider, rawKey);
+          if (outcome.success) {
+            models = outcome.models;
+          } else {
+            const error = outcome.error || `API Error (${provider})`;
+            if (error.includes("429")) {
+              warning = "API key is valid but rate limited. It will work when the limit resets.";
+            } else {
+              return { success: false, error };
+            }
+          }
         }
 
         await saveProviderKey(provider, rawKey);
-        return { success: true };
+        logProviders("key saved", { provider });
+        return await withState({ warning, models });
       } catch (error) {
         return { success: false, error: (error as Error).message };
       }
@@ -133,7 +196,8 @@ async function handleMessage(
     case "DELETE_PROVIDER_KEY":
       try {
         await clearProviderKey(message.provider ?? "");
-        return { success: true };
+        logProviders("key deleted", { provider: message.provider });
+        return await withState();
       } catch (error) {
         return { success: false, error: (error as Error).message };
       }
@@ -141,7 +205,7 @@ async function handleMessage(
     case "SET_PROVIDER_THINKING":
       try {
         await saveProfile(message.provider ?? "", { thinking: message.thinking === true });
-        return { success: true };
+        return await withState();
       } catch (error) {
         return { success: false, error: (error as Error).message };
       }
@@ -149,7 +213,38 @@ async function handleMessage(
     case "SET_MODEL_VISION":
       try {
         await setModelVision(message.provider ?? "", message.model ?? "", message.vision === true);
-        return { success: true };
+        return await withState();
+      } catch (error) {
+        return { success: false, error: (error as Error).message };
+      }
+
+    case "SET_MODEL_SELECTED":
+      try {
+        await setModelSelected(message.provider ?? "", message.model ?? "", message.selected === true);
+        return await withState();
+      } catch (error) {
+        return { success: false, error: (error as Error).message };
+      }
+
+    case "SET_SELECTION_MODE":
+      try {
+        const provider = message.provider ?? "";
+        const mode = message.selectionMode === "manual" ? "manual" : "auto";
+        await setSelectionMode(provider, mode);
+
+        // Switching back to auto re-runs detection so the curated list applies.
+        if (mode === "auto") {
+          const apiKey = await getProviderKey(provider);
+          if (apiKey) {
+            const outcome = await detectProviderModels(provider, apiKey);
+            return {
+              success: true,
+              models: outcome.models,
+              state: await getProviderState(),
+            } as MessageResponse & { models: unknown; state: unknown };
+          }
+        }
+        return await withState();
       } catch (error) {
         return { success: false, error: (error as Error).message };
       }
@@ -157,6 +252,14 @@ async function handleMessage(
     case "ADD_PROVIDER_MODEL":
       try {
         await addCustomModel(message.provider ?? "", message.model ?? "");
+        return await withState();
+      } catch (error) {
+        return { success: false, error: (error as Error).message };
+      }
+
+    case "SAVE_QA_MODEL":
+      try {
+        await saveQaModel(message.qaModel ?? null);
         return { success: true };
       } catch (error) {
         return { success: false, error: (error as Error).message };
@@ -174,18 +277,30 @@ async function handleMessage(
     case "FETCH_PROVIDER_MODELS":
       try {
         const provider = message.provider ?? "";
-        const preset = getPreset(provider);
         const apiKey = message.rawKey || (await getProviderKey(provider));
         if (!apiKey) return { success: false, error: "No API key for provider." };
 
-        const result = await fetchModels(preset, apiKey);
-        if (result.success) {
-          await saveProfile(provider, {
-            models: result.models.map((m) => m.id),
-            lastSync: Date.now(),
-          });
-        }
-        return { success: result.success, models: result.models, error: result.error } as MessageResponse & { models: unknown };
+        const outcome = await detectProviderModels(provider, apiKey);
+        return {
+          success: outcome.success,
+          models: outcome.models,
+          error: outcome.error,
+          state: await getProviderState(),
+        } as MessageResponse & { models: unknown; state: unknown };
+      } catch (error) {
+        return { success: false, error: (error as Error).message };
+      }
+
+    case "UPDATE_MODEL_PRICES":
+      try {
+        const result = await refreshPrices();
+        return {
+          success: result.success,
+          count: result.count,
+          error: result.error,
+          fetchedAt: result.fetchedAt,
+          state: await getProviderState(),
+        } as MessageResponse & { count: number; state: unknown };
       } catch (error) {
         return { success: false, error: (error as Error).message };
       }
@@ -304,3 +419,28 @@ chrome.tabs.onUpdated.addListener(
     }
   }
 );
+
+// ============================================
+// Global debug flag
+// ============================================
+
+async function loadDebugMode(): Promise<void> {
+  try {
+    const { debugMode } = (await chrome.storage.local.get("debugMode")) as {
+      debugMode?: boolean;
+    };
+    setDebugMode(debugMode === true);
+  } catch {
+    setDebugMode(false);
+  }
+}
+
+loadDebugMode();
+
+if (chrome.storage.onChanged) {
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && "debugMode" in changes) {
+      setDebugMode(changes.debugMode?.newValue === true);
+    }
+  });
+}

@@ -16,10 +16,16 @@ import {
   getProviderState,
   clearProviderKey,
   setModelVision,
+  setModelSelected,
+  applyDetectedModels,
   addCustomModel,
+  resolveQaModel,
+  saveQaModel,
+  saveProfile,
   CURRENT_SCHEMA_VERSION,
 } from "../../src/background/modules/llm/profiles";
 import { getPreset, OPENAI_PRESET_ID } from "../../src/background/modules/llm/registry";
+import { __setPriceIndexForTests } from "../../src/background/modules/llm/pricing";
 
 function clearStorage() {
   for (const key of Object.keys(mockStorage)) delete mockStorage[key];
@@ -58,6 +64,7 @@ describe("migrateProviderConfig", () => {
     Object.assign(mockStorage, {
       claudeApiKey: "enc-claude",
       deepseekApiKey: "enc-deepseek",
+      deepseekModel: "deepseek-v4-flash",
       useDeepSeek: true,
       deepseekOnly: true,
     });
@@ -110,6 +117,27 @@ describe("migrateProviderConfig", () => {
   });
 });
 
+describe("thinking default", () => {
+  beforeEach(clearStorage);
+
+  it("defaults thinking to true when no value is stored", async () => {
+    const state = await getProviderState();
+    for (const id of ["anthropic", "deepseek", "openai"]) {
+      const profile = state.profiles.find((p) => p.id === id);
+      expect(profile?.thinking).toBe(true);
+    }
+  });
+
+  it("does not force thinking off during migration without a legacy flag", async () => {
+    mockStorage.claudeApiKey = "enc-claude";
+
+    await migrateProviderConfig();
+
+    const profiles = mockStorage.providerProfiles as Record<string, { thinking?: boolean }>;
+    expect(profiles.anthropic.thinking).toBeUndefined();
+  });
+});
+
 describe("resolveRole", () => {
   beforeEach(clearStorage);
 
@@ -123,11 +151,10 @@ describe("resolveRole", () => {
     expect(resolved?.thinking).toBe(true);
   });
 
-  it("falls back to the preset default model", async () => {
+  it("returns null when the role has no model (no shipped fallback)", async () => {
     mockStorage.providerProfiles = { anthropic: { apiKey: "enc" } };
 
-    const resolved = await resolveRole({ provider: "anthropic", model: "" });
-    expect(resolved?.model).toBe(getPreset("anthropic").defaultModels[0]);
+    expect(await resolveRole({ provider: "anthropic", model: "" })).toBeNull();
   });
 
   it("returns null when the role is unset or the key is missing", async () => {
@@ -188,6 +215,7 @@ describe("ensureProviderConfig", () => {
 
   it("seeds roles lazily when they are empty", async () => {
     mockStorage.claudeApiKey = "enc-claude";
+    mockStorage.claudeModel = "claude-sonnet-4-6";
 
     await ensureProviderConfig();
 
@@ -199,15 +227,17 @@ describe("ensureProviderConfig", () => {
 describe("vision capabilities", () => {
   beforeEach(clearStorage);
 
-  it("resolveRole derives vision from the curated list", async () => {
-    mockStorage.providerProfiles = { anthropic: { apiKey: "enc" } };
+  it("resolveRole derives vision from the detected list", async () => {
+    mockStorage.providerProfiles = {
+      anthropic: { apiKey: "enc", visionModels: ["claude-haiku-4-5-20251001"] },
+    };
     const anthropic = await resolveRole({
       provider: "anthropic",
       model: "claude-haiku-4-5-20251001",
     });
     expect(anthropic?.vision).toBe(true);
 
-    mockStorage.providerProfiles = { deepseek: { apiKey: "enc" } };
+    mockStorage.providerProfiles = { deepseek: { apiKey: "enc", visionModels: [] } };
     const deepseek = await resolveRole({
       provider: "deepseek",
       model: "deepseek-v4-flash",
@@ -272,6 +302,114 @@ describe("clearProviderKey", () => {
   });
 });
 
+describe("providerProfiles shape guard", () => {
+  beforeEach(clearStorage);
+
+  it("recovers from a legacy Array and persists named profiles", async () => {
+    // Older builds stored an Array with a foreign schema; writing named
+    // properties onto it was silently dropped by structured serialization.
+    mockStorage.providerProfiles = [
+      { id: "claude", name: "Claude" },
+      { id: "deepseek", name: "DeepSeek" },
+    ];
+
+    await saveProfile("anthropic", { apiKey: "enc" });
+
+    const profiles = mockStorage.providerProfiles as Record<string, { apiKey?: string }>;
+    expect(Array.isArray(profiles)).toBe(false);
+    expect(profiles.anthropic.apiKey).toBe("enc");
+  });
+
+  it("treats a non-object value as empty", async () => {
+    mockStorage.providerProfiles = "corrupted";
+    expect(await getProviderState()).toBeDefined();
+
+    await saveProfile("openai", { apiKey: "enc" });
+    const profiles = mockStorage.providerProfiles as Record<string, { apiKey?: string }>;
+    expect(profiles.openai.apiKey).toBe("enc");
+  });
+});
+
+describe("model selection", () => {
+  beforeEach(() => {
+    clearStorage();
+    __setPriceIndexForTests(null);
+  });
+
+  it("auto-selects the most recent models plus the cheapest", async () => {
+    mockStorage.providerProfiles = { openai: { apiKey: "enc" } };
+    const candidates = [
+      { id: "new1", created: 5000, info: { inputPer1M: 2, outputPer1M: 2, vision: true, reasoning: true, mode: "chat" } },
+      { id: "new2", created: 4000, info: { inputPer1M: 3, outputPer1M: 3, vision: false, reasoning: false, mode: "chat" } },
+      { id: "new3", created: 3000, info: { inputPer1M: 4, outputPer1M: 4, vision: false, reasoning: false, mode: "chat" } },
+      { id: "old", created: 1000, info: { inputPer1M: 5, outputPer1M: 5, vision: false, reasoning: false, mode: "chat" } },
+      { id: "cheap", created: 500, info: { inputPer1M: 0.01, outputPer1M: 0.01, vision: false, reasoning: false, mode: "chat" } },
+      { id: "dep", created: 9000, info: { inputPer1M: 1, outputPer1M: 1, mode: "chat", deprecationDate: "2000-01-01" } },
+    ];
+
+    await applyDetectedModels("openai", candidates);
+
+    const profiles = mockStorage.providerProfiles as Record<string, { selectedModels?: string[] }>;
+    expect(profiles.openai.selectedModels).toEqual(
+      expect.arrayContaining(["new1", "new2", "new3", "old", "cheap"]),
+    );
+    expect(profiles.openai.selectedModels).not.toContain("dep");
+  });
+
+  it("preserves a manual selection on re-detection", async () => {
+    mockStorage.providerProfiles = {
+      openai: { apiKey: "enc", selectionMode: "manual", models: ["a"], selectedModels: ["a"] },
+    };
+
+    await applyDetectedModels("openai", [
+      { id: "a", created: 1 },
+      { id: "b", created: 2 },
+    ]);
+
+    const profiles = mockStorage.providerProfiles as Record<string, { selectedModels?: string[] }>;
+    expect(profiles.openai.selectedModels).toEqual(["a"]);
+  });
+
+  it("keeps a model assigned to a role", async () => {
+    mockStorage.providerProfiles = { openai: { apiKey: "enc" } };
+    mockStorage.roles = {
+      primary: { provider: "openai", model: "assigned-x" },
+      validator: null,
+    };
+
+    await applyDetectedModels("openai", [
+      { id: "assigned-x", created: 1 },
+      { id: "other", created: 2 },
+    ]);
+
+    const profiles = mockStorage.providerProfiles as Record<string, { selectedModels?: string[] }>;
+    expect(profiles.openai.selectedModels).toContain("assigned-x");
+  });
+
+  it("setModelSelected switches the provider to manual mode", async () => {
+    mockStorage.providerProfiles = {
+      openai: { apiKey: "enc", selectedModels: ["a", "b"] },
+    };
+
+    await setModelSelected("openai", "b", false);
+
+    const profiles = mockStorage.providerProfiles as Record<string, { selectedModels?: string[]; selectionMode?: string }>;
+    expect(profiles.openai.selectedModels).toEqual(["a"]);
+    expect(profiles.openai.selectionMode).toBe("manual");
+  });
+
+  it("defaults selectedModels to all models for legacy profiles", async () => {
+    mockStorage.providerProfiles = {
+      openai: { apiKey: "enc", models: ["a"], customModels: ["z"] },
+    };
+
+    const state = await getProviderState();
+    const openai = state.profiles.find((p) => p.id === "openai");
+    expect(openai?.selectedModels).toEqual(["a", "z"]);
+    expect(openai?.selectionMode).toBe("auto");
+  });
+});
+
 describe("addCustomModel", () => {
   beforeEach(clearStorage);
 
@@ -288,5 +426,68 @@ describe("addCustomModel", () => {
     const state = await getProviderState();
     const openai = state.profiles.find((p) => p.id === "openai");
     expect(openai?.customModels).toEqual(["my-custom-model", "spaced-model"]);
+  });
+});
+
+describe("resolveQaModel", () => {
+  beforeEach(() => {
+    clearStorage();
+    __setPriceIndexForTests(null);
+  });
+
+  it("prefers an explicit QA selection", async () => {
+    await saveQaModel({ provider: "openai", model: "gpt-5.1" });
+    expect(await resolveQaModel()).toEqual({ provider: "openai", model: "gpt-5.1" });
+  });
+
+  it("auto-selects the cheapest selected model of the primary provider", async () => {
+    __setPriceIndexForTests({
+      "claude-haiku-4-5-20251001": { inputPer1M: 1, outputPer1M: 5, vision: true, provider: "anthropic" },
+      "claude-opus-4-6": { inputPer1M: 5, outputPer1M: 25, vision: true, provider: "anthropic" },
+    });
+    mockStorage.providerProfiles = {
+      anthropic: {
+        apiKey: "enc",
+        models: ["claude-haiku-4-5-20251001", "claude-opus-4-6"],
+        // The cheaper model is detected but NOT selected → must be ignored.
+        selectedModels: ["claude-opus-4-6"],
+      },
+    };
+    mockStorage.roles = {
+      primary: { provider: "anthropic", model: "claude-opus-4-6" },
+      validator: null,
+    };
+
+    expect(await resolveQaModel()).toEqual({
+      provider: "anthropic",
+      model: "claude-opus-4-6",
+    });
+  });
+
+  it("falls back to detected models when selection is absent (legacy)", async () => {
+    __setPriceIndexForTests({
+      "claude-haiku-4-5-20251001": { inputPer1M: 1, outputPer1M: 5, vision: true, provider: "anthropic" },
+      "claude-opus-4-6": { inputPer1M: 5, outputPer1M: 25, vision: true, provider: "anthropic" },
+    });
+    mockStorage.providerProfiles = {
+      anthropic: {
+        apiKey: "enc",
+        models: ["claude-haiku-4-5-20251001", "claude-opus-4-6"],
+      },
+    };
+    mockStorage.roles = {
+      primary: { provider: "anthropic", model: "claude-opus-4-6" },
+      validator: null,
+    };
+
+    expect(await resolveQaModel()).toEqual({
+      provider: "anthropic",
+      model: "claude-haiku-4-5-20251001",
+    });
+  });
+
+  it("returns null when nothing is detected", async () => {
+    mockStorage.providerProfiles = {};
+    expect(await resolveQaModel()).toBeNull();
   });
 });

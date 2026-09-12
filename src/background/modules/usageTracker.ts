@@ -4,51 +4,49 @@
  */
 
 import { log } from "./constants.js";
+import { LLM_PRESETS } from "./llm/registry.js";
+import { resolveModelInfo, computeUsageCost } from "./llm/pricing.js";
 
 // ============================================
-// Pricing (per million tokens, USD)
+// Cost Calculation (LiteLLM-driven)
 // ============================================
-interface ModelPricing {
-  input: number;       // cache miss input
-  inputCacheHit: number;
-  output: number;
+
+/** Map a legacy usage `source` to a provider preset id. */
+function providerFromSource(source: string): string | undefined {
+  if (source === "claude") return "anthropic";
+  if (source === "deepseek") return "deepseek";
+  if (source === "openai") return "openai";
+  return undefined;
 }
 
-const PRICING: Record<string, ModelPricing> = {
-  // Claude Haiku
-  "claude-haiku-4-5-20251001": { input: 1.0, inputCacheHit: 0.10, output: 5.0 },
-
-  // Claude Sonnet
-  "claude-sonnet-4-6": { input: 3.0, inputCacheHit: 0.30, output: 15.0 },
-
-  // Claude Opus
-  "claude-opus-4-6": { input: 5.0, inputCacheHit: 0.50, output: 25.0 },
-
-  // DeepSeek V4 Flash
-  "deepseek-v4-flash": { input: 0.14, inputCacheHit: 0.0028, output: 0.28 },
-
-  // DeepSeek V4 Pro (with discount auto-expiry)
-  "deepseek-v4-pro": { input: 0.435, inputCacheHit: 0.003625, output: 0.87 },
-};
+export interface UsageTokensInput {
+  inputTokens: number;
+  outputTokens: number;
+  cacheHitTokens?: number;
+  cacheWriteTokens?: number;
+}
 
 /**
- * Get effective pricing for a model, applying time-limited discounts.
- * DeepSeek V4 Pro has a 75% discount until 2026-05-31.
+ * Cost in USD for a request, or null when the model has no LiteLLM price data
+ * (in which case no cost is recorded). Anthropic reports non-cached input
+ * separately; OpenAI-compatible providers include cached tokens in `inputTokens`.
  */
-function getEffectivePricing(model: string): ModelPricing {
-  const p = PRICING[model];
-  if (!p) return { input: 1.0, inputCacheHit: 1.0, output: 5.0 };
+export async function estimateCost(
+  providerId: string | undefined,
+  model: string,
+  usage: UsageTokensInput,
+): Promise<number | null> {
+  if (!providerId) return null;
+  const info = await resolveModelInfo(providerId, model);
+  if (!info) return null;
 
-  // No discount for non-pro models
-  if (model !== "deepseek-v4-pro") return p;
+  const excludesCache = LLM_PRESETS[providerId]?.dialect === "anthropic";
+  const cacheHit = usage.cacheHitTokens ?? 0;
+  const missInput = excludesCache
+    ? usage.inputTokens
+    : Math.max(usage.inputTokens - cacheHit, 0);
 
-  // Discount expires 2026-05-31 (after that, full price applies)
-  const DISCOUNT_END = new Date("2026-06-01T00:00:00Z").getTime();
-  const now = Date.now();
-  if (now < DISCOUNT_END) return p; // Discount still active
-
-  // Full price after discount ends
-  return { input: 1.74, inputCacheHit: 0.0145, output: 3.48 };
+  return computeUsageCost(info, { ...usage, inputTokens: missInput });
 }
 
 // ============================================
@@ -70,7 +68,9 @@ export interface UsageRecord {
   inputTokens: number;
   outputTokens: number;
   cacheHitTokens?: number;
-  costUsd: number;
+  cacheWriteTokens?: number;
+  /** USD cost. Omitted when the model has no LiteLLM price data. */
+  costUsd?: number;
   responseMode: string;
   success: boolean;
   latencyMs: number;
@@ -131,30 +131,23 @@ const MAX_RECORDS = 500;
 const STORAGE_KEY = "usageRecords";
 
 // ============================================
-// Cost Calculation
-// ============================================
-
-export function calculateCost(model: string, inputTokens: number, outputTokens: number, cacheHitTokens?: number): number {
-  const pricing = getEffectivePricing(model);
-  const cacheMissTokens = inputTokens - (cacheHitTokens ?? 0);
-  const cacheHitCost = (Math.max(cacheHitTokens ?? 0, 0) * pricing.inputCacheHit) / 1_000_000;
-  const cacheMissCost = (Math.max(cacheMissTokens, 0) * pricing.input) / 1_000_000;
-  const outputCost = (outputTokens * pricing.output) / 1_000_000;
-  return cacheHitCost + cacheMissCost + outputCost;
-}
-
-// ============================================
 // Track Usage
 // ============================================
 
 export async function trackUsage(
   record: Omit<UsageRecord, "id" | "costUsd">,
 ): Promise<UsageRecord> {
-  const cost = calculateCost(record.model, record.inputTokens, record.outputTokens, record.cacheHitTokens);
+  const providerId = record.provider ?? providerFromSource(record.source);
+  const cost = await estimateCost(providerId, record.model, {
+    inputTokens: record.inputTokens,
+    outputTokens: record.outputTokens,
+    cacheHitTokens: record.cacheHitTokens,
+    cacheWriteTokens: record.cacheWriteTokens,
+  });
   const fullRecord: UsageRecord = {
     ...record,
     id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-    costUsd: cost,
+    ...(cost === null ? {} : { costUsd: cost }),
   };
 
   try {
@@ -180,7 +173,7 @@ export async function trackUsage(
       "[Study Assist] Usage tracked:",
       fullRecord.source,
       fullRecord.model,
-      `$${cost.toFixed(6)}`,
+      cost === null ? "(no price data)" : `$${cost.toFixed(6)}`,
       `${fullRecord.inputTokens}+${fullRecord.outputTokens} tokens`,
     );
   } catch (error) {
@@ -234,7 +227,7 @@ export async function getUsageStats(): Promise<UsageStats> {
   for (const r of records) {
     stats.totalInputTokens += r.inputTokens;
     stats.totalOutputTokens += r.outputTokens;
-    stats.totalCostUsd += r.costUsd;
+    stats.totalCostUsd += r.costUsd ?? 0;
 
     if (r.success) {
       successCount++;
@@ -251,14 +244,14 @@ export async function getUsageStats(): Promise<UsageStats> {
     const day = new Date(r.timestamp).toISOString().split("T")[0];
     if (!stats.byDay[day]) stats.byDay[day] = { requests: 0, cost: 0, tokens: 0 };
     stats.byDay[day].requests++;
-    stats.byDay[day].cost += r.costUsd;
+    stats.byDay[day].cost += r.costUsd ?? 0;
     stats.byDay[day].tokens += r.inputTokens + r.outputTokens;
 
     const isToday = day === today;
 
     if (isToday) {
       stats.todayRequests++;
-      stats.todayCost += r.costUsd;
+      stats.todayCost += r.costUsd ?? 0;
       stats.todayTokens += r.inputTokens + r.outputTokens;
     }
 
@@ -269,12 +262,12 @@ export async function getUsageStats(): Promise<UsageStats> {
       ai.totalRequests++;
       ai.totalInputTokens += r.inputTokens;
       ai.totalOutputTokens += r.outputTokens;
-      ai.totalCostUsd += r.costUsd;
+      ai.totalCostUsd += r.costUsd ?? 0;
       if (isToday) {
         ai.todayRequests++;
         ai.todayInputTokens += r.inputTokens;
         ai.todayOutputTokens += r.outputTokens;
-        ai.todayCostUsd += r.costUsd;
+        ai.todayCostUsd += r.costUsd ?? 0;
       }
     }
 
@@ -285,12 +278,12 @@ export async function getUsageStats(): Promise<UsageStats> {
       provider.totalRequests++;
       provider.totalInputTokens += r.inputTokens;
       provider.totalOutputTokens += r.outputTokens;
-      provider.totalCostUsd += r.costUsd;
+      provider.totalCostUsd += r.costUsd ?? 0;
       if (isToday) {
         provider.todayRequests++;
         provider.todayInputTokens += r.inputTokens;
         provider.todayOutputTokens += r.outputTokens;
-        provider.todayCostUsd += r.costUsd;
+        provider.todayCostUsd += r.costUsd ?? 0;
       }
     }
   }

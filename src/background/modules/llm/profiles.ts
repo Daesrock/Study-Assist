@@ -15,14 +15,20 @@ import type {
   ProviderProfile,
   ProviderRoles,
   RoleAssignment,
+  ModelPriceInfo,
 } from "../constants.js";
+import { logProviders } from "../constants.js";
 import { encryptApiKey, decryptApiKey, isPlainTextKey } from "../crypto.js";
 import type { ProviderPreset } from "./contract.js";
 import { LLM_PRESETS } from "./registry.js";
+import { getPriceIndex, lookupModelInfo, resolveModelInfo } from "./pricing.js";
+import { computeAutoSelection } from "./selection.js";
+import type { SelectionCandidate } from "./selection.js";
 
 const PROFILES_KEY = "providerProfiles";
 const ROLES_KEY = "roles";
 const SCHEMA_KEY = "schemaVersion";
+const QA_MODEL_KEY = "qaModel";
 
 export const CURRENT_SCHEMA_VERSION = 2;
 
@@ -34,13 +40,30 @@ const LEGACY_KEY_MAP: Record<string, string> = {
   deepseek: "deepseekApiKey",
 };
 
+/** True when the value is a non-null, non-array plain object. */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 // ============================================
 // Profiles
 // ============================================
 
 export async function getProviderProfiles(): Promise<Record<string, ProviderProfile>> {
   const result = await chrome.storage.local.get([PROFILES_KEY]);
-  return (result[PROFILES_KEY] as Record<string, ProviderProfile>) ?? {};
+  const value = result[PROFILES_KEY];
+  if (value === undefined || value === null) return {};
+
+  // Guard against corrupted/legacy shapes (e.g. an Array from an older build).
+  // A non-object value can never hold a key, and writing named props onto an
+  // Array is silently dropped by structured serialization — reset it to {}.
+  if (!isPlainObject(value)) {
+    logProviders("providerProfiles has an invalid shape; treating as empty", {
+      type: Array.isArray(value) ? "array" : typeof value,
+    });
+    return {};
+  }
+  return value as Record<string, ProviderProfile>;
 }
 
 export async function getProfile(presetId: string): Promise<ProviderProfile | null> {
@@ -48,13 +71,21 @@ export async function getProfile(presetId: string): Promise<ProviderProfile | nu
   return profiles[presetId] ?? null;
 }
 
+// Serialize profile writes so concurrent patches never clobber each other and
+// so a corrupted (non-object) store is always replaced by a real object.
+let profileWriteChain: Promise<void> = Promise.resolve();
+
 export async function saveProfile(
   presetId: string,
   patch: Partial<ProviderProfile>,
 ): Promise<void> {
-  const profiles = await getProviderProfiles();
-  profiles[presetId] = { ...(profiles[presetId] ?? {}), ...patch };
-  await chrome.storage.local.set({ [PROFILES_KEY]: profiles });
+  const run = profileWriteChain.then(async () => {
+    const profiles = await getProviderProfiles();
+    profiles[presetId] = { ...(profiles[presetId] ?? {}), ...patch };
+    await chrome.storage.local.set({ [PROFILES_KEY]: profiles });
+  });
+  profileWriteChain = run.catch(() => {});
+  return run;
 }
 
 /**
@@ -113,12 +144,16 @@ export interface ResolvedRole {
   apiKey: string;
   thinking: boolean;
   vision: boolean;
+  /** Whether the model itself supports reasoning/effort parameters. */
+  reasoning: boolean;
+  /** Whether the model supports Anthropic adaptive thinking. */
+  adaptiveThinking: boolean;
 }
 
-/** Effective vision-capable model list: user override, else curated. */
+/** Effective vision-capable model list for a provider (detected + overrides). */
 export async function getEffectiveVisionModels(presetId: string): Promise<string[]> {
   const profile = await getProfile(presetId);
-  return profile?.visionModels ?? LLM_PRESETS[presetId]?.visionModels ?? [];
+  return profile?.visionModels ?? [];
 }
 
 /**
@@ -161,13 +196,20 @@ export async function resolveRole(
   const apiKey = await getProviderKey(role.provider);
   if (!apiKey) return null;
 
+  // Models come exclusively from the provider catalog (or user input); there
+  // is no shipped fallback. An unassigned model makes the role unusable.
+  const model = role.model?.trim();
+  if (!model) return null;
+
   const profile = await getProfile(role.provider);
   const thinking = profile?.thinking ?? preset.defaultThinking;
-  const model = role.model || preset.defaultModels[0];
-  const visionModels = profile?.visionModels ?? preset.visionModels;
+  const visionModels = profile?.visionModels ?? [];
   const vision = visionModels.includes(model);
+  const info = await resolveModelInfo(role.provider, model);
+  const reasoning = info?.reasoning === true;
+  const adaptiveThinking = info?.adaptive === true;
 
-  return { preset, model, apiKey, thinking, vision };
+  return { preset, model, apiKey, thinking, vision, reasoning, adaptiveThinking };
 }
 
 // ============================================
@@ -181,7 +223,11 @@ export interface PublicProviderProfile {
   models: string[];
   customModels: string[];
   visionModels: string[];
+  selectedModels: string[];
+  selectionMode: "auto" | "manual";
   lastSync: number | null;
+  /** LiteLLM price/capability info per visible model id (null when unknown). */
+  modelInfo: Record<string, ModelPriceInfo | null>;
 }
 
 export interface ProviderState {
@@ -193,16 +239,27 @@ export interface ProviderState {
 /** State for the providers page / popup. Never includes API keys. */
 export async function getProviderState(): Promise<ProviderState> {
   const stored = await getProviderProfiles();
+  const index = await getPriceIndex();
   const profiles: PublicProviderProfile[] = Object.values(LLM_PRESETS).map((preset) => {
     const profile = stored[preset.id];
+    const models = profile?.models ?? [];
+    const customModels = profile?.customModels ?? [];
+    const modelInfo: Record<string, ModelPriceInfo | null> = {};
+    for (const id of new Set([...models, ...customModels])) {
+      modelInfo[id] = lookupModelInfo(index, preset.id, id);
+    }
     return {
       id: preset.id,
       hasKey: !!profile?.apiKey,
       thinking: profile?.thinking ?? preset.defaultThinking,
-      models: profile?.models ?? [],
-      customModels: profile?.customModels ?? [],
-      visionModels: profile?.visionModels ?? preset.visionModels,
+      models,
+      customModels,
+      visionModels: profile?.visionModels ?? [],
+      selectedModels:
+        profile?.selectedModels ?? [...new Set([...models, ...customModels])],
+      selectionMode: profile?.selectionMode ?? "auto",
       lastSync: profile?.lastSync ?? null,
+      modelInfo,
     };
   });
   return {
@@ -220,17 +277,113 @@ export async function clearProviderKey(presetId: string): Promise<void> {
   await chrome.storage.local.set({ [PROFILES_KEY]: profiles });
 }
 
-/** Toggle whether a model accepts image input. */
+/** Toggle whether a model accepts image input (records a manual override). */
 export async function setModelVision(
   presetId: string,
   model: string,
   vision: boolean,
 ): Promise<void> {
-  const current = await getEffectiveVisionModels(presetId);
-  const next = new Set(current);
-  if (vision) next.add(model);
-  else next.delete(model);
-  await saveProfile(presetId, { visionModels: [...next] });
+  const profile = await getProfile(presetId);
+  const overrides = { ...(profile?.visionOverrides ?? {}), [model]: vision };
+  const current = new Set(profile?.visionModels ?? []);
+  if (vision) current.add(model);
+  else current.delete(model);
+  await saveProfile(presetId, {
+    visionOverrides: overrides,
+    visionModels: [...current],
+  });
+}
+
+/**
+ * Store a fresh catalog sync. Vision is derived from LiteLLM `supports_vision`
+ * (manual overrides always win). Selection is auto-curated with the hybrid
+ * heuristic unless the user has switched this provider to manual mode, in
+ * which case their list is preserved. Models assigned to a role are always
+ * kept so a configured role never disappears.
+ */
+export async function applyDetectedModels(
+  presetId: string,
+  candidates: SelectionCandidate[],
+): Promise<void> {
+  const profile = await getProfile(presetId);
+  const overrides = profile?.visionOverrides ?? {};
+  const modelIds = candidates.map((c) => c.id);
+
+  const visionModels = candidates
+    .filter((c) => {
+      const override = overrides[c.id];
+      if (override !== undefined) return override;
+      return c.info?.vision === true;
+    })
+    .map((c) => c.id);
+
+  const mode = profile?.selectionMode ?? "auto";
+  const custom = new Set(profile?.customModels ?? []);
+  const present = new Set(modelIds);
+  const previous = profile?.selectedModels ?? [];
+
+  let selectedModels: string[];
+  if (mode === "manual") {
+    // Keep the user's list, restricted to models that still exist, plus custom.
+    selectedModels = previous.filter(
+      (id) => present.has(id) || custom.has(id),
+    );
+  } else {
+    const customSelected = [...custom];
+    selectedModels = [
+      ...new Set([...computeAutoSelection(candidates), ...customSelected]),
+    ];
+  }
+
+  // Never drop a model that a role is using.
+  const roles = await getRoles();
+  for (const role of [roles.primary, roles.validator]) {
+    if (role && role.provider === presetId && role.model) {
+      if (!selectedModels.includes(role.model)) selectedModels.push(role.model);
+    }
+  }
+
+  await saveProfile(presetId, {
+    models: modelIds,
+    visionModels,
+    selectedModels,
+    lastSync: Date.now(),
+  });
+  logProviders("detected models stored", {
+    provider: presetId,
+    total: modelIds.length,
+    vision: visionModels.length,
+    selected: selectedModels.length,
+    mode,
+  });
+}
+
+/** Toggle whether a model is exposed in the popup role selectors. */
+export async function setModelSelected(
+  presetId: string,
+  model: string,
+  selected: boolean,
+): Promise<void> {
+  const profile = await getProfile(presetId);
+  const current = new Set(
+    profile?.selectedModels ??
+      [...(profile?.models ?? []), ...(profile?.customModels ?? [])],
+  );
+  if (selected) current.add(model);
+  else current.delete(model);
+  // Any manual edit switches the provider to manual selection.
+  await saveProfile(presetId, {
+    selectedModels: [...current],
+    selectionMode: "manual",
+  });
+}
+
+/** Switch a provider between auto-curated and manual model selection. */
+export async function setSelectionMode(
+  presetId: string,
+  mode: "auto" | "manual",
+): Promise<void> {
+  await saveProfile(presetId, { selectionMode: mode });
 }
 
 /** Add a manually-entered model id to a provider. */
@@ -240,7 +393,74 @@ export async function addCustomModel(presetId: string, model: string): Promise<v
   const profile = await getProfile(presetId);
   const current = profile?.customModels ?? [];
   if (current.includes(trimmed)) return;
-  await saveProfile(presetId, { customModels: [...current, trimmed] });
+  const selected = new Set(
+    profile?.selectedModels ??
+      [...(profile?.models ?? []), ...(profile?.customModels ?? [])],
+  );
+  selected.add(trimmed);
+  await saveProfile(presetId, {
+    customModels: [...current, trimmed],
+    selectedModels: [...selected],
+  });
+}
+
+// ============================================
+// QA model selection
+// ============================================
+
+/** Model used by the QA sandbox, or null to use the configured roles. */
+export async function getQaModel(): Promise<RoleAssignment | null> {
+  const result = await chrome.storage.local.get([QA_MODEL_KEY]);
+  const value = result[QA_MODEL_KEY] as RoleAssignment | null | undefined;
+  if (!value || !value.provider || !value.model) return null;
+  return { provider: value.provider, model: value.model };
+}
+
+export async function saveQaModel(role: RoleAssignment | null): Promise<void> {
+  await chrome.storage.local.set({ [QA_MODEL_KEY]: role });
+}
+
+/**
+ * Effective QA model: the explicit user choice, otherwise the cheapest
+ * selected model of the primary provider (falling back to any selected model,
+ * then to the first available one).
+ */
+export async function resolveQaModel(): Promise<RoleAssignment | null> {
+  const explicit = await getQaModel();
+  if (explicit) return explicit;
+
+  const state = await getProviderState();
+  const candidates: Array<{ provider: string; model: string; cost: number | null }> = [];
+  for (const profile of state.profiles) {
+    // Only models the user selected in the Providers page are eligible.
+    const ids = new Set(profile.selectedModels ?? []);
+    for (const model of ids) {
+      const info = profile.modelInfo?.[model] ?? null;
+      const cost = info
+        ? (info.inputPer1M ?? 0) + (info.outputPer1M ?? 0)
+        : null;
+      candidates.push({ provider: profile.id, model, cost });
+    }
+  }
+  if (candidates.length === 0) return null;
+
+  const primaryProvider = state.roles.primary?.provider;
+  const preferred = primaryProvider
+    ? candidates.filter((c) => c.provider === primaryProvider)
+    : [];
+  const pool = preferred.length ? preferred : candidates;
+
+  const priced = pool.filter((c) => c.cost !== null);
+  const chosen =
+    priced.length > 0
+      ? priced.reduce((best, c) => (c.cost! < best.cost! ? c : best))
+      : pool[0];
+
+  logProviders("qa model auto-selected", {
+    provider: chosen.provider,
+    model: chosen.model,
+  });
+  return { provider: chosen.provider, model: chosen.model };
 }
 
 // ============================================
@@ -279,43 +499,49 @@ export async function migrateProviderConfig(): Promise<void> {
   const claudeKey = stored["claudeApiKey"] as string | undefined;
   const deepseekKey = stored["deepseekApiKey"] as string | undefined;
 
-  // Seed provider profiles (never delete the legacy keys).
-  const anthropic = profiles.anthropic ?? {};
-  if (claudeKey && !anthropic.apiKey) anthropic.apiKey = await toEncrypted(claudeKey);
-  if (anthropic.thinking === undefined) {
-    anthropic.thinking = stored["claudeThinking"] === true;
-  }
-  if (anthropic.apiKey || anthropic.thinking !== undefined) {
+  // Seed provider profiles (never delete the legacy keys). Thinking is only
+  // inherited from a legacy flag when that flag actually exists — otherwise
+  // the provider default applies (thinking on by default).
+  if (claudeKey) {
+    const anthropic = profiles.anthropic ?? {};
+    if (!anthropic.apiKey) anthropic.apiKey = await toEncrypted(claudeKey);
+    if (stored["claudeThinking"] !== undefined) {
+      anthropic.thinking = stored["claudeThinking"] === true;
+    }
     profiles.anthropic = anthropic;
   }
 
-  const deepseek = profiles.deepseek ?? {};
-  if (deepseekKey && !deepseek.apiKey) deepseek.apiKey = await toEncrypted(deepseekKey);
-  if (deepseek.thinking === undefined) {
-    deepseek.thinking = stored["deepseekThinking"] !== false;
-  }
-  if (deepseek.apiKey || deepseek.thinking !== undefined) {
+  if (deepseekKey) {
+    const deepseek = profiles.deepseek ?? {};
+    if (!deepseek.apiKey) deepseek.apiKey = await toEncrypted(deepseekKey);
+    if (stored["deepseekThinking"] !== undefined) {
+      deepseek.thinking = stored["deepseekThinking"] === true;
+    }
     profiles.deepseek = deepseek;
   }
 
-  // Seed roles only when the user hasn't assigned any yet.
+  // Seed roles only when the user hasn't assigned any yet. Models are only
+  // taken from the user's own legacy selection — never from a shipped default
+  // (models now come exclusively from the provider catalog).
   if (rolesEmpty) {
     const useDeepSeek = stored["useDeepSeek"] === true;
     const deepseekOnly = stored["deepseekOnly"] === true;
-    const claudeModel =
-      (stored["claudeModel"] as string) ||
-      LLM_PRESETS.anthropic.defaultModels[0];
-    const deepseekModel =
-      (stored["deepseekModel"] as string) ||
-      LLM_PRESETS.deepseek.defaultModels[0];
+    const claudeModel = (stored["claudeModel"] as string | undefined)?.trim();
+    const deepseekModel = (stored["deepseekModel"] as string | undefined)?.trim();
 
-    roles.primary =
-      useDeepSeek && deepseekKey
+    const deepseekRole =
+      deepseekKey && deepseekModel
         ? { provider: "deepseek", model: deepseekModel }
-        : { provider: "anthropic", model: claudeModel };
-    roles.validator = deepseekOnly
-      ? null
-      : { provider: "anthropic", model: claudeModel };
+        : null;
+    const claudeRole =
+      claudeKey && claudeModel
+        ? { provider: "anthropic", model: claudeModel }
+        : null;
+
+    roles.primary = useDeepSeek && deepseekRole ? deepseekRole : claudeRole;
+    roles.validator = deepseekOnly ? null : claudeRole;
+
+    logProviders("migrated roles from legacy config", roles);
   }
 
   await chrome.storage.local.set({

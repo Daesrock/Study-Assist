@@ -21,12 +21,13 @@ When you explicitly activate the extension on an allowed domain, it reads visibl
 
 The extension does **not** read page content automatically. It only activates when you press a keyboard shortcut or click the extension button.
 
-### 2.2 API Keys (Local Storage Only)
+### 2.2 API Keys (Local Storage Only, Encrypted)
 
-- Claude (Anthropic) API key — optional, provided by you
+- Anthropic (Claude) API key — optional, provided by you
 - DeepSeek API key — optional, provided by you
+- OpenAI API key — optional, provided by you
 
-Keys are stored locally in your browser using the Chrome Storage API. They are never transmitted to any server other than the respective API endpoint during authenticated requests.
+Keys are stored locally in your browser using the Chrome Storage API and are encrypted at rest with AES-GCM 256-bit (the encryption key is derived from your browser installation). They are never transmitted to any server other than the respective API endpoint during authenticated requests.
 
 ### 2.3 Usage Statistics (Local Storage Only)
 
@@ -47,13 +48,18 @@ The extension communicates with the following third-party APIs only when you act
 
 | Service                | Endpoint                    | Data Sent                                                | When                                                               |
 | ---------------------- | --------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------ |
-| **Anthropic (Claude)** | `https://api.anthropic.com` | Question text, answer options, your API key (via header) | Only when you activate analysis and have a Claude key configured   |
+| **Anthropic (Claude)** | `https://api.anthropic.com` | Question text, answer options, your API key (via header) | Only when you activate analysis and have a Anthropic key configured |
 | **DeepSeek**           | `https://api.deepseek.com`  | Question text, answer options, your API key (via header) | Only when you activate analysis and have a DeepSeek key configured |
+| **OpenAI**             | `https://api.openai.com`    | Question text, answer options, your API key (via header) | Only when you activate analysis and have an OpenAI key configured  |
+| **LiteLLM price catalog** | `https://raw.githubusercontent.com` | Nothing (plain GET request, no user data or keys) | Only when you manually refresh model prices, or automatically on a periodic cache miss |
 
 These services have their own privacy policies:
 
 - Anthropic: https://www.anthropic.com/privacy
 - DeepSeek: https://www.deepseek.com/privacy
+- OpenAI: https://openai.com/privacy
+
+The LiteLLM catalog is fetched from a public GitHub repository to display model prices and vision capabilities. No question content, API key, or usage data is ever sent to it.
 
 ## 4. What the Extension Does NOT Do
 
@@ -98,7 +104,7 @@ The extension includes a user-defined domain allowlist. It will only operate on 
 | `activeTab`        | Access visible content on the current tab when activated         |
 | `tabs`             | Detect navigation events to reinitialize on allowed pages        |
 | `scripting`        | Inject content scripts for question detection on allowed domains |
-| `host_permissions` | Send requests to Anthropic and DeepSeek API endpoints only       |
+| `host_permissions` | Send requests to the configured AI API endpoints and to the public LiteLLM price catalog (no user data)|
 
 ## 9. Children's Privacy
 

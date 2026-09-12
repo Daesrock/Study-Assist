@@ -41,11 +41,12 @@ import {
   extractClaudeQuickAnswer,
 } from "./parsing.js";
 import { getDecryptedApiKey } from "./crypto.js";
-import { trackUsage, calculateCost } from "./usageTracker.js";
+import { trackUsage, estimateCost } from "./usageTracker.js";
 import { checkRateLimit, recordRequest } from "./rateLimiter.js";
 import { streamClaudeResponse } from "./streaming.js";
 import { runProvider } from "./llm/execute.js";
-import { getRoles, resolveRole, canRoleHandle, ensureProviderConfig } from "./llm/profiles.js";
+import { fetchModels } from "./llm/catalog.js";
+import { getRoles, resolveRole, canRoleHandle, ensureProviderConfig, resolveQaModel, getProviderState } from "./llm/profiles.js";
 import type { ResolvedRole } from "./llm/profiles.js";
 import { getPreset } from "./llm/registry.js";
 import type { ProviderPreset } from "./llm/contract.js";
@@ -203,36 +204,132 @@ export async function testProviderKey(
   if (!apiKey) return { success: false, error: "Missing API key" };
 
   try {
+    // Validate the key by listing models. This needs no hardcoded model and
+    // doubles as the catalog sync, so a valid key immediately yields models.
+    const outcome = await fetchModels(preset, apiKey);
+    if (outcome.success) return { success: true };
+
+    const error = outcome.error || `API Error (${preset.label})`;
+    if (error.includes("429")) {
+      return {
+        success: true,
+        warning: "API key is valid but rate limited. It will work when the limit resets.",
+      };
+    }
+    return { success: false, error };
+  } catch (error) {
+    return { success: false, error: `Exception: ${(error as Error).message}` };
+  }
+}
+
+/**
+ * End-to-end connection test: sends a minimal prompt through the real pipeline
+ * and expects the model to reply. Uses the given model or the cheapest selected
+ * one. This is what catches parameter/capability problems (e.g. reasoning
+ * params on models that don't support them).
+ */
+export async function testProviderConnection(
+  providerId: string,
+  model?: string,
+): Promise<
+  MessageResponse & {
+    model?: string;
+    text?: string;
+    inputTokens?: number;
+    outputTokens?: number;
+    cacheHitTokens?: number;
+    costUsd?: number;
+  }
+> {
+  let preset: ProviderPreset;
+  try {
+    preset = getPreset(providerId);
+  } catch {
+    return { success: false, error: `Unknown provider: ${providerId}` };
+  }
+
+  let chosen = model?.trim();
+  if (!chosen) {
+    const state = await getProviderState();
+    const profile = state.profiles.find((p) => p.id === providerId);
+    const selected = profile?.selectedModels ?? [];
+    const priced = selected
+      .map((id) => ({ id, info: profile?.modelInfo?.[id] ?? null }))
+      .filter((x): x is { id: string; info: NonNullable<typeof x.info> } => !!x.info);
+    chosen =
+      priced.length > 0
+        ? priced.reduce((best, x) => {
+            const cost = (y: typeof x) => (y.info.inputPer1M ?? 0) + (y.info.outputPer1M ?? 0);
+            return cost(x) < cost(best) ? x : best;
+          }).id
+        : selected[0];
+  }
+
+  if (!chosen) {
+    return { success: false, error: "No model selected for this provider." };
+  }
+
+  const role = await resolveRole({ provider: providerId, model: chosen });
+  if (!role) {
+    return { success: false, model: chosen, error: "Provider not configured or model unavailable." };
+  }
+
+  const maxTokens = role.reasoning ? 2048 : 64;
+
+  try {
     const run = await runProvider({
-      preset,
-      apiKey,
-      model: preset.defaultModels[0],
-      content: "Hello, respond with just OK to confirm.",
-      maxTokens: 10,
-      thinking: false,
+      preset: role.preset,
+      apiKey: role.apiKey,
+      model: role.model,
+      content: "Responde únicamente con: OK",
+      maxTokens,
+      thinking: role.thinking,
+      supportsReasoning: role.reasoning,
+      supportsAdaptiveThinking: role.adaptiveThinking,
+      reasoningEffort: "low",
       retries: 0,
       timeout: 30000,
     });
 
     await logError({
-      type: "testProviderKey",
+      type: "testProviderConnection",
       url: run.url,
       status: run.status ?? undefined,
       responseBody: run.raw,
     });
 
-    if (run.result.success) return { success: true };
-
-    if (run.status === 429) {
-      return { success: true, warning: "API key is valid but rate limited. It will work when the limit resets." };
+    if (!run.result.success) {
+      log(`[Study Assist] Connection test ${preset.label}/${role.model} failed`, {
+        status: run.status,
+        error: run.result.error,
+      });
+      return {
+        success: false,
+        model: role.model,
+        error: run.result.error?.message || `API Error (${run.status ?? "network"})`,
+      };
     }
 
+    const usage = run.result.usage;
+    const cost = await estimateCost(role.preset.id, role.model, {
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      cacheHitTokens: usage.cacheHitTokens,
+      cacheWriteTokens: usage.cacheWriteTokens,
+    });
+    const text = (run.result.text || "").trim();
+    log(`[Study Assist] Connection test ${preset.label}/${role.model} OK:`, text);
     return {
-      success: false,
-      error: run.result.error?.message || `API Error (${run.status ?? "network"})`,
+      success: true,
+      model: role.model,
+      text,
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      cacheHitTokens: usage.cacheHitTokens,
+      ...(cost === null ? {} : { costUsd: cost }),
     };
   } catch (error) {
-    return { success: false, error: `Exception: ${(error as Error).message}` };
+    return { success: false, model: chosen, error: `Exception: ${(error as Error).message}` };
   }
 }
 
@@ -440,10 +537,32 @@ export async function analyzeQuestion(context: AnalysisContext, onStatus?: (stat
     // did not run (unpacked reloads / MV3 worker wake-ups).
     await ensureProviderConfig();
     const roles = await getRoles();
-    const primary = await resolveRole(roles.primary);
-    const validator = await resolveRole(roles.validator);
+    let primary = await resolveRole(roles.primary);
+    let validator = await resolveRole(roles.validator);
+
+    // QA sandbox: when a test model is selected, force it into both slots so
+    // tests always exercise the chosen (often cheapest) model.
+    if (context.qaMode) {
+      const qaModel = await resolveQaModel();
+      if (qaModel) {
+        const qaRole = await resolveRole({
+          provider: qaModel.provider,
+          model: qaModel.model,
+        });
+        if (qaRole) {
+          primary = qaRole;
+          validator = qaRole;
+          log(`[Study Assist] QA mode → using ${qaRole.preset.label} / ${qaRole.model}`);
+        } else {
+          log(
+            `[Study Assist] QA model ${qaModel.provider}/${qaModel.model} not usable → configured roles`,
+          );
+        }
+      }
+    }
 
     if (!primary && !validator) {
+      log("[Study Assist] Analysis aborted: no provider configured");
       return { success: false, error: "No provider configured. Add an API key in the dashboard." };
     }
 
@@ -457,6 +576,7 @@ export async function analyzeQuestion(context: AnalysisContext, onStatus?: (stat
 
     if (!effectivePrimary && !effectiveValidator) {
       const reason = hasImages ? "images" : isMatching ? "matching questions" : "this request";
+      log(`[Study Assist] Analysis aborted: no configured provider supports ${reason}`);
       return { success: false, error: `No configured provider supports ${reason}.` };
     }
 
@@ -519,6 +639,7 @@ export async function analyzeQuestion(context: AnalysisContext, onStatus?: (stat
           inputTokens: primaryResult.inputTokens || 0,
           outputTokens: primaryResult.outputTokens || 0,
           cacheHitTokens: primaryResult.cacheHitTokens,
+          cacheWriteTokens: primaryResult.cacheWriteTokens,
           responseMode: context.responseMode,
           success: true,
           latencyMs: Date.now() - startTime,
@@ -544,6 +665,7 @@ export async function analyzeQuestion(context: AnalysisContext, onStatus?: (stat
             inputTokens: primaryResult.inputTokens || 0,
             outputTokens: primaryResult.outputTokens || 0,
             cacheHitTokens: primaryResult.cacheHitTokens,
+          cacheWriteTokens: primaryResult.cacheWriteTokens,
             responseMode: context.responseMode,
             success: true,
             latencyMs: Date.now() - startTime,
@@ -588,6 +710,7 @@ export async function analyzeQuestion(context: AnalysisContext, onStatus?: (stat
 
     return validatorResponse;
   } catch (error) {
+    log("[Study Assist] Analysis exception:", (error as Error).message, (error as Error).stack);
     await logError({ type: "analyzeQuestion_exception", error: (error as Error).message, stack: (error as Error).stack });
 
     if ((error as Error).message.includes("Failed to fetch")) {
@@ -619,13 +742,21 @@ export async function analyzeWithPrimary(
     const controller = new AbortController();
     setActiveDeepSeekController(controller);
 
+    let maxTokens = 2048;
+    if (role.preset.id === "openai" && role.reasoning) {
+      // Reasoning tokens count toward the completion budget on OpenAI models.
+      maxTokens = 8192;
+    }
+
     const run = await runProvider({
       preset: role.preset,
       apiKey: role.apiKey,
       model: role.model,
       content: prompt,
-      maxTokens: 2048,
+      maxTokens,
       thinking: role.thinking,
+      supportsReasoning: role.reasoning,
+      supportsAdaptiveThinking: role.adaptiveThinking,
       reasoningEffort: "high",
       retries: 0,
       timeout: role.thinking ? 120000 : 60000,
@@ -666,7 +797,12 @@ export async function analyzeWithPrimary(
     if (!result.success) {
       const skipRetry = result.error ? !result.error.retryable : false;
       const errorDescription = result.error?.message || `${role.preset.label} API error`;
-      log(`[Study Assist] ${role.preset.label} error${skipRetry ? " (non-retryable)" : ""}: ${errorDescription}`);
+      log(`[Study Assist] ${role.preset.label} error${skipRetry ? " (non-retryable)" : ""}: ${errorDescription}`, {
+        model: role.model,
+        status: run.status,
+        kind: result.error?.kind,
+        body: run.raw,
+      });
       return { success: false, error: errorDescription, skipRetry };
     }
 
@@ -691,6 +827,7 @@ export async function analyzeWithPrimary(
     parsed.inputTokens = result.usage.inputTokens;
     parsed.outputTokens = result.usage.outputTokens;
     parsed.cacheHitTokens = result.usage.cacheHitTokens;
+    parsed.cacheWriteTokens = result.usage.cacheWriteTokens;
     return parsed;
   } catch (error) {
     setActiveDeepSeekController(null);
@@ -824,6 +961,10 @@ export async function analyzeWithValidator(
   if (shouldUseThinking) {
     maxTokens = 4096;
   }
+  if (role.preset.id === "openai" && role.reasoning) {
+    // Reasoning tokens count toward the completion budget on OpenAI models.
+    maxTokens = 8192;
+  }
 
   log("[Study Assist] Validator config:", { model: role.model, maxTokens, hasImages, hasPrimaryAnalysis: !!primaryAnalysis, thinking: shouldUseThinking });
 
@@ -834,6 +975,8 @@ export async function analyzeWithValidator(
     content: messageContent,
     maxTokens,
     thinking: shouldUseThinking,
+    supportsReasoning: role.reasoning,
+    supportsAdaptiveThinking: role.adaptiveThinking,
     retries: 2,
     timeout: 45000,
   });
@@ -866,6 +1009,12 @@ export async function analyzeWithValidator(
     return { success: false, error: `${role.preset.label} cancelled` };
   }
   if (!runResult.success) {
+    log(`[Study Assist] Validator ${role.preset.label} error: ${runResult.error?.message || "unknown"}`, {
+      model: role.model,
+      status: run.status,
+      kind: runResult.error?.kind,
+      body: run.raw,
+    });
     return { success: false, error: runResult.error?.message || `${role.preset.label} API error` };
   }
 
@@ -895,6 +1044,8 @@ PLEASE RESPOND AGAIN with the CORRECT matches. Only output the match pairs — n
         content: strictMessageContent,
         maxTokens,
         thinking: shouldUseThinking,
+        supportsReasoning: role.reasoning,
+        supportsAdaptiveThinking: role.adaptiveThinking,
         retries: 2,
         timeout: 45000,
       });
@@ -936,6 +1087,7 @@ PLEASE RESPOND AGAIN with the CORRECT matches. Only output the match pairs — n
     inputTokens: realInputTokens,
     outputTokens: realOutputTokens,
     cacheHitTokens: usage.cacheHitTokens,
+    cacheWriteTokens: usage.cacheWriteTokens,
     responseMode: context.responseMode,
     success: true,
     latencyMs: Date.now() - startTime,
@@ -1084,12 +1236,13 @@ export async function analyzeQuestionStreaming(
     );
 
     // Track usage with real token counts from streaming
-    await trackUsage({
+    const tracked = await trackUsage({
       timestamp: Date.now(),
       questionText: context.questionText.substring(0, 200),
       questionType: context.questionType,
       answer: result.fullText.substring(0, 200),
       source: "claude",
+      provider: "anthropic",
       model,
       inputTokens: result.inputTokens,
       outputTokens: result.outputTokens,
@@ -1105,7 +1258,7 @@ export async function analyzeQuestionStreaming(
       fullText: result.fullText,
       inputTokens: result.inputTokens,
       outputTokens: result.outputTokens,
-      cost: calculateCost(model, result.inputTokens, result.outputTokens),
+      cost: tracked.costUsd ?? 0,
     });
   } catch (error) {
     if ((error as Error).name !== "AbortError") {

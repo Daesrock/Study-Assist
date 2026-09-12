@@ -46,17 +46,18 @@ describe("openaiCompat.buildOpenAiChatRequest", () => {
     });
   });
 
-  it("disables thinking when thinking=false", () => {
+  it("omits thinking when thinking=false", () => {
     const { body } = buildOpenAiChatRequest({
       baseUrl: "https://api.deepseek.com/",
       apiKey: "sk-test",
-      model: "deepseek-v4-flash",
+      model: "deepseek-chat",
       messages: [{ role: "user", content: "hi" }],
       maxTokens: 2048,
       thinking: false,
       reasoningKind: "deepseek",
     });
-    expect((body as { thinking: { type: string } }).thinking).toEqual({ type: "disabled" });
+    expect(body).not.toHaveProperty("thinking");
+    expect(body).not.toHaveProperty("reasoning_effort");
   });
 
   it("omits thinking for the openai-effort kind", () => {
@@ -71,6 +72,20 @@ describe("openaiCompat.buildOpenAiChatRequest", () => {
     });
     expect(body).not.toHaveProperty("thinking");
     expect((body as { reasoning_effort: string }).reasoning_effort).toBe("medium");
+  });
+
+  it("uses max_completion_tokens when configured (OpenAI)", () => {
+    const { body } = buildOpenAiChatRequest({
+      baseUrl: "https://api.openai.com/v1",
+      apiKey: "sk-test",
+      model: "gpt-5.1",
+      messages: [{ role: "user", content: "hi" }],
+      maxTokens: 2048,
+      maxTokensParam: "max_completion_tokens",
+      reasoningKind: "openai-effort",
+    });
+    expect(body).toHaveProperty("max_completion_tokens", 2048);
+    expect(body).not.toHaveProperty("max_tokens");
   });
 
   it("strips trailing slashes from baseUrl", () => {

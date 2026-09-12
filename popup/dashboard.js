@@ -112,12 +112,123 @@ document.getElementById("last-response-btn").addEventListener("click", () => {
 // Data Loading
 // ============================================
 
+let cachedProviderState = null;
+let cachedQaModel = null;
+
+function collectQaOptions(state) {
+  if (!state || !state.profiles) return [];
+  const options = [];
+  for (const profile of state.profiles) {
+    const preset = (state.presets || []).find((p) => p.id === profile.id);
+    const providerLabel = preset ? preset.label : profile.id;
+    // Only models the user selected in the Providers page are offered.
+    const selected =
+      profile.selectedModels ?? [
+        ...(profile.models || []),
+        ...(profile.customModels || []),
+      ];
+    for (const model of [...new Set(selected)]) {
+      options.push({
+        value: `${profile.id}::${model}`,
+        provider: profile.id,
+        model,
+        providerLabel,
+        info: (profile.modelInfo || {})[model] || null,
+      });
+    }
+  }
+
+  // Keep the currently saved QA model visible even if it is no longer selected.
+  if (cachedQaModel && cachedQaModel.provider && cachedQaModel.model) {
+    const value = `${cachedQaModel.provider}::${cachedQaModel.model}`;
+    if (!options.some((o) => o.value === value)) {
+      const profile = state.profiles.find((p) => p.id === cachedQaModel.provider);
+      const preset = (state.presets || []).find((p) => p.id === cachedQaModel.provider);
+      options.push({
+        value,
+        provider: cachedQaModel.provider,
+        model: cachedQaModel.model,
+        providerLabel: preset ? preset.label : cachedQaModel.provider,
+        info:
+          (profile && profile.modelInfo ? profile.modelInfo[cachedQaModel.model] : null) ||
+          null,
+      });
+    }
+  }
+
+  return options;
+}
+
+function cheapestQaOption(state, options) {
+  const primary = state && state.roles ? state.roles.primary : null;
+  const preferred = primary ? options.filter((o) => o.provider === primary.provider) : [];
+  const pool = preferred.length ? preferred : options;
+  const priced = pool.filter((o) => o.info);
+  if (!priced.length) return pool[0] || null;
+  const costOf = (o) => (o.info.inputPer1M || 0) + (o.info.outputPer1M || 0);
+  return priced.reduce((best, o) => (costOf(o) < costOf(best) ? o : best));
+}
+
+function formatQaPrice(option) {
+  if (!option || !option.info) return "";
+  const input = Math.round((option.info.inputPer1M || 0) * 1000) / 1000;
+  const output = Math.round((option.info.outputPer1M || 0) * 1000) / 1000;
+  return ` ($${input}/$${output})`;
+}
+
+function renderQaModelSelector() {
+  const options = collectQaOptions(cachedProviderState);
+  if (options.length === 0) {
+    return `<div class="qa-model-row"><span class="qa-model-empty">Configura un proveedor y selecciona modelos en Proveedores para elegir el modelo de las pruebas.</span></div>`;
+  }
+
+  const cheapest = cheapestQaOption(cachedProviderState, options);
+  const selectedValue =
+    cachedQaModel && cachedQaModel.model
+      ? `${cachedQaModel.provider}::${cachedQaModel.model}`
+      : "auto";
+  const autoLabel = cheapest
+    ? `Automático · ${cheapest.providerLabel} · ${cheapest.model}${formatQaPrice(cheapest)}`
+    : "Automático (usar roles configurados)";
+
+  // Group by provider, following the preset order.
+  const providerOrder = (cachedProviderState.presets || []).map((p) => p.id);
+  for (const o of options) {
+    if (!providerOrder.includes(o.provider)) providerOrder.push(o.provider);
+  }
+  const optionHtml = providerOrder
+    .map((providerId) => {
+      const items = options.filter((o) => o.provider === providerId);
+      if (items.length === 0) return "";
+      const rows = items
+        .map((o) => {
+          const label = `${o.model}${formatQaPrice(o)}`;
+          const selected = o.value === selectedValue ? " selected" : "";
+          return `<option value="${escapeAttr(o.value)}"${selected}>${escapeHtml(label)}</option>`;
+        })
+        .join("");
+      return `<optgroup label="${escapeAttr(items[0].providerLabel)}">${rows}</optgroup>`;
+    })
+    .join("");
+
+  return `
+    <div class="qa-model-row">
+      <label for="qa-model-select">Modelo de prueba QA</label>
+      <select id="qa-model-select">
+        <option value="auto"${selectedValue === "auto" ? " selected" : ""}>${escapeHtml(autoLabel)}</option>
+        ${optionHtml}
+      </select>
+      <button class="btn btn-primary" id="qa-model-save-btn">Guardar modelo</button>
+    </div>
+    <div class="qa-model-hint" id="qa-model-hint">El modo automático usa el modelo más económico seleccionado del proveedor principal.</div>`;
+}
+
 async function loadData() {
   const el = document.getElementById("content");
   el.innerHTML = '<div class="loading-spinner">Cargando datos…</div>';
 
   try {
-    const [statsRes, historyRes, configRes, devModeRes, storageRes] =
+    const [statsRes, historyRes, configRes, devModeRes, storageRes, providerRes, qaRes] =
       await Promise.all([
         chrome.runtime
           .sendMessage({ type: "GET_USAGE_STATS" })
@@ -130,6 +241,10 @@ async function loadData() {
         chrome.runtime
           .sendMessage({ type: "GET_STORAGE_INFO" })
           .catch(() => ({ success: false })),
+        chrome.runtime
+          .sendMessage({ type: "GET_PROVIDER_STATE" })
+          .catch(() => null),
+        chrome.storage.local.get(["qaModel"]),
       ]);
 
     const stats = (statsRes && statsRes.stats) || {};
@@ -140,6 +255,8 @@ async function loadData() {
 
     cachedHistory = history;
     cachedDevMode = devMode;
+    cachedProviderState = (providerRes && providerRes.state) || null;
+    cachedQaModel = (qaRes && qaRes.qaModel) || null;
 
     el.innerHTML = renderDashboard(
       stats,
@@ -741,9 +858,11 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
           <li>Usa <strong>ALT+W</strong> para re-detectar y repetir pruebas.</li>
         </ul>
         <div class="qa-warning">
-          ⚠️ <strong>Aviso:</strong> Estos escenarios utilizan la IA real para verificar el funcionamiento de la extensión. Se selecciona automáticamente el modelo más económico disponible (<strong>Haiku</strong>) para minimizar el costo de las pruebas. Las peticiones aparecerán en el historial marcadas como <span class="badge badge-qa-manual" style="font-size:10px;">QA</span>.
+          ⚠️ <strong>Aviso:</strong> Estos escenarios utilizan la IA real para verificar el funcionamiento de la extensión. Se usa el modelo de prueba seleccionado abajo (por defecto, el más económico detectado) para minimizar el costo. Las peticiones aparecerán en el historial marcadas como <span class="badge badge-qa-manual" style="font-size:10px;">QA</span>.
         </div>
       </div>
+
+      ${renderQaModelSelector()}
 
       <div class="qa-platform-group">
         <div class="qa-platform-header qa-netacad-header">🔵 NetAcad</div>
@@ -1065,6 +1184,37 @@ function bindDynamicEvents(history, devMode) {
   const qaGuideBtn = document.getElementById("qa-guide-btn");
   if (qaGuideBtn) {
     qaGuideBtn.addEventListener("click", showQAGuideModal);
+  }
+
+  const qaModelSaveBtn = document.getElementById("qa-model-save-btn");
+  if (qaModelSaveBtn) {
+    qaModelSaveBtn.addEventListener("click", async () => {
+      const select = document.getElementById("qa-model-select");
+      const hint = document.getElementById("qa-model-hint");
+      const value = select ? select.value : "auto";
+      let qaModel = null;
+      if (value !== "auto") {
+        const sep = value.indexOf("::");
+        if (sep > 0) {
+          qaModel = { provider: value.slice(0, sep), model: value.slice(sep + 2) };
+        }
+      }
+
+      qaModelSaveBtn.disabled = true;
+      const res = await chrome.runtime
+        .sendMessage({ type: "SAVE_QA_MODEL", qaModel })
+        .catch(() => null);
+      qaModelSaveBtn.disabled = false;
+
+      const ok = !!(res && res.success);
+      cachedQaModel = qaModel;
+      if (hint) {
+        hint.textContent = ok
+          ? "Modelo de prueba QA guardado."
+          : "No se pudo guardar el modelo de prueba.";
+        hint.className = "qa-model-hint" + (ok ? " ok" : " err");
+      }
+    });
   }
 
   const qaMoodleMcqBtn = document.getElementById("qa-moodle-mcq-btn");

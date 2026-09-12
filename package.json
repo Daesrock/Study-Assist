@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "validate:multi-answer": "node scripts/validate-multi-answer.js",
+    "update:prices": "node scripts/fetch-model-prices.js",
     "build": "npm run validate:multi-answer && node scripts/build.js",
     "watch": "node scripts/build.js --watch",
     "dev": "node scripts/build.js --watch",

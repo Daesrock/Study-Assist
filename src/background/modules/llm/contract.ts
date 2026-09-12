@@ -89,11 +89,12 @@ export interface ProviderPreset {
   reasoningKind: ReasoningKind;
   /** Default thinking/reasoning state for this provider. */
   defaultThinking: boolean;
+  /**
+   * Token-limit field name for OpenAI-compatible providers. Newer OpenAI
+   * models reject `max_tokens` and require `max_completion_tokens`.
+   */
+  maxTokensParam?: "max_tokens" | "max_completion_tokens";
   capabilities: ProviderCapabilities;
-  /** Shipped fallback models when the live catalog is unavailable. */
-  defaultModels: string[];
-  /** Curated models known to accept image input (vision). */
-  visionModels: string[];
 }
 
 /** A preset resolved with the user's chosen model for a given role. */

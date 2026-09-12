@@ -3,8 +3,18 @@
  * Configure per-provider API keys, models, thinking and vision.
  *
  * Models are only shown after a valid API key is saved; saving a key
- * triggers an automatic /models fetch.
+ * triggers an automatic /models fetch. Prices/vision come from the bundled
+ * LiteLLM snapshot and can be refreshed live.
  */
+
+// ============================================
+// Debug
+// ============================================
+let DEBUG = false;
+
+function debug(...args) {
+  if (DEBUG) console.log("[Study Assist][providers]", ...args);
+}
 
 // ============================================
 // i18n
@@ -50,10 +60,21 @@ function eyeOffIcon() {
   return '<svg viewBox="0 0 24 24"><path d="M17.94 17.94A10 10 0 0 1 12 20c-7 0-11-8-11-8a18.5 18.5 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9 9 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M1 1l22 22"/></svg>';
 }
 
+function formatPrice(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "—";
+  return "$" + String(Math.round(value * 1000) / 1000);
+}
+
+function formatContext(tokens) {
+  if (typeof tokens !== "number" || tokens <= 0) return "";
+  return tokens >= 1000 ? `${Math.round(tokens / 1000)}k` : String(tokens);
+}
+
 async function send(message) {
   try {
     return await chrome.runtime.sendMessage(message);
-  } catch {
+  } catch (error) {
+    debug("sendMessage failed", message.type, error);
     return null;
   }
 }
@@ -63,12 +84,42 @@ async function send(message) {
 // ============================================
 let STATE = { presets: [], profiles: [], roles: { primary: null, validator: null } };
 
+/** Apply a fresh state from any provider response, falling back to a GET. */
+async function applyState(res) {
+  if (res && res.success && res.state) {
+    STATE = res.state;
+    render();
+    return true;
+  }
+  return false;
+}
+
 async function loadState() {
   const res = await send({ type: "GET_PROVIDER_STATE" });
   if (res && res.success && res.state) {
     STATE = res.state;
     render();
+    setError("");
+    debug("state loaded", STATE.profiles.map((p) => `${p.id}:${p.hasKey}`).join(", "));
+    return;
   }
+  const message = (res && res.error) || t("providerStateError");
+  debug("state load failed", message);
+  setError(message);
+}
+
+function setError(text) {
+  const el = document.getElementById("providers-error");
+  if (!el) return;
+  el.textContent = text || "";
+  el.style.display = text ? "block" : "none";
+}
+
+function setStatus(text, kind) {
+  const el = document.getElementById("providers-status");
+  if (!el) return;
+  el.textContent = text || "";
+  el.className = "providers-status" + (kind ? " " + kind : "");
 }
 
 function profileOf(id) {
@@ -80,7 +131,10 @@ function profileOf(id) {
       models: [],
       customModels: [],
       visionModels: [],
+      selectedModels: [],
+      selectionMode: "auto",
       lastSync: null,
+      modelInfo: {},
     }
   );
 }
@@ -122,6 +176,47 @@ function render() {
   applyTranslations();
 }
 
+function renderModelRow(profile, model) {
+  const info = profile.modelInfo ? profile.modelInfo[model] : null;
+  const vision = profile.visionModels.includes(model);
+  const included = (profile.selectedModels || []).includes(model);
+  const hasPrice =
+    info && (typeof info.inputPer1M === "number" || typeof info.outputPer1M === "number");
+  const priceText = hasPrice
+    ? `${formatPrice(info.inputPer1M)} / ${formatPrice(info.outputPer1M)} ${escapeHtml(t("providerPricePerM"))}`
+    : escapeHtml(t("providerPriceUnavailable"));
+  const ctxText = info && info.maxInput ? formatContext(info.maxInput) : "";
+
+  return `
+    <div class="model-row" data-model="${escapeAttr(model)}">
+      <input type="checkbox" class="model-include" ${included ? "checked" : ""} title="${escapeAttr(t("providerIncludeTitle"))}" />
+      <div class="model-main">
+        <span class="model-id">${escapeHtml(model)}</span>
+        <span class="model-meta">
+          <span class="model-price">${priceText}</span>
+          ${ctxText ? `<span class="model-ctx">ctx ${escapeHtml(ctxText)}</span>` : ""}
+        </span>
+      </div>
+      <label class="model-vision-toggle" title="${escapeAttr(t("providerVisionTitle"))}">
+        <input type="checkbox" class="model-vision" ${vision ? "checked" : ""} />
+        <span class="model-vision-badge">${escapeHtml(t("providerVisionBadge"))}</span>
+      </label>
+    </div>`;
+}
+
+function renderSelectionMode(profile) {
+  const mode = profile.selectionMode === "manual" ? "manual" : "auto";
+  const label =
+    mode === "manual"
+      ? t("providerSelectionManual")
+      : t("providerSelectionAuto");
+  const button =
+    mode === "manual"
+      ? `<button class="btn btn-outline auto-select">${escapeHtml(t("providerAutoButton"))}</button>`
+      : "";
+  return `<div class="provider-selection-mode"><span class="selection-mode-label">${escapeHtml(label)}</span>${button}</div>`;
+}
+
 function renderCard(preset) {
   const profile = profileOf(preset.id);
   const card = document.createElement("section");
@@ -132,27 +227,19 @@ function renderCard(preset) {
   const statusClass = profile.hasKey ? "ok" : "none";
 
   const models = modelUnion(profile);
-  const rows = models
-    .map((model) => {
-      const isNew =
-        profile.models.includes(model) && !preset.defaultModels.includes(model);
-      const vision = profile.visionModels.includes(model);
-      return `
-        <div class="model-row" data-model="${escapeAttr(model)}">
-          <input type="checkbox" class="model-vision" ${vision ? "checked" : ""} title="${escapeAttr(t("providerVisionTitle"))}" />
-          <span class="model-id">${escapeHtml(model)}</span>
-          ${isNew ? `<span class="model-badge">${escapeHtml(t("providerModelNew"))}</span>` : ""}
-          ${vision ? "" : `<span class="model-warn">${escapeHtml(t("providerNoVision"))}</span>`}
-        </div>`;
-    })
-    .join("");
+  const rows = models.map((model) => renderModelRow(profile, model)).join("");
 
   const modelsArea = profile.hasKey
     ? `
     <div class="provider-models-head">
       <span>${escapeHtml(t("providerModelsTitle"))}</span>
-      <button class="btn btn-secondary detect-models">${escapeHtml(t("providerDetectModels"))}</button>
+      <div class="provider-models-actions">
+        <button class="btn btn-outline test-connection">${escapeHtml(t("providerTestConnection"))}</button>
+        <button class="btn btn-secondary detect-models">${escapeHtml(t("providerDetectModels"))}</button>
+      </div>
     </div>
+    <div class="provider-models-legend">${escapeHtml(t("providerModelsLegend"))}</div>
+    ${renderSelectionMode(profile)}
     <div class="provider-summary"></div>
     <div class="provider-models">${
       rows || `<div class="empty">${escapeHtml(t("providerNoModels"))}</div>`
@@ -203,20 +290,31 @@ function setMsg(card, text, kind) {
   el.className = "provider-msg" + (kind ? " " + kind : "");
 }
 
-/** Fetch /models, re-render and return a summary (or an error). */
+function setSummary(card, text, kind) {
+  const el = card && card.querySelector(".provider-summary");
+  if (!el) return;
+  el.textContent = text || "";
+  el.className = "provider-summary" + (kind ? " " + kind : "");
+}
+
+/** Fetch /models, refresh state and return a summary (or an error). */
 async function runDetection(provider) {
-  const before = profileOf(provider).models;
+  const before = profileOf(provider).models.slice();
+  debug("detecting models", provider);
   const res = await send({ type: "FETCH_PROVIDER_MODELS", provider });
 
   if (!res || !res.success) {
+    await applyState(res);
+    debug("detection failed", provider, res && res.error);
     return { error: (res && res.error) || t("providerDetectError") };
   }
 
   const after = (res.models || []).map((m) => m.id);
+  await applyState(res);
+
   const added = after.filter((m) => !before.includes(m));
   const removed = before.filter((m) => !after.includes(m));
-
-  await loadState();
+  debug("detection ok", { provider, total: after.length, added: added.length, removed: removed.length });
 
   return {
     text: `${t("providerNewLabel")}: ${added.length} · ${t("providerObsoleteLabel")}: ${removed.length} · ${t("providerTotalLabel")}: ${after.length}`,
@@ -241,34 +339,43 @@ function bindCard(card, preset, profile) {
       return;
     }
 
+    const before = profileOf(provider).models.slice();
     setMsg(card, t("providerValidating"), "");
+    debug("saving key", provider);
+    // The background validates + detects in a single /models request.
     const res = await send({ type: "SAVE_PROVIDER_KEY", provider, rawKey, test: true });
 
     if (!res || !res.success) {
+      debug("save failed", provider, res && res.error);
       setMsg(card, (res && res.error) || t("providerError"), "err");
       return;
     }
 
     keyInput.value = "";
     const successMsg = res.warning || t("providerSaved");
+    await applyState(res);
+    if (!res.state) await loadState();
 
-    // Re-render with the now-configured state, then auto-detect models.
-    await loadState();
-
-    let current = findCard(provider);
-    if (current) setMsg(current, successMsg, "ok");
-
-    const detection = await runDetection(provider);
-    current = findCard(provider);
+    const current = findCard(provider);
     if (current) {
       const summary = current.querySelector(".provider-summary");
-      if (summary) summary.textContent = detection.error || detection.text || "";
+      if (summary && res.models) {
+        const after = res.models.map((m) => m.id);
+        const added = after.filter((m) => !before.includes(m));
+        const removed = before.filter((m) => !after.includes(m));
+        summary.textContent = `${t("providerNewLabel")}: ${added.length} · ${t("providerObsoleteLabel")}: ${removed.length} · ${t("providerTotalLabel")}: ${after.length}`;
+      }
       setMsg(current, successMsg, "ok");
     }
   });
 
   card.querySelector(".thinking").addEventListener("change", async (event) => {
-    await send({ type: "SET_PROVIDER_THINKING", provider, thinking: event.target.checked });
+    const res = await send({
+      type: "SET_PROVIDER_THINKING",
+      provider,
+      thinking: event.target.checked,
+    });
+    if (!(await applyState(res))) await loadState();
   });
 
   const detectBtn = card.querySelector(".detect-models");
@@ -283,15 +390,55 @@ function bindCard(card, preset, profile) {
     });
   }
 
+  const testBtn = card.querySelector(".test-connection");
+  if (testBtn) {
+    testBtn.addEventListener("click", async () => {
+      setSummary(card, t("providerTesting"), "");
+      testBtn.disabled = true;
+      const res = await send({ type: "TEST_PROVIDER_CONNECTION", provider });
+      testBtn.disabled = false;
+      const current = findCard(provider) || card;
+      if (res && res.success) {
+        const tokens = (res.inputTokens || 0) + (res.outputTokens || 0);
+        const costText =
+          typeof res.costUsd === "number"
+            ? `$${res.costUsd.toFixed(6)}`
+            : t("providerTestNoPrice");
+        const detail = res.text ? `: ${res.text}` : "";
+        setSummary(
+          current,
+          `${t("providerTestOk")} (${res.model || ""}) · ${tokens} tok · ${costText}${detail}`,
+          "ok",
+        );
+      } else {
+        const detail = (res && res.error) || t("providerError");
+        setSummary(current, `${t("providerTestError")}: ${detail}`, "err");
+      }
+    });
+  }
+
+  const autoBtn = card.querySelector(".auto-select");
+  if (autoBtn) {
+    autoBtn.addEventListener("click", async () => {
+      autoBtn.disabled = true;
+      const res = await send({
+        type: "SET_SELECTION_MODE",
+        provider,
+        selectionMode: "auto",
+      });
+      if (!(await applyState(res))) await loadState();
+    });
+  }
+
   const addBtn = card.querySelector(".add-model");
   if (addBtn) {
     addBtn.addEventListener("click", async () => {
       const input = card.querySelector(".manual-model");
       const model = input.value.trim();
       if (!model) return;
-      await send({ type: "ADD_PROVIDER_MODEL", provider, model });
+      const res = await send({ type: "ADD_PROVIDER_MODEL", provider, model });
       input.value = "";
-      await loadState();
+      if (!(await applyState(res))) await loadState();
     });
   }
 
@@ -299,29 +446,70 @@ function bindCard(card, preset, profile) {
   if (deleteBtn) {
     deleteBtn.addEventListener("click", async () => {
       if (!confirm(t("providerDeleteConfirm"))) return;
-      await send({ type: "DELETE_PROVIDER_KEY", provider });
-      await loadState();
+      const res = await send({ type: "DELETE_PROVIDER_KEY", provider });
+      if (!(await applyState(res))) await loadState();
     });
   }
 
   card.querySelectorAll(".model-vision").forEach((checkbox) => {
     checkbox.addEventListener("change", async (event) => {
       const model = event.target.closest(".model-row").dataset.model;
-      await send({
+      const res = await send({
         type: "SET_MODEL_VISION",
         provider,
         model,
         vision: event.target.checked,
       });
-      await loadState();
+      if (!(await applyState(res))) await loadState();
+    });
+  });
+
+  card.querySelectorAll(".model-include").forEach((checkbox) => {
+    checkbox.addEventListener("change", async (event) => {
+      const model = event.target.closest(".model-row").dataset.model;
+      const res = await send({
+        type: "SET_MODEL_SELECTED",
+        provider,
+        model,
+        selected: event.target.checked,
+      });
+      if (!(await applyState(res))) await loadState();
     });
   });
 }
 
 // ============================================
+// Price refresh (global)
+// ============================================
+async function refreshPrices() {
+  setStatus(t("providerPricesUpdating"), "");
+  const res = await send({ type: "UPDATE_MODEL_PRICES" });
+  if (!res || !res.success) {
+    const detail = res && res.error ? `: ${res.error}` : "";
+    debug("price refresh failed", res && res.error);
+    setStatus(`${t("providerPricesError")}${detail}`, "err");
+    return;
+  }
+  if (res.state) {
+    STATE = res.state;
+    render();
+  }
+  setStatus(`${t("providerPricesUpdated")} (${res.count})`, "ok");
+}
+
+// ============================================
 // Boot
 // ============================================
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   applyTranslations();
-  loadState();
+  try {
+    const { debugMode } = await chrome.storage.local.get("debugMode");
+    DEBUG = debugMode === true;
+    debug("providers page ready", { debug: DEBUG });
+  } catch {
+    DEBUG = false;
+  }
+  const refreshBtn = document.getElementById("refresh-prices");
+  if (refreshBtn) refreshBtn.addEventListener("click", refreshPrices);
+  await loadState();
 });

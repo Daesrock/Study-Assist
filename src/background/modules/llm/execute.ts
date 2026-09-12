@@ -7,7 +7,7 @@
  * The orchestrator consumes `ProviderResult` and never touches wire shapes.
  */
 
-import { getClaudeThinkingConfig } from "../constants.js";
+import { getClaudeThinkingConfig, log } from "../constants.js";
 import type { ClaudeApiResponse, ClaudeContentBlock, ClaudeMessage } from "../constants.js";
 import { handleApiError } from "../parsing.js";
 import type {
@@ -37,6 +37,10 @@ export interface ProviderRunOptions {
   content: string | ClaudeContentBlock[];
   maxTokens: number;
   thinking?: boolean;
+  /** Whether the resolved model actually supports reasoning/effort params. */
+  supportsReasoning?: boolean;
+  /** Whether the model supports Anthropic adaptive thinking. */
+  supportsAdaptiveThinking?: boolean;
   reasoningEffort?: "low" | "medium" | "high";
   retries?: number;
   timeout?: number;
@@ -68,6 +72,7 @@ function buildRequest(opts: ProviderRunOptions): {
   init: import("../constants.js").FetchOptionsWithSignal;
 } {
   const { preset } = opts;
+  const reasoning = opts.thinking === true && opts.supportsReasoning === true;
 
   if (preset.dialect === "anthropic") {
     const messages: ClaudeMessage[] = [{ role: "user", content: opts.content }];
@@ -77,7 +82,9 @@ function buildRequest(opts: ProviderRunOptions): {
       model: opts.model,
       messages,
       maxTokens: opts.maxTokens,
-      thinking: opts.thinking ? getClaudeThinkingConfig(opts.model) : undefined,
+      thinking: reasoning
+        ? getClaudeThinkingConfig(opts.model, opts.supportsAdaptiveThinking)
+        : undefined,
       signal: opts.signal,
     });
   }
@@ -88,8 +95,9 @@ function buildRequest(opts: ProviderRunOptions): {
     model: opts.model,
     messages: [{ role: "user", content: blocksToText(opts.content) }],
     maxTokens: opts.maxTokens,
-    thinking: opts.thinking,
-    reasoningEffort: opts.thinking ? (opts.reasoningEffort ?? "high") : undefined,
+    maxTokensParam: preset.maxTokensParam,
+    thinking: reasoning,
+    reasoningEffort: reasoning ? (opts.reasoningEffort ?? "high") : undefined,
     reasoningKind: preset.reasoningKind,
     signal: opts.signal,
   });
@@ -169,6 +177,10 @@ export async function runProvider(opts: ProviderRunOptions): Promise<ProviderRun
         url: built.url,
       };
     }
+    log(
+      `[Study Assist] ${opts.preset.label} request failed for ${opts.model}:`,
+      (error as Error).message,
+    );
     return {
       result: {
         success: false,
@@ -190,6 +202,10 @@ export async function runProvider(opts: ProviderRunOptions): Promise<ProviderRun
   }
 
   if (!response.ok) {
+    log(
+      `[Study Assist] ${opts.preset.label} HTTP ${response.status} for ${opts.model}:`,
+      raw,
+    );
     return {
       result: {
         success: false,

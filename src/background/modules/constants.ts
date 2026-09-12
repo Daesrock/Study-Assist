@@ -5,9 +5,24 @@
 // ============================================
 // Debug Mode
 // ============================================
-export const DEBUG_MODE: boolean = true;
+/**
+ * Global debug flag, backed by the `debugMode` storage key. It is loaded on
+ * service-worker start and updated on `chrome.storage.onChanged`, so the same
+ * switch controls logs in both the background and the extension pages.
+ */
+export let DEBUG_MODE = false;
+
+export function setDebugMode(enabled: boolean): void {
+  DEBUG_MODE = enabled;
+}
+
 export const log = (...args: unknown[]): void => {
   if (DEBUG_MODE) console.log(...args);
+};
+
+/** Provider-config debug logger; silenced unless the global flag is on. */
+export const logProviders = (...args: unknown[]): void => {
+  if (DEBUG_MODE) console.log("[Study Assist][providers]", ...args);
 };
 
 // ============================================
@@ -27,8 +42,12 @@ export function isAdaptiveThinkingModel(model: string): boolean {
   return model.includes("sonnet-4-6") || model.includes("opus-4-6") || model.includes("opus-4-7") || model.includes("mythos");
 }
 
-export function getClaudeThinkingConfig(model: string): { type: string; budget_tokens?: number } {
-  if (isAdaptiveThinkingModel(model)) {
+export function getClaudeThinkingConfig(
+  model: string,
+  supportsAdaptive?: boolean,
+): { type: string; budget_tokens?: number } {
+  const adaptive = supportsAdaptive ?? isAdaptiveThinkingModel(model);
+  if (adaptive) {
     return { type: "adaptive" };
   }
   return { type: "enabled", budget_tokens: 1024 };
@@ -134,6 +153,38 @@ export interface StorageData {
   providerProfiles?: Record<string, ProviderProfile>;
   roles?: ProviderRoles;
   schemaVersion?: number;
+  /** QA sandbox model selection (used when context.qaMode is true). */
+  qaModel?: RoleAssignment | null;
+  /** Trimmed LiteLLM price index, keyed by model id. */
+  modelPrices?: Record<string, ModelPriceInfo>;
+  /** Epoch ms of the last live price sync. */
+  modelPricesFetchedAt?: number;
+  /** Global debug logging flag (background + pages). */
+  debugMode?: boolean;
+}
+
+/** Price/capability metadata for a single model id (LiteLLM-derived). */
+export interface ModelPriceInfo {
+  /** USD per 1M input tokens. */
+  inputPer1M: number;
+  /** USD per 1M output tokens. */
+  outputPer1M: number;
+  /** USD per 1M cache-read (hit) input tokens (null = unknown). */
+  cacheReadPer1M?: number | null;
+  /** USD per 1M cache-write (creation) input tokens (null = unknown). */
+  cacheWritePer1M?: number | null;
+  /** Whether the model accepts image input (null when unknown). */
+  vision: boolean | null;
+  /** Whether the model supports reasoning/thinking (null when unknown). */
+  reasoning?: boolean | null;
+  /** Whether the model supports Anthropic adaptive thinking. */
+  adaptive?: boolean | null;
+  /** ISO date after which the model is deprecated (null when none). */
+  deprecationDate?: string | null;
+  maxInput?: number;
+  maxOutput?: number;
+  provider?: string;
+  mode?: string;
 }
 
 /** Per-provider configuration, keyed by preset id. */
@@ -146,6 +197,12 @@ export interface ProviderProfile {
   customModels?: string[];
   /** User-overridden model ids that accept image input (vision). */
   visionModels?: string[];
+  /** Explicit per-model vision overrides (win over detected capabilities). */
+  visionOverrides?: Record<string, boolean>;
+  /** Model ids the user chose to expose in the popup role selectors. */
+  selectedModels?: string[];
+  /** Whether `selectedModels` is auto-curated or manually managed. */
+  selectionMode?: "auto" | "manual";
   /** Epoch ms of the last catalog sync. */
   lastSync?: number;
   /** Whether thinking/reasoning mode is enabled for this provider. */
@@ -272,6 +329,7 @@ export interface DeepSeekAnalysisResult {
   inputTokens?: number;
   outputTokens?: number;
   cacheHitTokens?: number;
+  cacheWriteTokens?: number;
 }
 
 export interface DeepSeekAnalysisForClaude {
@@ -287,6 +345,7 @@ export type ExtensionMessageType =
   | "TEST_API_KEY"
   | "TEST_DEEPSEEK_API_KEY"
   | "TEST_PROVIDER_KEY"
+  | "TEST_PROVIDER_CONNECTION"
   | "ANALYZE_QUESTION"
   | "CANCEL_DEEPSEEK"
   | "TOGGLE_DISGUISE_MODE"
@@ -302,8 +361,12 @@ export type ExtensionMessageType =
   | "DELETE_PROVIDER_KEY"
   | "SET_PROVIDER_THINKING"
   | "SET_MODEL_VISION"
+  | "SET_MODEL_SELECTED"
+  | "SET_SELECTION_MODE"
   | "ADD_PROVIDER_MODEL"
   | "FETCH_PROVIDER_MODELS"
+  | "UPDATE_MODEL_PRICES"
+  | "SAVE_QA_MODEL"
   | "SAVE_ROLES";
 
 export interface ExtensionMessage {
@@ -315,8 +378,11 @@ export interface ExtensionMessage {
   model?: string;
   thinking?: boolean;
   vision?: boolean;
+  selected?: boolean;
+  selectionMode?: "auto" | "manual";
   test?: boolean;
   roles?: ProviderRoles;
+  qaModel?: RoleAssignment | null;
   context?: import("../../types/index").AnalysisContext;
   url?: string;
   keyType?: string;

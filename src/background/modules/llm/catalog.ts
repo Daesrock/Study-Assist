@@ -13,6 +13,8 @@ import { llmRequest } from "./transport.js";
 export interface CatalogModel {
   id: string;
   name?: string;
+  /** Creation time in epoch ms, when the provider reports it. */
+  created?: number;
 }
 
 export interface CatalogResult {
@@ -56,14 +58,18 @@ export async function fetchModels(
         return { success: false, models: [], error: `Anthropic /models ${response.status}` };
       }
       const json = (await response.json()) as {
-        data?: Array<{ id: string; display_name?: string }>;
+        data?: Array<{ id: string; display_name?: string; created_at?: string }>;
       };
       return {
         success: true,
-        models: (json.data ?? []).map((model) => ({
-          id: model.id,
-          name: model.display_name,
-        })),
+        models: (json.data ?? []).map((model) => {
+          const created = model.created_at ? Date.parse(model.created_at) : NaN;
+          return {
+            id: model.id,
+            name: model.display_name,
+            created: Number.isFinite(created) ? created : undefined,
+          };
+        }),
       };
     }
 
@@ -82,11 +88,16 @@ export async function fetchModels(
       return { success: false, models: [], error: `${preset.label} /models ${response.status}` };
     }
     const json = (await response.json()) as {
-      data?: Array<{ id: string; name?: string }>;
+      data?: Array<{ id: string; name?: string; created?: number }>;
     };
     return {
       success: true,
-      models: (json.data ?? []).map((model) => ({ id: model.id, name: model.name })),
+      models: (json.data ?? []).map((model) => ({
+        id: model.id,
+        name: model.name,
+        created:
+          typeof model.created === "number" ? model.created * 1000 : undefined,
+      })),
     };
   } catch (error) {
     return { success: false, models: [], error: (error as Error).message };

@@ -21,6 +21,8 @@ export interface OpenAiChatRequestInput {
   model: string;
   messages: OpenAiChatMessage[];
   maxTokens: number;
+  /** Field name for the token limit (`max_completion_tokens` on OpenAI). */
+  maxTokensParam?: "max_tokens" | "max_completion_tokens";
   /** DeepSeek-style thinking toggle (used only by `reasoningKind: "deepseek"`). */
   thinking?: boolean;
   reasoningEffort?: "low" | "medium" | "high";
@@ -36,16 +38,20 @@ export interface BuiltOpenAiRequest {
 
 /** Build a `/chat/completions` request for an OpenAI-compatible provider. */
 export function buildOpenAiChatRequest(input: OpenAiChatRequestInput): BuiltOpenAiRequest {
+  const tokenParam = input.maxTokensParam ?? "max_tokens";
   const body: Record<string, unknown> = {
     model: input.model,
-    max_tokens: input.maxTokens,
+    [tokenParam]: input.maxTokens,
     messages: input.messages,
   };
 
   const kind = input.reasoningKind ?? "openai-effort";
   if (kind === "deepseek") {
-    body.thinking = { type: input.thinking === false ? "disabled" : "enabled" };
-    body.reasoning_effort = input.reasoningEffort ?? "high";
+    // Only reasoning-capable DeepSeek models accept the thinking toggle.
+    if (input.thinking) {
+      body.thinking = { type: "enabled" };
+      body.reasoning_effort = input.reasoningEffort ?? "high";
+    }
   } else if (kind === "openai-effort" && input.reasoningEffort) {
     body.reasoning_effort = input.reasoningEffort;
   }
@@ -85,16 +91,20 @@ export function parseOpenAiChatResponse(json: unknown): ParsedOpenAiResponse {
       prompt_tokens?: number;
       completion_tokens?: number;
       prompt_cache_hit_tokens?: number;
+      prompt_tokens_details?: { cached_tokens?: number };
     };
   };
   const message = body?.choices?.[0]?.message;
+  const cacheHit =
+    body?.usage?.prompt_cache_hit_tokens ??
+    body?.usage?.prompt_tokens_details?.cached_tokens;
   return {
     text: message?.content ?? null,
     reasoning: message?.reasoning_content ?? message?.reasoning ?? null,
     usage: {
       inputTokens: body?.usage?.prompt_tokens ?? 0,
       outputTokens: body?.usage?.completion_tokens ?? 0,
-      cacheHitTokens: body?.usage?.prompt_cache_hit_tokens,
+      cacheHitTokens: cacheHit,
     },
   };
 }
