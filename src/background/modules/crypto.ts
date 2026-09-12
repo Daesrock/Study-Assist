@@ -66,30 +66,3 @@ export function isPlainTextKey(value: string): boolean {
   // Claude keys start with "sk-ant-", DeepSeek keys start with "sk-"
   return value.startsWith("sk-ant-") || (value.startsWith("sk-") && !value.startsWith("sk-ant-"));
 }
-
-/**
- * Retrieve a decrypted API key from storage.
- * Transparently migrates plain-text keys to encrypted on first access.
- */
-export async function getDecryptedApiKey(storageKey: string): Promise<string | null> {
-  const result = await chrome.storage.local.get([storageKey]);
-  const value = result[storageKey];
-  if (!value) return null;
-
-  if (isPlainTextKey(value)) {
-    // Migrate: encrypt and re-store
-    const encrypted = await encryptApiKey(value);
-    await chrome.storage.local.set({ [storageKey]: encrypted });
-    return value;
-  }
-
-  return decryptApiKey(value);
-}
-
-/**
- * Encrypt and save an API key to storage
- */
-export async function encryptAndSaveKey(storageKey: string, plainKey: string): Promise<void> {
-  const encrypted = await encryptApiKey(plainKey);
-  await chrome.storage.local.set({ [storageKey]: encrypted });
-}

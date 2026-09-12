@@ -1,6 +1,6 @@
 # Study Assist
 
-Study Assist is a Chromium browser extension that uses AI (Claude + DeepSeek) to detect and analyze quiz questions on learning platforms.
+Study Assist is a Chromium (Manifest V3) browser extension that uses AI to detect and analyze quiz questions on learning platforms. Providers are pluggable — **Anthropic, DeepSeek and OpenAI** — assigned to a `primary` and optional `validator` role, with models detected live from each provider's API.
 
 ## Supported Platforms
 
@@ -22,17 +22,21 @@ The following Moodle question types are recognised by the platform but not yet d
 
 ## Current Features
 
-- **Hybrid AI pipeline** — DeepSeek Reasoner first, Claude fallback/validation when needed
+- **Pluggable providers** — Anthropic, DeepSeek and OpenAI; models are detected live from each provider's `GET /models` (no hardcoded lists)
+- **Role-based pipeline** — a configurable `primary` provider/model answers first; an optional `validator` validates or acts as fallback
 - **Question bank lookup** — Local NetAcad-style question bank for instant matches
 - **Quick mode** — Trigger analysis with `SHIFT` and show compact answer directly on the SA button
-- **Detailed mode** — Overlay-based full explanation flow
+- **Detailed mode (streaming)** — Overlay-based full explanation streamed over SSE for both Anthropic and OpenAI-compatible providers
 - **Response modes** — `guided`, `direct`, `hints`, and `explanation`
+- **Model pricing** — LiteLLM-driven per-request cost (input/output/cache read/write); unpriced models are recorded without a cost
+- **Connection test** — Send a minimal request per provider to verify the key/model works
 - **Image-aware analysis** — Sends image context when enabled (public URL preferred over base64)
 - **Dashboard** — Usage metrics, latency/cost trends, history, and last-response inspector
-- **Manual QA scenarios** — Inject test scenarios from dashboard without opening a real quiz
+- **Manual QA scenarios** — Inject test scenarios from the dashboard (quick or full/streaming mode)
 - **Disguise mode** — Optional uBlock-like visual disguise
 - **i18n support** — Locales available in English and Spanish
 - **Domain allowlist** — Extension logic only runs on user-allowed domains
+- **Dev logging** — Local log server writes background/content logs into the project
 
 ## Installation
 
@@ -54,17 +58,20 @@ npm run build
 ### 3) Configure
 
 1. Open the extension popup
-2. Add your **Claude API key** (Anthropic)
-3. (Optional) Add your **DeepSeek API key**
-4. Add allowed domains (for example: `netacad.com`, your Moodle domain)
-5. Enable extension toggle
+2. Click **Configure providers** to open the Providers page
+3. Add the API key for each provider you use (Anthropic, DeepSeek, OpenAI); the available models are detected automatically
+4. Back in the popup, pick a **Primary** provider/model and an optional **Validator**
+5. Add allowed domains (for example: `netacad.com`, your Moodle domain)
+6. Enable the extension toggle
+
+Each provider also has a **Test connection** button (sends a minimal request) and a **Detect models** button.
 
 ## Keyboard Shortcuts
 
 | Shortcut     | Action                                      |
 | ------------ | ------------------------------------------- |
 | `SHIFT`      | Analyze visible question (quick mode)       |
-| `CTRL+SHIFT` | Skip DeepSeek and force Claude              |
+| `CTRL+SHIFT` | Analyze using the validator role            |
 | `ALT+W`      | Re-detect current question                  |
 | `ALT+Q`      | Toggle SA button visibility                 |
 | `ALT+X`      | Cancel in-flight request                    |
@@ -90,7 +97,7 @@ The dashboard includes a **QA Manual** section to inject test scenarios into `ht
 - NetAcad Matching — drag-and-drop / dropdown matching
 - NetAcad Quiz — combined multi-question page
 
-This is useful to validate detection, quick mode, and UI behavior without requiring a live assessment page.
+The QA card also has a **Modo full (streaming)** toggle: when enabled it opens the full overlay with the detected question(s), so a click runs the streaming path. This is useful to validate detection, quick/full modes, and UI behavior without requiring a live assessment page.
 
 ## Project Structure
 
@@ -100,17 +107,18 @@ study-assist-extension/
 ├── src/
 │   ├── background/
 │   │   ├── background.ts
-│   │   └── modules/
+│   │   └── modules/          # pipeline, providers (llm/), usage, logging
 │   ├── content/
 │   │   ├── content.ts
 │   │   └── modules/
 │   └── types/
-├── popup/
-├── background/      # built JS
-├── content/         # built JS
-├── data/
+├── popup/                    # popup, providers page, dashboard (static)
+├── background/               # built JS
+├── content/                  # built JS
+├── data/                     # question banks + LiteLLM price snapshot
+├── logs/                     # dev logs (gitignored)
 ├── tests/
-└── scripts/
+└── scripts/                  # build, packaging, scrapers, dev log server
 ```
 
 ## Development
@@ -119,9 +127,11 @@ study-assist-extension/
 npm install
 npm run build
 npm run watch
+npm run dev:logs     # local log server -> logs/background.log + logs/content.log
 npm test
 npm run test:smoke
 npm run test:watch
+npm run update:prices
 npm run package
 npm run package:zip
 ```
@@ -141,4 +151,4 @@ This README is aligned with the current codebase state:
 
 ## Privacy
 
-Data is stored locally in browser storage. The extension only sends question context to Anthropic/DeepSeek APIs using user-provided keys, when analysis is explicitly triggered. No external telemetry server is used.
+Data is stored locally in browser storage. The extension only sends question context to the configured AI providers (Anthropic, DeepSeek and/or OpenAI) using your own keys, when analysis is explicitly triggered. It also fetches LiteLLM's public model-price catalog to display model costs/capabilities; no user data is sent with that request. No external telemetry server is used.

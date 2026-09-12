@@ -6,13 +6,11 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { mockStorage } from "../setup";
 
 import {
-  migrateProviderConfig,
   resolveRole,
   canPresetHandle,
   canRoleHandle,
   getRoles,
   getProviderKey,
-  ensureProviderConfig,
   getProviderState,
   clearProviderKey,
   setModelVision,
@@ -22,7 +20,6 @@ import {
   resolveQaModel,
   saveQaModel,
   saveProfile,
-  CURRENT_SCHEMA_VERSION,
 } from "../../src/background/modules/llm/profiles";
 import { getPreset, OPENAI_PRESET_ID } from "../../src/background/modules/llm/registry";
 import { __setPriceIndexForTests } from "../../src/background/modules/llm/pricing";
@@ -30,92 +27,6 @@ import { __setPriceIndexForTests } from "../../src/background/modules/llm/pricin
 function clearStorage() {
   for (const key of Object.keys(mockStorage)) delete mockStorage[key];
 }
-
-describe("migrateProviderConfig", () => {
-  beforeEach(clearStorage);
-
-  it("seeds profiles and roles from legacy Claude + DeepSeek config", async () => {
-    Object.assign(mockStorage, {
-      claudeApiKey: "enc-claude",
-      claudeModel: "claude-sonnet-4-6",
-      claudeThinking: true,
-      deepseekApiKey: "enc-deepseek",
-      deepseekModel: "deepseek-v4-pro",
-      deepseekThinking: true,
-      useDeepSeek: true,
-      deepseekOnly: false,
-    });
-
-    await migrateProviderConfig();
-
-    const profiles = mockStorage.providerProfiles as Record<string, { apiKey?: string; thinking?: boolean }>;
-    expect(profiles.anthropic.apiKey).toBe("enc-claude");
-    expect(profiles.anthropic.thinking).toBe(true);
-    expect(profiles.deepseek.apiKey).toBe("enc-deepseek");
-    expect(profiles.deepseek.thinking).toBe(true);
-
-    const roles = mockStorage.roles as { primary: unknown; validator: unknown };
-    expect(roles.primary).toEqual({ provider: "deepseek", model: "deepseek-v4-pro" });
-    expect(roles.validator).toEqual({ provider: "anthropic", model: "claude-sonnet-4-6" });
-    expect(mockStorage.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
-  });
-
-  it("maps deepseekOnly to a null validator", async () => {
-    Object.assign(mockStorage, {
-      claudeApiKey: "enc-claude",
-      deepseekApiKey: "enc-deepseek",
-      deepseekModel: "deepseek-v4-flash",
-      useDeepSeek: true,
-      deepseekOnly: true,
-    });
-
-    await migrateProviderConfig();
-
-    const roles = mockStorage.roles as { primary: unknown; validator: unknown };
-    expect(roles.primary).toEqual({ provider: "deepseek", model: "deepseek-v4-flash" });
-    expect(roles.validator).toBeNull();
-  });
-
-  it("defaults the primary to Anthropic when DeepSeek is off", async () => {
-    Object.assign(mockStorage, {
-      claudeApiKey: "enc-claude",
-      claudeModel: "claude-opus-4-6",
-      useDeepSeek: false,
-    });
-
-    await migrateProviderConfig();
-
-    const roles = mockStorage.roles as { primary: { provider: string; model: string } };
-    expect(roles.primary).toEqual({ provider: "anthropic", model: "claude-opus-4-6" });
-  });
-
-  it("is idempotent once the schema version is current", async () => {
-    Object.assign(mockStorage, {
-      schemaVersion: CURRENT_SCHEMA_VERSION,
-      roles: { primary: { provider: "openai", model: "gpt-5.1" }, validator: null },
-    });
-
-    await migrateProviderConfig();
-
-    const roles = mockStorage.roles as { primary: { provider: string } };
-    expect(roles.primary.provider).toBe("openai");
-    expect(mockStorage.providerProfiles).toBeUndefined();
-  });
-
-  it("self-heals: re-seeds roles when the schema is current but roles are empty", async () => {
-    Object.assign(mockStorage, {
-      schemaVersion: CURRENT_SCHEMA_VERSION,
-      claudeApiKey: "enc-claude",
-      claudeModel: "claude-opus-4-6",
-    });
-
-    await migrateProviderConfig();
-
-    const roles = mockStorage.roles as { primary: unknown; validator: unknown };
-    expect(roles.primary).toEqual({ provider: "anthropic", model: "claude-opus-4-6" });
-    expect(roles.validator).toEqual({ provider: "anthropic", model: "claude-opus-4-6" });
-  });
-});
 
 describe("thinking default", () => {
   beforeEach(clearStorage);
@@ -126,15 +37,6 @@ describe("thinking default", () => {
       const profile = state.profiles.find((p) => p.id === id);
       expect(profile?.thinking).toBe(true);
     }
-  });
-
-  it("does not force thinking off during migration without a legacy flag", async () => {
-    mockStorage.claudeApiKey = "enc-claude";
-
-    await migrateProviderConfig();
-
-    const profiles = mockStorage.providerProfiles as Record<string, { thinking?: boolean }>;
-    expect(profiles.anthropic.thinking).toBeUndefined();
   });
 });
 
@@ -197,30 +99,6 @@ describe("getProviderKey", () => {
   it("returns the stored key value", async () => {
     mockStorage.providerProfiles = { openai: { apiKey: "enc-openai" } };
     expect(await getProviderKey("openai")).toBe("enc-openai");
-  });
-
-  it("falls back to the legacy key and persists it into the profile", async () => {
-    mockStorage.claudeApiKey = "enc-legacy-claude";
-
-    const key = await getProviderKey("anthropic");
-
-    expect(key).toBe("enc-legacy-claude");
-    const profiles = mockStorage.providerProfiles as Record<string, { apiKey?: string }>;
-    expect(profiles.anthropic.apiKey).toBe("enc-legacy-claude");
-  });
-});
-
-describe("ensureProviderConfig", () => {
-  beforeEach(clearStorage);
-
-  it("seeds roles lazily when they are empty", async () => {
-    mockStorage.claudeApiKey = "enc-claude";
-    mockStorage.claudeModel = "claude-sonnet-4-6";
-
-    await ensureProviderConfig();
-
-    const roles = mockStorage.roles as { primary: { provider: string } | null };
-    expect(roles.primary?.provider).toBe("anthropic");
   });
 });
 

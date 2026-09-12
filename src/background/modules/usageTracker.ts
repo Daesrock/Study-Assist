@@ -81,9 +81,9 @@ export interface UsageRecord {
   trigger?: string;
   confidence?: string;
   deepseekReasoning?: string;
-  deepseekThinkingEnabled?: boolean;
+  thinkingEnabled?: boolean;
   claudeCorrection?: string;
-  claudeThinking?: string;
+  reasoningText?: string;
   bankConflictDetected?: boolean;
   bankConflictType?: "semantic-equivalent" | "real-conflict";
   bankConflictAnswerSimilarity?: number;

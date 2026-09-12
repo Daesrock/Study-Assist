@@ -43,8 +43,6 @@ export const logProviders = (...args: unknown[]): void => {
 // ============================================
 // API Constants
 // ============================================
-export const CLAUDE_API_BASE = "https://api.anthropic.com/v1/messages";
-export const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
 export const ANTHROPIC_VERSION = "2023-06-01";
 
 // ============================================
@@ -67,12 +65,6 @@ export function getClaudeThinkingConfig(
   }
   return { type: "enabled", budget_tokens: 1024 };
 }
-
-export const DEEPSEEK_API_BASE = "https://api.deepseek.com/chat/completions";
-
-// DeepSeek V4 Models
-export const DEEPSEEK_V4_FLASH = "deepseek-v4-flash";
-export const DEEPSEEK_V4_PRO = "deepseek-v4-pro";
 
 // ============================================
 // Mutable Shared State
@@ -148,36 +140,6 @@ export interface ErrorLogObject {
   hasImages?: boolean;
 }
 
-export interface StorageData {
-  claudeApiKey?: string;
-  claudeModel?: string;
-  useDeepSeek?: boolean;
-  useMultiBank?: boolean;
-  deepseekApiKey?: string;
-  deepseekModel?: string;
-  deepseekThinking?: boolean;
-  deepseekOnly?: boolean;
-  claudeThinking?: boolean;
-  extensionActive?: boolean;
-  disguiseMode?: boolean;
-  responseMode?: string;
-  autoDetect?: boolean;
-  highlightQuestions?: boolean;
-  errorLog?: string;
-  // Generalized provider configuration (Step B)
-  providerProfiles?: Record<string, ProviderProfile>;
-  roles?: ProviderRoles;
-  schemaVersion?: number;
-  /** QA sandbox model selection (used when context.qaMode is true). */
-  qaModel?: RoleAssignment | null;
-  /** Trimmed LiteLLM price index, keyed by model id. */
-  modelPrices?: Record<string, ModelPriceInfo>;
-  /** Epoch ms of the last live price sync. */
-  modelPricesFetchedAt?: number;
-  /** Global debug logging flag (background + pages). */
-  debugMode?: boolean;
-}
-
 /** Price/capability metadata for a single model id (LiteLLM-derived). */
 export interface ModelPriceInfo {
   /** USD per 1M input tokens. */
@@ -246,16 +208,6 @@ export interface FetchOptionsWithSignal extends RequestInit {
 }
 
 // Claude types
-export interface ClaudeRequestBody {
-  model: string;
-  max_tokens: number;
-  messages: ClaudeMessage[];
-  thinking?: {
-    type: "enabled" | "disabled" | "adaptive";
-    budget_tokens?: number;
-  };
-}
-
 export interface ClaudeMessage {
   role: "user" | "assistant";
   content: string | ClaudeContentBlock[];
@@ -294,41 +246,6 @@ export interface ClaudeApiResponse {
   parseError?: string;
 }
 
-// DeepSeek types
-export interface DeepSeekRequestBody {
-  model: string;
-  max_tokens: number;
-  messages: DeepSeekMessage[];
-  thinking?: {
-    type: "enabled" | "disabled";
-  };
-  reasoning_effort?: "low" | "medium" | "high";
-  stream?: boolean;
-}
-
-export interface DeepSeekMessage {
-  role: "user" | "assistant" | "system";
-  content: string;
-}
-
-export interface DeepSeekApiResponse {
-  choices?: Array<{
-    message?: {
-      content?: string;
-      reasoning_content?: string;
-    };
-  }>;
-  usage?: {
-    prompt_tokens?: number;
-    completion_tokens?: number;
-    total_tokens?: number;
-    prompt_cache_hit_tokens?: number;
-    prompt_cache_miss_tokens?: number;
-  };
-  error?: { message: string; type?: string };
-  parseError?: string;
-}
-
 export interface DeepSeekAnalysisResult {
   success: boolean;
   result?: string;
@@ -357,15 +274,12 @@ export interface DeepSeekAnalysisForClaude {
 // Message types
 export type ExtensionMessageType =
   | "TOGGLE_EXTENSION"
-  | "TEST_API_KEY"
-  | "TEST_DEEPSEEK_API_KEY"
   | "TEST_PROVIDER_KEY"
   | "TEST_PROVIDER_CONNECTION"
   | "ANALYZE_QUESTION"
   | "CANCEL_DEEPSEEK"
   | "TOGGLE_DISGUISE_MODE"
   | "PAGE_LOADED"
-  | "ENCRYPT_AND_SAVE_KEY"
   | "GET_USAGE_STATS"
   | "GET_USAGE_HISTORY"
   | "CLEAR_USAGE_DATA"
@@ -401,7 +315,6 @@ export interface ExtensionMessage {
   qaModel?: RoleAssignment | null;
   context?: import("../../types/index").AnalysisContext;
   url?: string;
-  keyType?: string;
   rawKey?: string;
   limit?: number;
   keepLast?: number;

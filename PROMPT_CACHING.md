@@ -1,6 +1,6 @@
 # Prompt Caching de Claude — Análisis de factibilidad
 
-**Fecha:** 08/09/2026 · **Versión:** 1.2.2 · **Veredicto: NO factible hoy** (técnicamente implementable, económicamente sin beneficio).
+**Fecha:** 08/09/2026 · **Versión:** 1.3.0 · **Veredicto: NO factible hoy** (técnicamente implementable, económicamente sin beneficio).
 
 ## 1. Requisitos oficiales (docs Anthropic)
 
@@ -11,10 +11,10 @@
 
 ## 2. Estado actual del código
 
-- **No existe parámetro `system`** en ningún path Claude (`ClaudeRequestBody` en `src/background/modules/constants.ts` no lo tiene; tampoco `streaming.ts`).
+- **No existe parámetro `system`** en ningún path Claude (`ClaudeMessage` en `src/background/modules/constants.ts` no lo tiene; tampoco `src/background/modules/llm/stream.ts`).
 - Todo va inline en **un solo mensaje `user`**: instrucciones estáticas + pregunta variable mezcladas (`prompts.ts`: `buildAnalysisPrompt`, `buildMatchingPrompt`, `buildClaudeValidationPrompt` + `buildMessageContent`).
-- `usage` de Claude **ignora** `cache_read_input_tokens` / `cache_creation_input_tokens` (`api.ts` y `streaming.ts`).
-- `calculateCost` (`usageTracker.ts`) **ya soporta** `inputCacheHit` (0.1×) para los 3 modelos Claude, pero **solo DeepSeek lo alimenta**; Claude siempre paga precio full. No existe precio de writes (1.25×).
+- `usage` de Claude **ya lee** `cache_read_input_tokens` / `cache_creation_input_tokens` y los propaga (`api.ts` + `llm/stream.ts` → `NormalizedUsage.cacheHitTokens` / `cacheWriteTokens`).
+- El costo es **LiteLLM-driven** (`usageTracker.estimateCost` + `pricing.computeUsageCost`): usa `input_per_token`, `output_per_token`, `cache_read_input_token_cost` y `cache_creation_input_token_cost`. La plomería de observabilidad de caché **ya está implementada**.
 
 ## 3. Números (por qué no cierra)
 
@@ -29,9 +29,9 @@ Faltan ~7–10× contenido para calificar. Rellenar con few-shot hasta el mínim
 
 ## 4. Refactor requerido (si algún día aplica)
 
-`prompts.ts` (separar estático→`system` con `cache_control`, variable→`user`) + `api.ts` (3 builders) + `streaming.ts` + `constants.ts` (tipos `system`/`cache_control`/usage) + `usageTracker.ts` (precio writes + thread `cacheHitTokens`). Multi-archivo, riesgo en ruta crítica, beneficio actual ~$0.
+`prompts.ts` (separar estático→`system` con `cache_control`, variable→`user`) + `api.ts` (3 builders) + `llm/stream.ts` + `constants.ts` (tipos `system`/`cache_control`) + adaptadores (`anthropic.ts`). Multi-archivo y riesgo en la ruta crítica; hoy el beneficio es ~$0. La parte de **medición/costo ya está hecha**.
 
-## 5. Acción propuesta (pospuesta)
+## 5. Acción
 
-1. **Plomería de observabilidad**: leer campos de caché del `usage` y pasarlos a `calculateCost`. Barato, sin riesgo, deja medición lista.
-2. **Revisitar si**: default pasa a Sonnet, o se agrega contexto estable grande reutilizado por sesión (ej. "course pack" 2k+ tokens).
+1. **Observabilidad de caché**: ✅ implementada (se leen los campos de caché y se costean con precios LiteLLM de read/write).
+2. **Revisitar si**: el default pasa a Sonnet, o se agrega contexto estable grande reutilizado por sesión (ej. "course pack" 2k+ tokens).

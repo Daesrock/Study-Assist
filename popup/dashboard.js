@@ -1700,12 +1700,12 @@ function renderRecordDetailPage(r, idx, history, devMode, apiData) {
       }
 
       ${
-        r.claudeThinking
+        r.reasoningText
           ? `
-      <!-- Claude Thinking -->
+      <!-- Reasoning -->
       <div class="dp-section">
         <div class="dp-section-label" style="color:var(--color-claude);">Razonamiento (validador)</div>
-        <pre class="dp-trace">${escapeHtml(r.claudeThinking)}</pre>
+        <pre class="dp-trace">${escapeHtml(r.reasoningText)}</pre>
       </div>`
           : ""
       }

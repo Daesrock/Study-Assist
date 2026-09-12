@@ -7,11 +7,10 @@ import { log, logProviders, setDebugMode, activeDeepSeekController, setActiveDee
 import { devLog, DEV_LOGGING } from "./modules/logger.js";
 import type { ExtensionMessage, MessageResponse } from "./modules/constants.js";
 import type { AnalysisResponse } from "../types/index.js";
-import { analyzeQuestion, analyzeQuestionStreaming, testApiKey, testDeepSeekApiKey, testProviderKey, testProviderConnection } from "./modules/api.js";
+import { analyzeQuestion, analyzeQuestionStreaming, testProviderKey, testProviderConnection } from "./modules/api.js";
 import { handleToggleExtension, handleDisguiseMode, restoreDisguiseMode } from "./modules/extensionState.js";
-import { encryptAndSaveKey } from "./modules/crypto.js";
 import { getUsageStats, getRecentHistory, clearUsageData, getStorageInfo, trimHistory, updateStorageBadge } from "./modules/usageTracker.js";
-import { migrateProviderConfig, getProviderState, saveProviderKey, clearProviderKey, setModelVision, setModelSelected, setSelectionMode, addCustomModel, saveRoles, saveProfile, getProviderKey, applyDetectedModels, saveQaModel } from "./modules/llm/profiles.js";
+import { getProviderState, saveProviderKey, clearProviderKey, setModelVision, setModelSelected, setSelectionMode, addCustomModel, saveRoles, saveProfile, getProviderKey, applyDetectedModels, saveQaModel } from "./modules/llm/profiles.js";
 import { fetchModels } from "./modules/llm/catalog.js";
 import { getPreset } from "./modules/llm/registry.js";
 import { getPriceIndex, lookupModelInfo, refreshPrices } from "./modules/llm/pricing.js";
@@ -69,12 +68,6 @@ async function handleMessage(
     case "TOGGLE_EXTENSION":
       return handleToggleExtension(message.active ?? false);
 
-    case "TEST_API_KEY":
-      return testApiKey(message.apiKey ?? "");
-
-    case "TEST_DEEPSEEK_API_KEY":
-      return testDeepSeekApiKey(message.apiKey ?? "");
-
     case "TEST_PROVIDER_KEY":
       return testProviderKey(message.provider ?? "anthropic", message.apiKey ?? "");
 
@@ -111,15 +104,6 @@ async function handleMessage(
 
     case "TOGGLE_DISGUISE_MODE":
       return handleDisguiseMode(message.enabled ?? false);
-
-    case "ENCRYPT_AND_SAVE_KEY":
-      try {
-        const storageKey = message.keyType === "deepseek" ? "deepseekApiKey" : "claudeApiKey";
-        await encryptAndSaveKey(storageKey, message.rawKey ?? "");
-        return { success: true };
-      } catch (error) {
-        return { success: false, error: (error as Error).message };
-      }
 
     case "GET_USAGE_STATS":
       try {
@@ -384,8 +368,6 @@ chrome.runtime.onInstalled.addListener(async (details: chrome.runtime.InstalledD
       autoDetect: true,
       highlightQuestions: true,
       useMultiBank: true,
-      deepseekModel: "deepseek-v4-flash",
-      deepseekThinking: true,
       theme: "system",
       buttonPosition: "bottom-right",
       errorLog: "",
@@ -394,19 +376,9 @@ chrome.runtime.onInstalled.addListener(async (details: chrome.runtime.InstalledD
   }
   await restoreDisguiseMode();
   await updateStorageBadge();
-  try {
-    await migrateProviderConfig();
-  } catch (error) {
-    console.error("[Study Assist] Provider migration error:", error);
-  }
 });
 
 chrome.runtime.onStartup.addListener(async () => {
-  try {
-    await migrateProviderConfig();
-  } catch (error) {
-    console.error("[Study Assist] Provider migration error:", error);
-  }
   await restoreDisguiseMode();
   await updateStorageBadge();
 });

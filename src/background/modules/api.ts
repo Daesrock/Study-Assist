@@ -7,19 +7,10 @@ import type { AnalysisContext, AnalysisResponse } from "../../types/index.js";
 import {
   log,
   DEBUG_MODE,
-  CLAUDE_API_BASE,
-  DEFAULT_MODEL,
-  ANTHROPIC_VERSION,
-  DEEPSEEK_API_BASE,
-  DEEPSEEK_V4_FLASH,
-  DEEPSEEK_V4_PRO,
   setActiveDeepSeekController,
 } from "./constants.js";
 import type {
   MessageResponse,
-  ClaudeRequestBody,
-  ClaudeApiResponse,
-  DeepSeekApiResponse,
   DeepSeekAnalysisResult,
   DeepSeekAnalysisForClaude,
 } from "./constants.js";
@@ -43,7 +34,7 @@ import { streamProvider } from "./llm/stream.js";
 import type { StreamResult } from "./llm/stream.js";
 import { resolveModelInfo } from "./llm/pricing.js";
 import { fetchModels } from "./llm/catalog.js";
-import { getRoles, resolveRole, canRoleHandle, ensureProviderConfig, resolveQaModel, getProviderState } from "./llm/profiles.js";
+import { getRoles, resolveRole, canRoleHandle, resolveQaModel, getProviderState } from "./llm/profiles.js";
 import type { ResolvedRole } from "./llm/profiles.js";
 import { getPreset } from "./llm/registry.js";
 import type { ProviderPreset } from "./llm/contract.js";
@@ -88,101 +79,7 @@ function legacySource(preset: ProviderPreset): "claude" | "deepseek" | "openai" 
 }
 
 // ============================================
-// API Key Testing
-// ============================================
-
-export async function testApiKey(apiKey: string): Promise<MessageResponse> {
-  const url = CLAUDE_API_BASE;
-
-  try {
-    const requestBody: ClaudeRequestBody = {
-      model: DEFAULT_MODEL,
-      max_tokens: 10,
-      messages: [{ role: "user", content: "Hello, respond with just OK to confirm." }],
-    };
-
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": ANTHROPIC_VERSION,
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    let responseBody: ClaudeApiResponse | null = null;
-    try {
-      responseBody = await response.clone().json() as ClaudeApiResponse;
-    } catch (e) {
-      responseBody = { parseError: (e as Error).message };
-    }
-
-    await logError({
-      type: "testApiKey",
-      url,
-      status: response.status,
-      statusText: response.statusText,
-      responseBody,
-    });
-
-    if (response.ok) return { success: true };
-
-    const errorMessage = responseBody?.error?.message || "Invalid API key";
-
-    if (response.status === 400) return { success: false, error: `Bad Request (400): ${errorMessage}` };
-    if (response.status === 401) return { success: false, error: `Unauthorized (401): ${errorMessage}` };
-    if (response.status === 403) return { success: false, error: `Forbidden (403): ${errorMessage}` };
-    if (response.status === 429) {
-      return { success: true, warning: "API key is valid but rate limited. It will work when the limit resets." };
-    }
-
-    return { success: false, error: `API Error (${response.status}): ${errorMessage}` };
-  } catch (error) {
-    console.error("[Study Assist] API test error:", error);
-    await logError({ type: "testApiKey_exception", url, error: (error as Error).message, stack: (error as Error).stack });
-
-    if ((error as Error).message.includes("Failed to fetch")) {
-      return { success: false, error: "Network error. Check your internet connection." };
-    }
-    return { success: false, error: `Exception: ${(error as Error).message}` };
-  }
-}
-
-export async function testDeepSeekApiKey(apiKey: string): Promise<MessageResponse> {
-  try {
-    const response = await fetch(DEEPSEEK_API_BASE, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: DEEPSEEK_V4_FLASH,
-        max_tokens: 10,
-        messages: [{ role: "user", content: "Hello, respond with just OK." }],
-      }),
-    });
-
-    let responseBody: DeepSeekApiResponse | null = null;
-    try {
-      responseBody = await response.clone().json() as DeepSeekApiResponse;
-    } catch (e) {
-      responseBody = { parseError: (e as Error).message };
-    }
-
-    await logError({ type: "testDeepSeekApiKey", status: response.status, responseBody });
-
-    if (response.ok) return { success: true };
-
-    const errorMessage = responseBody?.error?.message || "Invalid API key";
-    return { success: false, error: `DeepSeek Error (${response.status}): ${errorMessage}` };
-  } catch (error) {
-    console.error("[Study Assist] DeepSeek API test error:", error);
-    return { success: false, error: `Exception: ${(error as Error).message}` };
-  }
-}
-
-// ============================================
-// Generic Provider Key Testing (Step B)
+// Generic Provider Key Testing
 // ============================================
 
 export async function testProviderKey(
@@ -528,9 +425,6 @@ export async function analyzeQuestion(context: AnalysisContext, onStatus?: (stat
     const skipPrimary = context.skipDeepSeek === true;
 
     // Resolve the configured pipeline roles (primary → validator).
-    // Lazily self-heal the provider config in case the lifecycle migration
-    // did not run (unpacked reloads / MV3 worker wake-ups).
-    await ensureProviderConfig();
     const roles = await getRoles();
     let primary = await resolveRole(roles.primary);
     let validator = await resolveRole(roles.validator);
@@ -641,7 +535,7 @@ export async function analyzeQuestion(context: AnalysisContext, onStatus?: (stat
           platform: detectPlatform(context.pageUrl),
           confidence: "HIGH",
           deepseekReasoning: primaryResult.deepseekReasoning ?? undefined,
-          deepseekThinkingEnabled: effectivePrimary.thinking,
+            thinkingEnabled: effectivePrimary.thinking,
         });
         return primaryResult;
       } else if (primaryResult.success) {
@@ -667,7 +561,7 @@ export async function analyzeQuestion(context: AnalysisContext, onStatus?: (stat
             platform: detectPlatform(context.pageUrl),
             confidence: primaryResult.confidence,
             deepseekReasoning: primaryResult.deepseekReasoning ?? undefined,
-            deepseekThinkingEnabled: effectivePrimary.thinking,
+          thinkingEnabled: effectivePrimary.thinking,
           });
           return primaryResult;
         }
@@ -1013,7 +907,7 @@ export async function analyzeWithValidator(
     return { success: false, error: runResult.error?.message || `${role.preset.label} API error` };
   }
 
-  const claudeThinking = runResult.reasoning ?? undefined;
+  const reasoningText = runResult.reasoning ?? undefined;
   let result = runResult.text;
   if (!result) return { success: false, error: "No response generated." };
 
@@ -1091,7 +985,7 @@ PLEASE RESPOND AGAIN with the CORRECT matches. Only output the match pairs — n
     fallbackReason,
     confidence: primaryAnalysis?.confidence,
     deepseekReasoning: primaryAnalysis?.reasoning ?? undefined,
-    claudeThinking: claudeThinking,
+    reasoningText,
   });
 
   // For quick mode, extract the final answer
@@ -1169,7 +1063,6 @@ export async function analyzeQuestionStreaming(
     }
     recordRequest(context.questionText);
 
-    await ensureProviderConfig();
     const roles = await getRoles();
     let primary = await resolveRole(roles.primary);
     let validator = await resolveRole(roles.validator);
@@ -1281,7 +1174,7 @@ export async function analyzeQuestionStreaming(
       success: true,
       latencyMs: Date.now() - startTime,
       platform: detectPlatform(context.pageUrl),
-      claudeThinking: thinkingText || result.thinkingText || undefined,
+      reasoningText: thinkingText || result.thinkingText || undefined,
     });
 
     port.postMessage({
