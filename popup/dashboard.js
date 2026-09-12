@@ -12,6 +12,46 @@ let cachedHistory = [];
 let cachedDevMode = false;
 
 // ============================================
+// Provider helpers
+// ============================================
+const PROVIDER_LABELS = {
+  anthropic: "Anthropic",
+  deepseek: "DeepSeek",
+  openai: "OpenAI",
+  "question-bank": "Banco de preguntas",
+};
+
+function providerIdOf(r) {
+  if (r && r.provider) return r.provider;
+  if (r && r.source === "claude") return "anthropic";
+  return (r && r.source) || "other";
+}
+
+function providerLabel(id) {
+  return PROVIDER_LABELS[id] || id || "—";
+}
+
+function roleLabel(role) {
+  if (role === "validator") return "Validador";
+  if (role === "primary") return "Principal";
+  return "";
+}
+
+function badgeClassForProvider(id) {
+  if (id === "anthropic") return "badge-claude";
+  if (id === "deepseek") return "badge-deepseek";
+  if (id === "openai") return "badge-openai";
+  return "badge-bank";
+}
+
+function fillClassForProvider(id) {
+  if (id === "anthropic") return "fill-claude";
+  if (id === "deepseek") return "fill-deepseek";
+  if (id === "openai") return "fill-openai";
+  return "fill-default";
+}
+
+// ============================================
 // Boot
 // ============================================
 
@@ -85,13 +125,7 @@ async function loadData() {
         chrome.runtime
           .sendMessage({ type: "GET_USAGE_HISTORY", limit: 50 })
           .catch(() => ({ success: false, history: [] })),
-        chrome.storage.local.get([
-          "useDeepSeek",
-          "deepseekOnly",
-          "claudeModel",
-          "deepseekApiKey",
-          "claudeApiKey",
-        ]),
+        chrome.storage.local.get(["roles", "providerProfiles"]),
         chrome.storage.local.get(["dashboardDevMode"]),
         chrome.runtime
           .sendMessage({ type: "GET_STORAGE_INFO" })
@@ -170,34 +204,15 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
 
   // — Derive routing metrics from history —
   const today = new Date().toISOString().split("T")[0];
-  let deepseekToday = 0,
-    claudeValidations = 0,
+  let claudeValidations = 0,
     fallbacks = 0,
     imageFallbacks = 0;
-  let dsLatencySum = 0,
-    dsLatencyCount = 0,
-    clLatencySum = 0,
-    clLatencyCount = 0;
 
   for (const r of history) {
-    const day = new Date(r.timestamp).toISOString().split("T")[0];
-    const isToday = day === today;
-    if (r.source === "deepseek") {
-      if (isToday) deepseekToday++;
-      dsLatencySum += r.latencyMs || 0;
-      dsLatencyCount++;
-    } else if (r.source === "claude") {
-      clLatencySum += r.latencyMs || 0;
-      clLatencyCount++;
-      // Heuristic: if record has deepseek reasoning or is a validation
-      if (r.validated) claudeValidations++;
-      if (r.fallbackReason) fallbacks++;
-      if (r.fallbackReason === "images") imageFallbacks++;
-    }
+    if (r.validated) claudeValidations++;
+    if (r.fallbackReason) fallbacks++;
+    if (r.fallbackReason === "images") imageFallbacks++;
   }
-
-  const dsAvgLatency = dsLatencyCount ? dsLatencySum / dsLatencyCount : 0;
-  const clAvgLatency = clLatencyCount ? clLatencySum / clLatencyCount : 0;
 
   // — Cost intelligence —
   const costToday = stats.todayCost || 0;
@@ -236,12 +251,48 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
   // — Platforms —
   const platforms = Object.keys(stats.byPlatform || {}).sort();
 
-  // — Model usage ratio —
-  const dsReqs = (stats.bySource || {}).deepseek || 0;
-  const clReqs = (stats.bySource || {}).claude || 0;
-  const aiTotal = dsReqs + clReqs;
-  const dsPct = aiTotal > 0 ? ((dsReqs / aiTotal) * 100).toFixed(0) : "0";
-  const clPct = aiTotal > 0 ? ((clReqs / aiTotal) * 100).toFixed(0) : "0";
+  // — Per-provider aggregates —
+  const latencyByProvider = {};
+  const todayByProvider = {};
+  for (const r of history) {
+    const id = providerIdOf(r);
+    if (!latencyByProvider[id]) latencyByProvider[id] = { sum: 0, n: 0 };
+    latencyByProvider[id].sum += r.latencyMs || 0;
+    latencyByProvider[id].n++;
+    if (new Date(r.timestamp).toISOString().split("T")[0] === today) {
+      todayByProvider[id] = (todayByProvider[id] || 0) + 1;
+    }
+  }
+  const providerAgg = Object.entries(stats.byProvider || {}).map(([id, a]) => ({
+    id,
+    label: providerLabel(id),
+    tokens: (a.totalInputTokens || 0) + (a.totalOutputTokens || 0),
+    cost: a.totalCostUsd || 0,
+    requests: a.totalRequests || 0,
+  }));
+  const totalProviderRequests = providerAgg.reduce((s, p) => s + p.requests, 0);
+  const providerTokenRows = providerAgg
+    .map((p) => `<div class="grouped-row"><span class="g-label">${escapeHtml(p.label)}</span><span class="g-value">${formatTokens(p.tokens)}</span></div>`)
+    .join("");
+  const providerCostRows = providerAgg
+    .map((p) => `<div class="grouped-row"><span class="g-label">${escapeHtml(p.label)}</span><span class="g-value">$${p.cost.toFixed(4)}</span></div>`)
+    .join("");
+  const providerLatencyRows = providerAgg
+    .map((p) => {
+      const lat = latencyByProvider[p.id];
+      const avg = lat && lat.n ? (lat.sum / lat.n / 1000).toFixed(1) + "s" : "—";
+      return `<div class="grouped-row"><span class="g-label">${escapeHtml(p.label)}</span><span class="g-value">${avg}</span></div>`;
+    })
+    .join("");
+  const providerTodayRows = providerAgg
+    .map((p) => `<div class="grouped-row"><span class="g-label">${escapeHtml(p.label)} hoy</span><span class="g-value">${todayByProvider[p.id] || 0}</span></div>`)
+    .join("");
+  const ratioLegend = providerAgg
+    .map((p) => {
+      const pct = totalProviderRequests > 0 ? ((p.requests / totalProviderRequests) * 100).toFixed(0) : "0";
+      return `<div class="ratio-legend-item">${escapeHtml(p.label)}: ${p.requests} (${pct}%)</div>`;
+    })
+    .join("");
 
   // — System health (image fallbacks are normal behavior, not errors) —
   const oneHourAgo = Date.now() - 3600_000;
@@ -249,7 +300,6 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
     recentErrorFallbacks = 0,
     recentImageFallbacks = 0,
     lastErrorTs = 0;
-  let dsFailures = 0;
   for (const r of history) {
     if (r.timestamp >= oneHourAgo) {
       if (!r.success) {
@@ -259,11 +309,10 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
       if (r.fallbackReason && r.fallbackReason !== "images")
         recentErrorFallbacks++;
       if (r.fallbackReason === "images") recentImageFallbacks++;
-      if (r.source === "deepseek" && !r.success) dsFailures++;
     }
   }
   let healthStatus, healthColor;
-  if (recentErrors >= 3 || dsFailures >= 2) {
+  if (recentErrors >= 3) {
     healthStatus = "Degradado";
     healthColor = "red";
   } else if (recentErrors >= 1 || recentErrorFallbacks >= 2) {
@@ -274,37 +323,34 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
     healthColor = "green";
   }
 
-  // — Active mode —
-  const useDeepSeek = config.useDeepSeek ?? false;
-  const deepseekOnly = config.deepseekOnly ?? false;
-  const hasDeepSeekKey = !!config.deepseekApiKey;
-  const hasClaudeKey = !!config.claudeApiKey;
-
-  let activeMode, modeCss;
-  if (useDeepSeek && deepseekOnly) {
-    activeMode = "Solo DeepSeek";
-    modeCss = "deepseek";
-  } else if (useDeepSeek) {
-    activeMode = "Híbrido";
-    modeCss = "hybrid";
-  } else {
-    activeMode = "Solo Claude";
-    modeCss = "claude";
-  }
+  // — Active mode (from roles) —
+  const roles = config.roles || { primary: null, validator: null };
+  const primaryRole = roles.primary;
+  const validatorRole = roles.validator;
+  const primaryLabel = primaryRole ? providerLabel(primaryRole.provider) : "—";
+  const validatorLabel = validatorRole ? providerLabel(validatorRole.provider) : "—";
+  const activeMode = validatorRole
+    ? `${primaryLabel} + ${validatorLabel}`
+    : `${primaryLabel} (sin validador)`;
+  const modeCss = validatorRole ? "hybrid" : "claude";
 
   const lastModel = history.length ? history[0].model : "—";
 
-  // — Source bars —
-  const sourceEntries = Object.entries(stats.bySource || {});
-  const maxSrc = Math.max(...sourceEntries.map(([, c]) => Number(c)), 1);
+  // — Provider bars —
+  const byProvider = stats.byProvider || {};
+  const providerEntries = Object.entries(byProvider);
+  const sourceEntries = providerEntries.length
+    ? providerEntries.map(([id, a]) => [providerLabel(id), a.totalRequests || 0, fillClassForProvider(id)])
+    : Object.entries(stats.bySource || {}).map(([src, count]) => [providerLabel(src), Number(count), fillClassForProvider(src)]);
+  const maxSrc = Math.max(...sourceEntries.map(([, c]) => c), 1);
   const sourceBars = sourceEntries.length
     ? sourceEntries
         .map(
-          ([src, count]) => `
+          ([label, count, fill]) => `
         <div class="chart-bar-row">
-          <span class="chart-bar-label">${src}</span>
+          <span class="chart-bar-label">${escapeHtml(label)}</span>
           <div class="chart-bar-track">
-            <div class="chart-bar-fill fill-${src.replace(/\s/g, "-")}" style="width:${(count / maxSrc) * 100}%"></div>
+            <div class="chart-bar-fill ${fill}" style="width:${(count / maxSrc) * 100}%"></div>
           </div>
           <span class="chart-bar-value">${count}</span>
         </div>`,
@@ -339,22 +385,18 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
   const historyRows = history
     .map((r, i) => {
       const time = new Date(r.timestamp).toLocaleString();
-      const srcBadge =
-        r.source === "claude"
-          ? "badge-claude"
-          : r.source === "deepseek"
-            ? "badge-deepseek"
-            : "badge-bank";
+      const pid = providerIdOf(r);
+      const srcBadge = badgeClassForProvider(pid);
       const statusBadge = r.success ? "badge-success" : "badge-error";
       const validated = r.validated ? "badge-yes" : "badge-no";
       const trigger = r.trigger || "auto";
       const plat = r.platform || "other";
       const isQA = plat === "qa-manual";
       return `
-      <tr data-idx="${i}" data-platform="${escapeAttr(plat)}" data-source="${escapeAttr(r.source || "")}" data-model="${escapeAttr(r.model || "")}" data-validated="${r.validated ? "yes" : "no"}">
+      <tr data-idx="${i}" data-platform="${escapeAttr(plat)}" data-source="${escapeAttr(pid)}" data-model="${escapeAttr(r.model || "")}" data-validated="${r.validated ? "yes" : "no"}">
         <td>${time}</td>
         <td><span class="text-truncate" title="${escapeAttr(r.questionText)}">${escapeHtml(r.questionText)}</span></td>
-        <td><span class="badge ${srcBadge}">${r.source}</span></td>
+        <td><span class="badge ${srcBadge}">${escapeHtml(providerLabel(pid))}</span>${r.role ? ` <span class="role-tag">${escapeHtml(roleLabel(r.role))}</span>` : ""}</td>
         <td>${r.model ? shortModel(r.model) : "—"}</td>
         <td>${isQA ? '<span class="badge badge-qa-manual">QA</span>' : `<span class="badge badge-platform">${plat}</span>`}</td>
         <td>${trigger}</td>
@@ -370,14 +412,6 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
 
   // — Success rate visibility: hide if consistently >98% —
   const showSuccessRate = stats.totalRequests > 0 && stats.successRate < 98;
-
-  // — Per-AI token/cost data —
-  const ds = stats.deepseek || {};
-  const cl = stats.claude || {};
-  const dsTotalTokens =
-    (ds.totalInputTokens || 0) + (ds.totalOutputTokens || 0);
-  const clTotalTokens =
-    (cl.totalInputTokens || 0) + (cl.totalOutputTokens || 0);
 
   // ========== Assemble HTML ==========
   let html = "";
@@ -420,16 +454,12 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
           <span class="mode-tag ${modeCss}">${activeMode}</span>
         </div>
         <div class="mode-item">
-          <span class="label">Modelo:</span>
-          <span class="value">${shortModel(lastModel)}</span>
+          <span class="label">Principal:</span>
+          <span class="value">${primaryRole ? `${escapeHtml(primaryLabel)} · ${shortModel(primaryRole.model)}` : "—"}</span>
         </div>
         <div class="mode-item">
-          <span class="label">DeepSeek:</span>
-          <span class="value">${hasDeepSeekKey && useDeepSeek ? "✅" : "❌"}</span>
-        </div>
-        <div class="mode-item">
-          <span class="label">Claude:</span>
-          <span class="value">${hasClaudeKey && !deepseekOnly ? "✅" : "❌"}</span>
+          <span class="label">Validador:</span>
+          <span class="value">${validatorRole ? `${escapeHtml(validatorLabel)} · ${shortModel(validatorRole.model)}` : "Ninguno"}</span>
         </div>
       </div>
       <div class="banner-right">
@@ -452,10 +482,9 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
       <div class="health-dot ${healthColor}"></div>
       <span class="health-label">Sistema: ${healthStatus}</span>
       <div class="health-items">
-        <span>DeepSeek: <span class="${dsFailures === 0 ? "tag-ok" : "tag-fail"}">${dsFailures === 0 ? "OK" : dsFailures + " fail"}</span></span>
-        <span>Claude: <span class="${recentErrors - dsFailures <= 0 ? "tag-ok" : "tag-fail"}">${recentErrors - dsFailures <= 0 ? "OK" : recentErrors - dsFailures + " fail"}</span></span>
-        <span>Error Fallbacks (1h): <span class="${recentErrorFallbacks === 0 ? "tag-ok" : "tag-warn"}">${recentErrorFallbacks}</span></span>
-        <span>Image→Claude (1h): <span class="tag-ok">${recentImageFallbacks}</span></span>
+        <span>Errores (1h): <span class="${recentErrors === 0 ? "tag-ok" : "tag-fail"}">${recentErrors}</span></span>
+        <span>Fallbacks API (1h): <span class="${recentErrorFallbacks === 0 ? "tag-ok" : "tag-warn"}">${recentErrorFallbacks}</span></span>
+        <span>Image→Validador (1h): <span class="tag-ok">${recentImageFallbacks}</span></span>
         <span>Último error: ${lastErrStr}</span>
       </div>
     </div>`;
@@ -487,20 +516,13 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
       }
     </div>`;
 
-  // — Model Usage Ratio —
-  if (aiTotal > 0) {
+  // — Usage by provider —
+  if (providerAgg.length > 0) {
     html += `
     <div class="ratio-card">
-      <h3>🔀 Uso por Modelo</h3>
-      <div class="ratio-bar-wrapper">
-        <div class="ratio-bar-track">
-          <div class="ratio-bar-ds" style="width:${dsPct}%">${Number(dsPct) >= 10 ? dsPct + "%" : ""}</div>
-          <div class="ratio-bar-cl" style="width:${clPct}%">${Number(clPct) >= 10 ? clPct + "%" : ""}</div>
-        </div>
-      </div>
+      <h3>🔀 Uso por Proveedor</h3>
       <div class="ratio-legend">
-        <div class="ratio-legend-item"><span class="ratio-dot ds"></span> DeepSeek: ${dsReqs} (${dsPct}%)</div>
-        <div class="ratio-legend-item"><span class="ratio-dot cl"></span> Claude: ${clReqs} (${clPct}%)</div>
+        ${ratioLegend}
       </div>
     </div>`;
   }
@@ -513,32 +535,29 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
         <div class="grouped-row"><span class="g-label">Hoy</span><span class="g-value accent">${formatTokens(tokensToday)}</span></div>
         <div class="grouped-row"><span class="g-label">Total</span><span class="g-value">${formatTokens(totalTokens)}</span></div>
         <div class="grouped-row"><span class="g-label">Prom / petición</span><span class="g-value">${formatTokens(tokensPerReq)}</span></div>
-        <div class="grouped-row"><span class="g-label">DeepSeek total</span><span class="g-value ds">${formatTokens(dsTotalTokens)}</span></div>
-        <div class="grouped-row"><span class="g-label">Claude total</span><span class="g-value cl">${formatTokens(clTotalTokens)}</span></div>
+        ${providerTokenRows}
       </div>
       <div class="grouped-card">
         <h3>💰 Costos</h3>
         <div class="grouped-row"><span class="g-label">Hoy</span><span class="g-value accent">$${costToday.toFixed(4)}</span></div>
         <div class="grouped-row"><span class="g-label">Total</span><span class="g-value">$${stats.totalCostUsd.toFixed(4)}</span></div>
         <div class="grouped-row"><span class="g-label">Est. Mensual (14d)</span><span class="g-value">$${estMonthlyCost.toFixed(2)}</span></div>
-        <div class="grouped-row"><span class="g-label">DeepSeek total</span><span class="g-value ds">$${(ds.totalCostUsd || 0).toFixed(4)}</span></div>
-        <div class="grouped-row"><span class="g-label">Claude total</span><span class="g-value cl">$${(cl.totalCostUsd || 0).toFixed(4)}</span></div>
+        ${providerCostRows}
       </div>
     </div>`;
 
-  // — Latency Breakdown —
+  // — Latency + Routing —
   html += `
     <div class="dual-section">
       <div class="grouped-card">
-        <h3>⏱️ Latencia por Modelo</h3>
-        <div class="grouped-row"><span class="g-label">DeepSeek prom.</span><span class="g-value ds">${dsLatencyCount ? (dsAvgLatency / 1000).toFixed(1) + "s" : "—"}</span></div>
-        <div class="grouped-row"><span class="g-label">Claude prom.</span><span class="g-value cl">${clLatencyCount ? (clAvgLatency / 1000).toFixed(1) + "s" : "—"}</span></div>
+        <h3>⏱️ Latencia por Proveedor</h3>
+        ${providerLatencyRows}
         <div class="grouped-row"><span class="g-label">Global prom.</span><span class="g-value">${stats.totalRequests ? (stats.avgLatencyMs / 1000).toFixed(1) + "s" : "—"}</span></div>
       </div>
       <div class="grouped-card">
         <h3>🔀 Routing y Validación</h3>
-        <div class="grouped-row"><span class="g-label">DeepSeek hoy</span><span class="g-value ds">${deepseekToday}</span></div>
-        <div class="grouped-row"><span class="g-label">Validaciones Claude</span><span class="g-value cl">${claudeValidations}</span></div>
+        ${providerTodayRows}
+        <div class="grouped-row"><span class="g-label">Validaciones</span><span class="g-value">${claudeValidations}</span></div>
         <div class="grouped-row"><span class="g-label">Fallbacks API</span><span class="g-value ${fallbacks > 0 ? "accent" : ""}">${fallbacks}</span></div>
         <div class="grouped-row"><span class="g-label">Fallbacks imagen</span><span class="g-value">${imageFallbacks}</span></div>
       </div>
@@ -559,7 +578,7 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
         hasSourceData
           ? `
       <div class="chart-card">
-        <h3>Peticiones por Fuente</h3>
+        <h3>Peticiones por Proveedor</h3>
         <div class="chart-bar-container">${sourceBars}</div>
       </div>`
           : ""
@@ -582,11 +601,12 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
         .map((p) => `<option value="${escapeAttr(p)}">${p}</option>`)
         .join("")
     : "";
-  const sourceOptions = Object.keys(stats.bySource || {}).sort().length
-    ? Object.keys(stats.bySource || {})
-        .sort()
+  const providerIds = [...new Set(history.map((r) => providerIdOf(r)))].sort();
+  const sourceOptions = providerIds.length
+    ? providerIds
         .map(
-          (s) => `<option value="${escapeAttr(s)}">${escapeHtml(s)}</option>`,
+          (id) =>
+            `<option value="${escapeAttr(id)}">${escapeHtml(providerLabel(id))}</option>`,
         )
         .join("")
     : "";
@@ -608,7 +628,7 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
           <option value="all" selected>Todas</option>
           ${platformOptions}
         </select>
-        <label for="source-filter">🧠 Fuente:</label>
+        <label for="source-filter">Proveedor:</label>
         <select id="source-filter" class="platform-select">
           <option value="all" selected>Todas</option>
           ${sourceOptions}
@@ -643,7 +663,7 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
             <tr>
               <th>Hora</th>
               <th>Pregunta</th>
-              <th>Fuente</th>
+              <th>Proveedor</th>
               <th>Modelo</th>
               <th>Plataforma</th>
               <th>Trigger</th>
@@ -677,23 +697,23 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
         </div>
 
         <div class="howto-col">
-          <div class="howto-col-title">⚙️ Configuración</div>
+          <div class="howto-col-title">Configuración</div>
           <ul class="howto-list">
-            <li><strong>Clave Claude:</strong> Necesaria para el análisis principal. Se guarda cifrada.</li>
-            <li><strong>Modelo:</strong> Haiku (rápido/barato), Sonnet (equilibrado), Opus (máxima capacidad).</li>
-            <li><strong>DeepSeek:</strong> Opcional. Si se habilita, DeepSeek razona primero y Claude valida/corrige.</li>
-            <li><strong>Solo DeepSeek:</strong> Usa solo DeepSeek; no funciona con imágenes ni preguntas de matching.</li>
+            <li><strong>Proveedores:</strong> Configura tus claves de API en la página Proveedores. Se guardan cifradas.</li>
+            <li><strong>Principal:</strong> El modelo que analiza primero.</li>
+            <li><strong>Validador:</strong> Modelo opcional que valida o corrige cuando la confianza no es alta.</li>
+            <li><strong>Visión:</strong> Activa "Visión" por modelo para preguntas con imágenes.</li>
           </ul>
         </div>
 
         <div class="howto-col">
-          <div class="howto-col-title">🔄 Flujo de Análisis</div>
+          <div class="howto-col-title">Flujo de Análisis</div>
           <ol class="howto-list">
             <li>La extensión detecta la pregunta visible automáticamente.</li>
-            <li><strong>Quick Mode (SHIFT):</strong> DeepSeek razona → si confianza HIGH → respuesta directa. Si MEDIUM/LOW → Claude valida.</li>
-            <li><strong>Análisis Completo (clic badge):</strong> Claude genera explicación detallada con streaming.</li>
-            <li>Si hay imágenes en la pregunta, Claude se usa siempre (DeepSeek no soporta imágenes).</li>
-            <li>El banco de preguntas local (solo netacad) se consulta primero; si hay coincidencia ≥80% responde al instante sin IA.</li>
+            <li><strong>Quick Mode (SHIFT):</strong> el principal responde → si confianza alta → respuesta directa. Si no → valida el validador.</li>
+            <li><strong>Análisis Completo (clic badge):</strong> genera explicación detallada con streaming.</li>
+            <li>Si hay imágenes, se usa un proveedor/modelo con visión.</li>
+            <li>El banco de preguntas local (solo netacad) se consulta primero; si hay coincidencia alta responde al instante sin IA.</li>
           </ol>
         </div>
 
@@ -1327,51 +1347,58 @@ async function openRecordDetail(idx) {
 
 function buildRoutingLines(r) {
   const lines = [];
+  const provider = providerLabel(providerIdOf(r));
+
   if (r.source === "question-bank") {
     lines.push(
-      "📚 Respuesta instantánea del banco de preguntas local (sin llamada a la IA).",
+      "Respuesta instantánea del banco de preguntas local (sin llamada a la IA).",
     );
     lines.push(`Confianza de coincidencia: ${r.confidence || "HIGH"}`);
-  } else if (r.source === "deepseek") {
-    lines.push("DeepSeek Reasoner analizó la pregunta directamente.");
+    return lines;
+  }
+
+  if (r.role === "primary") {
+    lines.push(
+      `${provider} (${shortModel(r.model)}) analizó la pregunta como modelo principal.`,
+    );
     lines.push(`Confianza: ${r.confidence || "—"}`);
     if (r.confidence === "HIGH") {
-      lines.push(
-        "Confianza alta → respuesta final directa, sin validación por Claude.",
-      );
+      lines.push("Confianza alta → respuesta final directa, sin validación.");
     } else {
       lines.push(
-        "Confianza baja o media → normalmente se solicitaría validación Claude (no ocurrió en este caso).",
+        "Confianza baja o media (no se solicitó validación en este caso).",
       );
     }
-  } else if (r.source === "claude") {
-    if (r.validated) {
-      lines.push(
-        "DeepSeek Reasoner analizó la pregunta (confianza media o baja).",
-      );
-      lines.push(
-        `Claude (${shortModel(r.model)}) validó y refinó la respuesta de DeepSeek.`,
-      );
-      lines.push("✅ Flujo híbrido completado correctamente.");
-    } else if (r.fallbackReason === "images") {
-      lines.push("La pregunta contiene imágenes → DeepSeek no las soporta.");
-      lines.push(
-        `Claude (${shortModel(r.model)}) respondió directamente con contexto de imagen.`,
-      );
-    } else if (r.fallbackReason === "deepseek_error") {
-      lines.push("DeepSeek fue contactado pero falló (error de API o red).");
-      lines.push(
-        `Claude (${shortModel(r.model)}) actuó como fallback de error.`,
-      );
-    } else if (r.fallbackReason) {
-      lines.push(`Fallback activado por: ${r.fallbackReason}`);
-      lines.push(`Claude (${shortModel(r.model)}) respondió.`);
-    } else {
-      lines.push(`Claude (${shortModel(r.model)}) respondió directamente.`);
-      lines.push(
-        "DeepSeek no estaba disponible, desactivado, o el tipo de pregunta lo omite (matching).",
-      );
-    }
+    return lines;
+  }
+
+  if (r.validated) {
+    lines.push(
+      "El modelo principal analizó la pregunta (confianza media o baja).",
+    );
+    lines.push(
+      `${provider} (${shortModel(r.model)}) validó y refinó la respuesta.`,
+    );
+    lines.push("Flujo híbrido completado correctamente.");
+  } else if (r.fallbackReason === "images") {
+    lines.push("La pregunta contiene imágenes → el modelo principal no las soporta.");
+    lines.push(
+      `${provider} (${shortModel(r.model)}) respondió directamente con contexto de imagen.`,
+    );
+  } else if (
+    r.fallbackReason === "primary_error" ||
+    r.fallbackReason === "deepseek_error"
+  ) {
+    lines.push("El modelo principal fue contactado pero falló (error de API o red).");
+    lines.push(`${provider} (${shortModel(r.model)}) actuó como fallback de error.`);
+  } else if (r.fallbackReason) {
+    lines.push(`Fallback activado por: ${r.fallbackReason}`);
+    lines.push(`${provider} (${shortModel(r.model)}) respondió.`);
+  } else {
+    lines.push(`${provider} (${shortModel(r.model)}) respondió directamente.`);
+    lines.push(
+      "El modelo principal no estaba disponible, desactivado, o el tipo de pregunta lo omite.",
+    );
   }
   return lines;
 }
@@ -1410,19 +1437,15 @@ function renderAnswerBlock(r) {
 }
 
 function renderRecordDetailPage(r, idx, history, devMode, apiData) {
-  const srcBadge =
-    r.source === "claude"
-      ? "badge-claude"
-      : r.source === "deepseek"
-        ? "badge-deepseek"
-        : "badge-bank";
+  const pid = providerIdOf(r);
+  const srcBadge = badgeClassForProvider(pid);
   const statusBadge = r.success ? "badge-success" : "badge-error";
   const time = new Date(r.timestamp).toLocaleString();
   const isQA = r.platform === "qa-manual";
   const routingLines = buildRoutingLines(r);
 
   const metrics = [
-    { k: "Fuente", v: r.source },
+    { k: "Proveedor", v: providerLabel(pid) + (r.role ? ` (${roleLabel(r.role)})` : "") },
     { k: "Modelo", v: shortModel(r.model) || "—" },
     {
       k: "Plataforma",
@@ -1461,7 +1484,7 @@ function renderRecordDetailPage(r, idx, history, devMode, apiData) {
         <button class="btn" id="detail-back-btn">← Volver al Dashboard</button>
         <div class="dp-title-row">
           <h2>🔎 Detalles de Petición</h2>
-          <span class="badge ${srcBadge}" style="font-size:12px;padding:3px 12px;">${r.source}</span>
+          <span class="badge ${srcBadge}" style="font-size:12px;padding:3px 12px;">${escapeHtml(providerLabel(pid))}</span>
           <span class="badge ${statusBadge}">${r.success ? "OK" : "ERROR"}</span>
           ${isQA ? '<span class="badge badge-qa-manual">QA Manual</span>' : ""}
         </div>
@@ -1502,7 +1525,7 @@ function renderRecordDetailPage(r, idx, history, devMode, apiData) {
           ? `
       <!-- DeepSeek Reasoning -->
       <div class="dp-section">
-        <div class="dp-section-label" style="color:var(--color-deepseek);">🧠 Razonamiento DeepSeek</div>
+        <div class="dp-section-label" style="color:var(--color-hybrid);">Razonamiento (principal)</div>
         <pre class="dp-trace">${escapeHtml(r.deepseekReasoning)}</pre>
       </div>`
           : ""
@@ -1513,7 +1536,7 @@ function renderRecordDetailPage(r, idx, history, devMode, apiData) {
           ? `
       <!-- Claude Thinking -->
       <div class="dp-section">
-        <div class="dp-section-label" style="color:var(--color-claude);">🤔 Razonamiento Claude</div>
+        <div class="dp-section-label" style="color:var(--color-claude);">Razonamiento (validador)</div>
         <pre class="dp-trace">${escapeHtml(r.claudeThinking)}</pre>
       </div>`
           : ""
@@ -1523,7 +1546,7 @@ function renderRecordDetailPage(r, idx, history, devMode, apiData) {
           ? `
       <!-- Claude Correction -->
       <div class="dp-section">
-        <div class="dp-section-label" style="color:var(--color-claude);">🔧 Validación / Corrección Claude</div>
+        <div class="dp-section-label" style="color:var(--color-claude);">Validación / Corrección</div>
         <pre class="dp-trace">${escapeHtml(r.claudeCorrection)}</pre>
       </div>`
           : ""

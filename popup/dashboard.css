@@ -22,6 +22,8 @@
   --color-claude-bg: #f3f0ff;
   --color-deepseek: #10b981;
   --color-deepseek-bg: #ecfdf5;
+  --color-openai: #0ea5e9;
+  --color-openai-bg: #e0f2fe;
   --color-hybrid: #3b82f6;
   --color-hybrid-bg: #eff6ff;
   --color-bank: #7c3aed;
@@ -390,6 +392,9 @@ body {
 .fill-claude {
   background: var(--color-claude);
 }
+.fill-openai {
+  background: var(--color-openai);
+}
 .fill-bank,
 .fill-question-bank {
   background: var(--color-bank);
@@ -515,6 +520,15 @@ body {
 .badge-deepseek {
   background: var(--color-deepseek-bg);
   color: var(--color-deepseek);
+}
+.badge-openai {
+  background: var(--color-openai-bg);
+  color: var(--color-openai);
+}
+.role-tag {
+  font-size: 10px;
+  color: var(--text-secondary);
+  margin-left: 4px;
 }
 .badge-bank,
 .badge-question-bank {
