@@ -326,5 +326,16 @@
   "providerDeleteConfirm": { "message": "Delete this provider's API key?", "description": "Delete confirmation" },
   "providerNewLabel": { "message": "New", "description": "Summary new label" },
   "providerObsoleteLabel": { "message": "Obsolete", "description": "Summary obsolete label" },
-  "providerTotalLabel": { "message": "Total", "description": "Summary total label" }
+  "providerTotalLabel": { "message": "Total", "description": "Summary total label" },
+  "primaryProvider": { "message": "Primary provider", "description": "Primary role section title" },
+  "validatorProvider": { "message": "Validator (optional)", "description": "Validator role section title" },
+  "providerField": { "message": "Provider", "description": "Provider select label" },
+  "modelField": { "message": "Model", "description": "Model select label" },
+  "manualModelPlaceholder": { "message": "Other model id...", "description": "Manual model input placeholder" },
+  "configureProviders": { "message": "Configure providers", "description": "Open providers page button" },
+  "noneOption": { "message": "None", "description": "None option" },
+  "otherOption": { "message": "Other...", "description": "Other model option" },
+  "noProviderConfigured": { "message": "Configure a provider first.", "description": "No provider warning" },
+  "rolesSaved": { "message": "Saved.", "description": "Roles saved status" },
+  "providerVisionWarning": { "message": "This model cannot handle image questions.", "description": "Vision warning in popup" }
 }

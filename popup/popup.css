@@ -750,3 +750,27 @@ section h2 {
   letter-spacing: 0.3px;
   margin-top: 2px;
 }
+
+/* Role inputs (primary / validator) */
+.role-manual {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  font-size: 13px;
+  margin-top: 6px;
+}
+
+.role-manual:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+.role-warning {
+  font-size: 11px;
+  color: var(--danger-color);
+  background: #fce8e6;
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  margin-top: 6px;
+}

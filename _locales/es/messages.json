@@ -326,5 +326,16 @@
   "providerDeleteConfirm": { "message": "Eliminar la clave API de este proveedor?", "description": "Confirmacion de borrado" },
   "providerNewLabel": { "message": "Nuevos", "description": "Etiqueta resumen nuevos" },
   "providerObsoleteLabel": { "message": "Obsoletos", "description": "Etiqueta resumen obsoletos" },
-  "providerTotalLabel": { "message": "Total", "description": "Etiqueta resumen total" }
+  "providerTotalLabel": { "message": "Total", "description": "Etiqueta resumen total" },
+  "primaryProvider": { "message": "Proveedor principal", "description": "Titulo rol principal" },
+  "validatorProvider": { "message": "Validador (opcional)", "description": "Titulo rol validador" },
+  "providerField": { "message": "Proveedor", "description": "Etiqueta select proveedor" },
+  "modelField": { "message": "Modelo", "description": "Etiqueta select modelo" },
+  "manualModelPlaceholder": { "message": "Otro model id...", "description": "Placeholder modelo manual" },
+  "configureProviders": { "message": "Configurar proveedores", "description": "Boton abrir proveedores" },
+  "noneOption": { "message": "Ninguno", "description": "Opcion ninguno" },
+  "otherOption": { "message": "Otro...", "description": "Opcion otro modelo" },
+  "noProviderConfigured": { "message": "Configura un proveedor primero.", "description": "Aviso sin proveedor" },
+  "rolesSaved": { "message": "Guardado.", "description": "Estado roles guardados" },
+  "providerVisionWarning": { "message": "Este modelo no sirve para preguntas con imagenes.", "description": "Aviso de vision en popup" }
 }

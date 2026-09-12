@@ -44,17 +44,21 @@ document.addEventListener("DOMContentLoaded", applyTranslations);
 const elements = {
   extensionToggle: document.getElementById("extension-toggle"),
   statusText: document.getElementById("status-text"),
-  apiKeyInput: document.getElementById("api-key-input"),
-  toggleVisibility: document.getElementById("toggle-visibility"),
-  saveApiKey: document.getElementById("save-api-key"),
-  apiStatus: document.getElementById("api-status"),
   analyzePage: document.getElementById("analyze-page"),
   responseMode: document.getElementById("response-mode"),
   autoDetect: document.getElementById("auto-detect"),
   highlightQuestions: document.getElementById("highlight-questions"),
   quickMode: document.getElementById("quick-mode"),
-  claudeModel: document.getElementById("claude-model"),
-  claudeThinking: document.getElementById("claude-thinking"),
+  // Roles
+  primaryProvider: document.getElementById("primary-provider"),
+  primaryModel: document.getElementById("primary-model"),
+  primaryModelManual: document.getElementById("primary-model-manual"),
+  primaryWarning: document.getElementById("primary-warning"),
+  validatorProvider: document.getElementById("validator-provider"),
+  validatorModel: document.getElementById("validator-model"),
+  validatorModelManual: document.getElementById("validator-model-manual"),
+  openProviders: document.getElementById("open-providers"),
+  rolesStatus: document.getElementById("roles-status"),
   // Domain management
   domainsList: document.getElementById("domains-list"),
   newDomainInput: document.getElementById("new-domain-input"),
@@ -62,19 +66,6 @@ const elements = {
   // Image option
   sendImages: document.getElementById("send-images"),
   useMultiBank: document.getElementById("use-multibank"),
-  // DeepSeek
-  useDeepSeek: document.getElementById("use-deepseek"),
-  deepseekConfig: document.getElementById("deepseek-config"),
-  deepseekModel: document.getElementById("deepseek-model"),
-  deepseekThinking: document.getElementById("deepseek-thinking"),
-  deepseekOnly: document.getElementById("deepseek-only"),
-  deepseekOnlyWarnings: document.getElementById("deepseek-only-warnings"),
-  deepseekApiKeyInput: document.getElementById("deepseek-api-key-input"),
-  toggleDeepseekVisibility: document.getElementById(
-    "toggle-deepseek-visibility",
-  ),
-  saveDeepseekKey: document.getElementById("save-deepseek-key"),
-  deepseekStatus: document.getElementById("deepseek-status"),
   // Disguise mode
   disguiseMode: document.getElementById("disguise-mode"),
   // New elements
@@ -90,25 +81,14 @@ const elements = {
 // ============================================
 const STORAGE_KEYS = {
   EXTENSION_ACTIVE: "extensionActive",
-  API_KEY: "claudeApiKey",
   RESPONSE_MODE: "responseMode",
   AUTO_DETECT: "autoDetect",
   HIGHLIGHT_QUESTIONS: "highlightQuestions",
   QUICK_MODE: "quickMode",
-  CLAUDE_MODEL: "claudeModel",
-  CLAUDE_THINKING: "claudeThinking",
   ALLOWED_DOMAINS: "allowedDomains",
   SEND_IMAGES: "sendImages",
   USE_MULTI_BANK: "useMultiBank",
-  // DeepSeek
-  USE_DEEPSEEK: "useDeepSeek",
-  DEEPSEEK_API_KEY: "deepseekApiKey",
-  DEEPSEEK_MODEL: "deepseekModel",
-  DEEPSEEK_THINKING: "deepseekThinking",
-  DEEPSEEK_ONLY: "deepseekOnly",
-  // Disguise mode
   DISGUISE_MODE: "disguiseMode",
-  // New settings
 };
 
 // Default allowed domains (empty for public release - users add their own)
@@ -133,21 +113,13 @@ async function loadSettings() {
   try {
     const result = await chrome.storage.local.get([
       STORAGE_KEYS.EXTENSION_ACTIVE,
-      STORAGE_KEYS.API_KEY,
       STORAGE_KEYS.RESPONSE_MODE,
       STORAGE_KEYS.AUTO_DETECT,
       STORAGE_KEYS.HIGHLIGHT_QUESTIONS,
       STORAGE_KEYS.QUICK_MODE,
-      STORAGE_KEYS.CLAUDE_MODEL,
-      STORAGE_KEYS.CLAUDE_THINKING,
       STORAGE_KEYS.ALLOWED_DOMAINS,
       STORAGE_KEYS.SEND_IMAGES,
       STORAGE_KEYS.USE_MULTI_BANK,
-      STORAGE_KEYS.USE_DEEPSEEK,
-      STORAGE_KEYS.DEEPSEEK_API_KEY,
-      STORAGE_KEYS.DEEPSEEK_MODEL,
-      STORAGE_KEYS.DEEPSEEK_THINKING,
-      STORAGE_KEYS.DEEPSEEK_ONLY,
       STORAGE_KEYS.DISGUISE_MODE,
     ]);
 
@@ -155,22 +127,9 @@ async function loadSettings() {
     elements.extensionToggle.checked =
       result[STORAGE_KEYS.EXTENSION_ACTIVE] ?? false;
 
-    // Set API key (if exists)
-    if (result[STORAGE_KEYS.API_KEY]) {
-      elements.apiKeyInput.value = result[STORAGE_KEYS.API_KEY];
-    }
-
     // Set response mode
     elements.responseMode.value =
       result[STORAGE_KEYS.RESPONSE_MODE] ?? "guided";
-
-    // Set Claude model
-    elements.claudeModel.value =
-      result[STORAGE_KEYS.CLAUDE_MODEL] ?? "claude-haiku-4-5-20251001";
-
-    // Set Claude thinking toggle
-    elements.claudeThinking.checked =
-      result[STORAGE_KEYS.CLAUDE_THINKING] ?? false;
 
     // Set checkboxes
     elements.autoDetect.checked = result[STORAGE_KEYS.AUTO_DETECT] ?? true;
@@ -182,31 +141,15 @@ async function loadSettings() {
     elements.sendImages.checked = result[STORAGE_KEYS.SEND_IMAGES] ?? false;
     elements.useMultiBank.checked = result[STORAGE_KEYS.USE_MULTI_BANK] ?? true;
 
-    // DeepSeek settings
-    const useDeepSeek = result[STORAGE_KEYS.USE_DEEPSEEK] ?? false;
-    const deepseekOnly = result[STORAGE_KEYS.DEEPSEEK_ONLY] ?? false;
-    const deepseekModel =
-      result[STORAGE_KEYS.DEEPSEEK_MODEL] ?? "deepseek-v4-flash";
-    const deepseekThinking = result[STORAGE_KEYS.DEEPSEEK_THINKING] ?? true;
-    elements.useDeepSeek.checked = useDeepSeek;
-    elements.deepseekConfig.style.display = useDeepSeek ? "block" : "none";
-    elements.deepseekModel.value = deepseekModel;
-    elements.deepseekThinking.checked = deepseekThinking;
-    elements.deepseekOnly.checked = deepseekOnly;
-    elements.deepseekOnlyWarnings.style.display = deepseekOnly
-      ? "block"
-      : "none";
-    if (result[STORAGE_KEYS.DEEPSEEK_API_KEY]) {
-      elements.deepseekApiKeyInput.value =
-        result[STORAGE_KEYS.DEEPSEEK_API_KEY];
-    }
-
     // Load domains list
     const domains = result[STORAGE_KEYS.ALLOWED_DOMAINS] ?? DEFAULT_DOMAINS;
     renderDomainsList(domains);
 
     // Disguise mode
     elements.disguiseMode.checked = result[STORAGE_KEYS.DISGUISE_MODE] ?? false;
+
+    // Roles + providers
+    await loadProviderState();
   } catch (error) {
     console.error("Error loading settings:", error);
   }
@@ -219,13 +162,6 @@ function setupEventListeners() {
   // Extension toggle
   elements.extensionToggle.addEventListener("change", handleToggleChange);
 
-  // API key management
-  elements.toggleVisibility.addEventListener("click", toggleApiKeyVisibility);
-  elements.saveApiKey.addEventListener("click", saveApiKey);
-  elements.apiKeyInput.addEventListener("keypress", (e) => {
-    if (e.key === "Enter") saveApiKey();
-  });
-
   // Action buttons
   elements.analyzePage.addEventListener("click", analyzePage);
 
@@ -234,30 +170,25 @@ function setupEventListeners() {
   elements.autoDetect.addEventListener("change", saveSettings);
   elements.highlightQuestions.addEventListener("change", saveSettings);
   elements.quickMode.addEventListener("change", saveSettings);
-  elements.claudeModel.addEventListener("change", saveSettings);
-  elements.claudeThinking.addEventListener("change", saveSettings);
   elements.sendImages.addEventListener("change", saveSettings);
   elements.useMultiBank.addEventListener("change", saveSettings);
-  elements.useDeepSeek.addEventListener("change", handleDeepSeekToggle);
-  elements.deepseekModel.addEventListener("change", saveSettings);
-  elements.deepseekThinking.addEventListener("change", saveSettings);
-  elements.deepseekOnly.addEventListener("change", handleDeepSeekOnlyToggle);
   elements.disguiseMode.addEventListener("change", handleDisguiseModeToggle);
+
+  // Roles
+  elements.primaryProvider.addEventListener("change", () => onRoleChange("primary"));
+  elements.primaryModel.addEventListener("change", () => onRoleModelChange("primary"));
+  elements.primaryModelManual.addEventListener("change", () => onRoleModelChange("primary"));
+  elements.validatorProvider.addEventListener("change", () => onRoleChange("validator"));
+  elements.validatorModel.addEventListener("change", () => onRoleModelChange("validator"));
+  elements.validatorModelManual.addEventListener("change", () => onRoleModelChange("validator"));
+  if (elements.openProviders) {
+    elements.openProviders.addEventListener("click", openProviders);
+  }
 
   // Dashboard button
   if (elements.openDashboard) {
     elements.openDashboard.addEventListener("click", openDashboard);
   }
-
-  // DeepSeek API key management
-  elements.toggleDeepseekVisibility.addEventListener(
-    "click",
-    toggleDeepSeekKeyVisibility,
-  );
-  elements.saveDeepseekKey.addEventListener("click", saveDeepSeekKey);
-  elements.deepseekApiKeyInput.addEventListener("keypress", (e) => {
-    if (e.key === "Enter") saveDeepSeekKey();
-  });
 
   // Domain management
   elements.addDomainBtn.addEventListener("click", addDomain);
@@ -313,7 +244,7 @@ async function handleToggleChange() {
 // ============================================
 async function updateUIState() {
   const isActive = elements.extensionToggle.checked;
-  const hasApiKey = elements.apiKeyInput.value.trim().length > 0;
+  const hasApiKey = !!(PROVIDER_STATE.roles && PROVIDER_STATE.roles.primary);
 
   // Check if disguise mode is enabled
   const result = await chrome.storage.local.get([STORAGE_KEYS.DISGUISE_MODE]);
@@ -337,115 +268,203 @@ async function updateUIState() {
 }
 
 // ============================================
-// Toggle API Key Visibility
+// Roles (primary / validator)
 // ============================================
-function toggleApiKeyVisibility() {
-  const input = elements.apiKeyInput;
-  const isPassword = input.type === "password";
-  input.type = isPassword ? "text" : "password";
-  elements.toggleVisibility.textContent = isPassword ? "🔒" : "👁️";
+let PROVIDER_STATE = {
+  presets: [],
+  profiles: [],
+  roles: { primary: null, validator: null },
+};
+
+function t(key, fallback) {
+  return chrome.i18n.getMessage(key) || fallback || key;
 }
 
-// ============================================
-// Save API Key
-// ============================================
-async function saveApiKey() {
-  const apiKey = elements.apiKeyInput.value.trim();
+async function loadProviderState() {
+  const res = await chrome.runtime
+    .sendMessage({ type: "GET_PROVIDER_STATE" })
+    .catch(() => null);
+  if (!res || !res.success || !res.state) return;
+  PROVIDER_STATE = res.state;
+  renderRoleSelectors();
+}
 
-  if (!apiKey) {
-    showApiStatus("Por favor ingresa una clave API", "error");
+function configuredProviders() {
+  return PROVIDER_STATE.profiles.filter((p) => p.hasKey);
+}
+
+function providerLabelOf(id) {
+  const preset = PROVIDER_STATE.presets.find((p) => p.id === id);
+  return preset ? preset.label : id;
+}
+
+function modelsForProvider(providerId) {
+  const preset = PROVIDER_STATE.presets.find((p) => p.id === providerId);
+  const profile = PROVIDER_STATE.profiles.find((p) => p.id === providerId);
+  if (!preset) return [];
+  return [
+    ...new Set([
+      ...(preset.defaultModels || []),
+      ...((profile && profile.models) || []),
+      ...((profile && profile.customModels) || []),
+    ]),
+  ];
+}
+
+function setOptions(select, options, selectedValue) {
+  select.innerHTML = "";
+  for (const opt of options) {
+    const o = document.createElement("option");
+    o.value = opt.value;
+    o.textContent = opt.label;
+    select.appendChild(o);
+  }
+  if (selectedValue != null) select.value = selectedValue;
+}
+
+function roleEls(role) {
+  return role === "primary"
+    ? {
+        provider: elements.primaryProvider,
+        model: elements.primaryModel,
+        manual: elements.primaryModelManual,
+      }
+    : {
+        provider: elements.validatorProvider,
+        model: elements.validatorModel,
+        manual: elements.validatorModelManual,
+      };
+}
+
+function renderRoleSelectors() {
+  const providers = configuredProviders();
+  const providerOptions = providers.map((p) => ({
+    value: p.id,
+    label: providerLabelOf(p.id),
+  }));
+
+  const primaryRole = PROVIDER_STATE.roles.primary;
+  setOptions(
+    elements.primaryProvider,
+    providerOptions,
+    primaryRole ? primaryRole.provider : providerOptions[0]?.value,
+  );
+  renderModels("primary");
+
+  const validatorRole = PROVIDER_STATE.roles.validator;
+  setOptions(
+    elements.validatorProvider,
+    [{ value: "", label: t("noneOption", "None") }, ...providerOptions],
+    validatorRole ? validatorRole.provider : "",
+  );
+  renderModels("validator");
+
+  if (providers.length === 0) {
+    showRolesStatus(t("noProviderConfigured", "Configure a provider first."), "error");
+  } else {
+    showRolesStatus("", "");
+  }
+}
+
+function renderModels(role) {
+  const els = roleEls(role);
+  const providerId = els.provider.value;
+
+  if (!providerId) {
+    setOptions(els.model, [], "");
+    els.model.style.display = "none";
+    els.manual.style.display = "none";
+    if (role === "primary") elements.primaryWarning.style.display = "none";
     return;
   }
 
-  // Basic validation - Claude API keys typically start with "sk-ant-"
-  if (!apiKey.startsWith("sk-ant-") || apiKey.length < 40) {
-    showApiStatus(
-      'Formato de clave inválido. Las claves de Claude empiezan con "sk-ant-"',
-      "error",
-    );
+  els.model.style.display = "";
+  const assigned = PROVIDER_STATE.roles[role];
+  const assignedModel =
+    assigned && assigned.provider === providerId ? assigned.model : "";
+  const models = modelsForProvider(providerId);
+  const options = [
+    ...models.map((m) => ({ value: m, label: m })),
+    { value: "__other__", label: t("otherOption", "Other...") },
+  ];
+  const selected = models.includes(assignedModel)
+    ? assignedModel
+    : assignedModel
+      ? "__other__"
+      : models[0] || "__other__";
+  setOptions(els.model, options, selected);
+
+  const isOther = els.model.value === "__other__";
+  els.manual.style.display = isOther ? "" : "none";
+  if (isOther) els.manual.value = assignedModel || "";
+
+  if (role === "primary") {
+    updatePrimaryWarning(providerId, isOther ? els.manual.value : els.model.value);
+  }
+}
+
+function updatePrimaryWarning(providerId, model) {
+  const profile = PROVIDER_STATE.profiles.find((p) => p.id === providerId);
+  const vision =
+    profile && model ? (profile.visionModels || []).includes(model) : false;
+  if (!profile || !model || vision) {
+    elements.primaryWarning.style.display = "none";
     return;
   }
+  elements.primaryWarning.textContent = t(
+    "providerVisionWarning",
+    "This model cannot handle image questions.",
+  );
+  elements.primaryWarning.style.display = "block";
+}
 
-  try {
-    // Test the API key
-    showApiStatus("Validando clave API...", "success");
+function readRole(role) {
+  const els = roleEls(role);
+  const providerId = els.provider.value;
+  if (!providerId) return null;
+  let model = els.model.value;
+  if (model === "__other__") model = els.manual.value.trim();
+  if (!model) return null;
+  return { provider: providerId, model };
+}
 
-    const result = await testApiKey(apiKey);
-
-    if (result.success) {
-      await chrome.storage.local.set({ [STORAGE_KEYS.API_KEY]: apiKey });
-      if (result.warning) {
-        showApiStatus("✓ " + result.warning, "success");
-      } else {
-        showApiStatus("✓ Clave API guardada y validada!", "success");
-      }
-      await updateUIState();
-    } else {
-      showApiStatus(
-        result.error ||
-          "Clave API inválida. Por favor verifica e intenta de nuevo.",
-        "error",
-      );
-    }
-  } catch (error) {
-    showApiStatus(`Error: ${error.message}`, "error");
+async function persistRoles() {
+  const roles = { primary: readRole("primary"), validator: readRole("validator") };
+  const res = await chrome.runtime
+    .sendMessage({ type: "SAVE_ROLES", roles })
+    .catch(() => null);
+  if (res && res.success) {
+    PROVIDER_STATE.roles = roles;
+    await updateUIState();
+    showRolesStatus(t("rolesSaved", "Saved."), "success");
+  } else {
+    showRolesStatus((res && res.error) || t("providerError", "Could not save."), "error");
   }
 }
 
-// ============================================
-// Test API Key with Claude
-// ============================================
-async function testApiKey(apiKey) {
-  try {
-    const response = await chrome.runtime.sendMessage({
-      type: "TEST_API_KEY",
-      apiKey: apiKey,
-    });
+async function onRoleChange(role) {
+  renderModels(role);
+  await persistRoles();
+}
 
-    return response;
-  } catch (error) {
-    console.error("Error testing API key:", error);
-    return { success: false, error: error.message };
-  }
+async function onRoleModelChange(role) {
+  const els = roleEls(role);
+  els.manual.style.display = els.model.value === "__other__" ? "" : "none";
+  await persistRoles();
+}
+
+function showRolesStatus(message, type) {
+  elements.rolesStatus.textContent = message || "";
+  elements.rolesStatus.className = "api-status" + (type ? " " + type : "");
+}
+
+function openProviders() {
+  chrome.tabs.create({ url: chrome.runtime.getURL("popup/providers.html") });
 }
 
 // ============================================
-// Show API Status Message
+// Disguise mode
 // ============================================
-function showApiStatus(message, type) {
-  elements.apiStatus.textContent = message;
-  elements.apiStatus.className = `api-status ${type}`;
-
-  // Auto-hide success messages after 3 seconds
-  if (type === "success" && !message.includes("Validando")) {
-    setTimeout(() => {
-      if (elements.apiStatus.textContent === message) {
-        elements.apiStatus.className = "api-status";
-      }
-    }, 3000);
-  }
-}
-
-// ============================================
-// DeepSeek Toggle and API Key Management
-// ============================================
-function handleDeepSeekToggle() {
-  const isEnabled = elements.useDeepSeek.checked;
-  elements.deepseekConfig.style.display = isEnabled ? "block" : "none";
-  // Reset deepseek-only when disabling DeepSeek
-  if (!isEnabled) {
-    elements.deepseekOnly.checked = false;
-    elements.deepseekOnlyWarnings.style.display = "none";
-  }
-  saveSettings();
-}
-
-function handleDeepSeekOnlyToggle() {
-  const isEnabled = elements.deepseekOnly.checked;
-  elements.deepseekOnlyWarnings.style.display = isEnabled ? "block" : "none";
-  saveSettings();
-}
-
 async function handleDisguiseModeToggle() {
   const isEnabled = elements.disguiseMode.checked;
 
@@ -468,74 +487,6 @@ async function handleDisguiseModeToggle() {
   }
 }
 
-function toggleDeepSeekKeyVisibility() {
-  const input = elements.deepseekApiKeyInput;
-  const isPassword = input.type === "password";
-  input.type = isPassword ? "text" : "password";
-  elements.toggleDeepseekVisibility.textContent = isPassword ? "🔒" : "👁️";
-}
-
-async function saveDeepSeekKey() {
-  const apiKey = elements.deepseekApiKeyInput.value.trim();
-
-  if (!apiKey) {
-    showDeepSeekStatus("Por favor ingresa una clave API", "error");
-    return;
-  }
-
-  // DeepSeek keys start with "sk-"
-  if (!apiKey.startsWith("sk-") || apiKey.length < 20) {
-    showDeepSeekStatus(
-      'Formato de clave inválido. Las claves de DeepSeek empiezan con "sk-"',
-      "error",
-    );
-    return;
-  }
-
-  try {
-    showDeepSeekStatus("Validando clave API...", "success");
-
-    const result = await testDeepSeekKey(apiKey);
-
-    if (result.success) {
-      await chrome.storage.local.set({
-        [STORAGE_KEYS.DEEPSEEK_API_KEY]: apiKey,
-      });
-      showDeepSeekStatus("✓ ¡Clave DeepSeek guardada y validada!", "success");
-    } else {
-      showDeepSeekStatus(result.error || "Clave API inválida.", "error");
-    }
-  } catch (error) {
-    showDeepSeekStatus(`Error: ${error.message}`, "error");
-  }
-}
-
-async function testDeepSeekKey(apiKey) {
-  try {
-    const response = await chrome.runtime.sendMessage({
-      type: "TEST_DEEPSEEK_API_KEY",
-      apiKey: apiKey,
-    });
-    return response;
-  } catch (error) {
-    console.error("Error testing DeepSeek API key:", error);
-    return { success: false, error: error.message };
-  }
-}
-
-function showDeepSeekStatus(message, type) {
-  elements.deepseekStatus.textContent = message;
-  elements.deepseekStatus.className = `api-status ${type}`;
-
-  if (type === "success" && !message.includes("Validando")) {
-    setTimeout(() => {
-      if (elements.deepseekStatus.textContent === message) {
-        elements.deepseekStatus.className = "api-status";
-      }
-    }, 3000);
-  }
-}
-
 // ============================================
 // Save Settings
 // ============================================
@@ -546,14 +497,8 @@ async function saveSettings() {
       [STORAGE_KEYS.AUTO_DETECT]: elements.autoDetect.checked,
       [STORAGE_KEYS.HIGHLIGHT_QUESTIONS]: elements.highlightQuestions.checked,
       [STORAGE_KEYS.QUICK_MODE]: elements.quickMode.checked,
-      [STORAGE_KEYS.CLAUDE_MODEL]: elements.claudeModel.value,
-      [STORAGE_KEYS.CLAUDE_THINKING]: elements.claudeThinking.checked,
       [STORAGE_KEYS.SEND_IMAGES]: elements.sendImages.checked,
       [STORAGE_KEYS.USE_MULTI_BANK]: elements.useMultiBank.checked,
-      [STORAGE_KEYS.USE_DEEPSEEK]: elements.useDeepSeek.checked,
-      [STORAGE_KEYS.DEEPSEEK_MODEL]: elements.deepseekModel.value,
-      [STORAGE_KEYS.DEEPSEEK_THINKING]: elements.deepseekThinking.checked,
-      [STORAGE_KEYS.DEEPSEEK_ONLY]: elements.deepseekOnly.checked,
     };
 
     await chrome.storage.local.set(settingsData);

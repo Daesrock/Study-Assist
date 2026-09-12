@@ -44,182 +44,59 @@
         </label>
       </section>
 
-      <!-- API Key Section -->
+      <!-- Roles: primary + validator -->
       <section class="api-section">
-        <h2 data-i18n="claudeApiKey">Claude API Key</h2>
-        <div class="api-input-wrapper">
-          <input
-            type="password"
-            id="api-key-input"
-            data-i18n-placeholder="enterClaudeKey"
-            placeholder="Enter your Claude API Key (sk-ant-...)"
-            autocomplete="off"
-          />
-          <button
-            id="toggle-visibility"
-            class="icon-btn"
-            data-i18n-title="toggleVisibility"
-            title="Toggle visibility"
-          >
-            👁️
-          </button>
-        </div>
-        <button
-          id="save-api-key"
-          class="btn btn-primary"
-          data-i18n="saveApiKey"
-        >
-          Save API Key
-        </button>
-        <div id="api-status" class="api-status"></div>
-
-        <div class="setting-item" style="margin-top: 12px">
-          <label for="claude-model" data-i18n="claudeModel">Claude Model</label>
-          <select id="claude-model">
-            <option value="claude-haiku-4-5-20251001" data-i18n="modelHaiku45">
-              Claude Haiku 4.5 (Rápido, Recomendado)
-            </option>
-            <option value="claude-sonnet-4-6" data-i18n="modelSonnet45">
-              Claude Sonnet 4.6 (Latest)
-            </option>
-            <option value="claude-opus-4-6" data-i18n="modelOpus45">
-              Claude Opus 4.6 (Most Capable)
-            </option>
-          </select>
-        </div>
-
-        <!-- Claude Thinking Toggle -->
+        <h2 data-i18n="primaryProvider">Proveedor principal</h2>
         <div class="setting-item">
-          <label>
-            <input type="checkbox" id="claude-thinking" />
-            <span data-i18n="claudeThinking"
-              >Enable Thinking Mode (razonamiento adaptativo)</span
-            >
-          </label>
+          <label for="primary-provider" data-i18n="providerField">Proveedor</label>
+          <select id="primary-provider"></select>
         </div>
-      </section>
-
-      <!-- DeepSeek API Section -->
-      <section class="api-section deepseek-section">
-        <div class="setting-item deepseek-toggle">
-          <label>
-            <input type="checkbox" id="use-deepseek" />
-            <img
-              src="../icons/deepseek_logo.png"
-              alt="DeepSeek"
-              class="deepseek-logo"
-            />
-            <strong data-i18n="useDeepSeek">Use DeepSeek</strong>
-            <span data-i18n="claudeAsFallback">(Claude as fallback)</span>
-          </label>
+        <div class="setting-item">
+          <label for="primary-model" data-i18n="modelField">Modelo</label>
+          <select id="primary-model"></select>
+          <input
+            type="text"
+            id="primary-model-manual"
+            class="role-manual"
+            data-i18n-placeholder="manualModelPlaceholder"
+            placeholder="Otro model id..."
+            autocomplete="off"
+            style="display: none"
+          />
         </div>
+        <div id="primary-warning" class="role-warning" style="display: none"></div>
 
-        <div id="deepseek-config" class="deepseek-config" style="display: none">
-          <p class="deepseek-info" data-i18n="deepseekInfo">
-            DeepSeek analyzes first. If confidence is not HIGH, Claude
-            validates.
-          </p>
-
-          <!-- DeepSeek Model Selector -->
-          <div class="setting-item">
-            <label for="deepseek-model" data-i18n="deepseekModel"
-              >DeepSeek Model</label
-            >
-            <select id="deepseek-model">
-              <option value="deepseek-v4-flash" data-i18n="modelDFlash">
-                DeepSeek V4 Flash (Rápido, Económico)
-              </option>
-              <option value="deepseek-v4-pro" data-i18n="modelDPro">
-                DeepSeek V4 Pro (Potente, Preciso)
-              </option>
-            </select>
-          </div>
-
-          <!-- Thinking Mode Toggle -->
-          <div class="setting-item">
-            <label>
-              <input type="checkbox" id="deepseek-thinking" checked />
-              <span data-i18n="deepseekThinking"
-                >Enable Thinking Mode (razonamiento profundo)</span
-              >
-            </label>
-          </div>
-
-          <div class="setting-item deepseek-only-option">
-            <label>
-              <input type="checkbox" id="deepseek-only" />
-              <strong data-i18n="deepseekOnly">DeepSeek Only</strong>
-              <span data-i18n="noClaudeFallback">(no Claude fallback)</span>
-            </label>
-            <div
-              id="deepseek-only-warnings"
-              class="deepseek-warnings"
-              style="display: none"
-            >
-              <p>⚠️ <strong data-i18n="warnings">Warnings:</strong></p>
-              <ul>
-                <li>
-                  ❌
-                  <strong data-i18n="noImageSupport">No image support</strong> -
-                  <span data-i18n="noImageSupportDesc"
-                    >DeepSeek cannot read images</span
-                  >
-                </li>
-                <li>
-                  ❌ <strong data-i18n="lowerAccuracy">Lower accuracy</strong> -
-                  <span data-i18n="lowerAccuracyDesc"
-                    >No Claude validation for uncertain answers</span
-                  >
-                </li>
-                <li>
-                  ❌
-                  <strong data-i18n="apiInstability">API instability</strong> -
-                  <span data-i18n="apiInstabilityDesc"
-                    >DeepSeek API may fail or timeout</span
-                  >
-                </li>
-                <li>
-                  ❌ <strong data-i18n="noFallback">No fallback</strong> -
-                  <span data-i18n="noFallbackDesc"
-                    >If DeepSeek fails, you get no answer</span
-                  >
-                </li>
-              </ul>
-              <p class="deepseek-warning-note">
-                💡
-                <span data-i18n="deepseekOnlyTip"
-                  >Only use if you don't have a Claude API key</span
-                >
-              </p>
-            </div>
-          </div>
-
-          <div class="api-input-wrapper">
-            <input
-              type="password"
-              id="deepseek-api-key-input"
-              data-i18n-placeholder="enterDeepseekKey"
-              placeholder="Enter DeepSeek API Key (sk-...)"
-              autocomplete="off"
-            />
-            <button
-              id="toggle-deepseek-visibility"
-              class="icon-btn"
-              data-i18n-title="toggleVisibility"
-              title="Toggle visibility"
-            >
-              👁️
-            </button>
-          </div>
-          <button
-            id="save-deepseek-key"
-            class="btn btn-primary"
-            data-i18n="saveDeepseekKey"
+        <h2 data-i18n="validatorProvider" style="margin-top: 14px">
+          Validador (opcional)
+        </h2>
+        <div class="setting-item">
+          <label for="validator-provider" data-i18n="providerField"
+            >Proveedor</label
           >
-            Save DeepSeek Key
-          </button>
-          <div id="deepseek-status" class="api-status"></div>
+          <select id="validator-provider"></select>
         </div>
+        <div class="setting-item">
+          <label for="validator-model" data-i18n="modelField">Modelo</label>
+          <select id="validator-model"></select>
+          <input
+            type="text"
+            id="validator-model-manual"
+            class="role-manual"
+            data-i18n-placeholder="manualModelPlaceholder"
+            placeholder="Otro model id..."
+            autocomplete="off"
+            style="display: none"
+          />
+        </div>
+
+        <button
+          id="open-providers"
+          class="btn btn-outline"
+          data-i18n="configureProviders"
+        >
+          Configure providers
+        </button>
+        <div id="roles-status" class="api-status"></div>
       </section>
 
       <!-- Quick Actions -->
