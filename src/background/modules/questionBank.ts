@@ -3,87 +3,65 @@
  * Handles loading, searching, and matching questions from the bank
  */
 
-import { log, questionsBank, setQuestionsBank } from "./constants.js";
+import { log } from "./constants.js";
 import type { QuestionsBank, MatchedQuestion } from "./constants.js";
 import { compareAnswerSetsSemantically } from "./answerEquivalences.js";
 
-const PRIMARY_BANK_FILE = "data/questions-bank.json";
-const SECONDARY_BANK_FILE = "data/questions-bank-ccnadesdecero.json";
+/**
+ * Question bank files, loaded and searched together. Each bank holds a single
+ * course/source; the matcher picks the best match across all of them.
+ */
+const BANK_FILES = [
+  { file: "data/questions-bank.json", name: "questions-bank.json" }, // CCNA 2 - examenredes.com (primary)
+  { file: "data/questions-bank-ccnadesdecero.json", name: "questions-bank-ccnadesdecero.json" }, // CCNA 2 - ccnadesdecero.es
+  { file: "data/questions-bank-ccna3.json", name: "questions-bank-ccna3.json" }, // CCNA 3 (ENSA) - examenredes.com
+  { file: "data/questions-bank-ccna3-ccnadesdecero.json", name: "questions-bank-ccna3-ccnadesdecero.json" }, // CCNA 3 (ENSA) - ccnadesdecero.es
+];
 
-let secondaryQuestionsBank: QuestionsBank | null = null;
-let secondaryLoadAttempted = false;
-let useMultiBankCache: boolean | null = null;
+const PRIMARY_BANK_NAME = BANK_FILES[0].name;
+
+const bankCache = new Map<string, QuestionsBank>();
+const bankLoadAttempted = new Set<string>();
 
 // ============================================
 // Questions Bank Loading
 // ============================================
 
-export async function loadQuestionsBank(): Promise<QuestionsBank | null> {
-  if (questionsBank) return questionsBank;
+/** Load a single bank file (cached). Returns null when unavailable. */
+async function loadBank(file: string): Promise<QuestionsBank | null> {
+  const cached = bankCache.get(file);
+  if (cached) return cached;
+  if (bankLoadAttempted.has(file)) return null;
+  bankLoadAttempted.add(file);
 
   try {
-    const url = chrome.runtime.getURL(PRIMARY_BANK_FILE);
+    const url = chrome.runtime.getURL(file);
     const response = await fetch(url);
-    const bank = await response.json() as QuestionsBank;
-    setQuestionsBank(bank);
+    const bank = (await response.json()) as QuestionsBank;
+    bankCache.set(file, bank);
     log(
       "[Study Assist] Questions bank loaded:",
+      file,
       Object.keys(bank.modules).length,
       "modules",
     );
     return bank;
   } catch (error) {
-    console.error("[Study Assist] Failed to load questions bank:", error);
+    console.warn(`[Study Assist] Questions bank not available: ${file}`, error);
     return null;
   }
 }
 
-export async function loadSecondaryQuestionsBank(): Promise<QuestionsBank | null> {
-  if (secondaryQuestionsBank) return secondaryQuestionsBank;
-  if (secondaryLoadAttempted) return null;
-  secondaryLoadAttempted = true;
-
-  try {
-    const url = chrome.runtime.getURL(SECONDARY_BANK_FILE);
-    const response = await fetch(url);
-    const bank = await response.json() as QuestionsBank;
-    secondaryQuestionsBank = bank;
-    log(
-      "[Study Assist] Secondary questions bank loaded:",
-      Object.keys(bank.modules).length,
-      "modules",
-    );
-    return bank;
-  } catch (error) {
-    console.warn("[Study Assist] Secondary questions bank not available:", error);
-    return null;
-  }
-}
-
-async function getUseMultiBankEnabled(): Promise<boolean> {
-  if (useMultiBankCache !== null) return useMultiBankCache;
-
-  try {
-    const result = await chrome.storage.local.get(["useMultiBank"]);
-    useMultiBankCache = typeof result.useMultiBank === "boolean"
-      ? result.useMultiBank
-      : true;
-  } catch {
-    // Keep hybrid mode enabled by default if storage is unavailable.
-    useMultiBankCache = true;
-  }
-
-  return useMultiBankCache;
+export async function loadQuestionsBank(): Promise<QuestionsBank | null> {
+  return loadBank(BANK_FILES[0].file);
 }
 
 /**
  * Test-only helper to clear in-memory bank caches between unit tests.
  */
 export function __resetQuestionBankCachesForTests(): void {
-  setQuestionsBank(null);
-  secondaryQuestionsBank = null;
-  secondaryLoadAttempted = false;
-  useMultiBankCache = null;
+  bankCache.clear();
+  bankLoadAttempted.clear();
 }
 
 // ============================================
@@ -163,34 +141,57 @@ export function isNetAcadPage(pageTitle: string | undefined, pageUrl: string | u
 }
 
 function buildModulesToSearch(moduleInfo: string | undefined, bank: QuestionsBank): string[] {
-  const modulesToSearch: string[] = [];
+  const bankKeys = Object.keys(bank.modules);
+  const candidates: string[] = [];
 
   if (moduleInfo) {
-    const moduleMatch = moduleInfo.match(/(\d+)[\.\-]?(\d+)?/);
-    if (moduleMatch) {
-      const moduleNum = parseInt(moduleMatch[1]);
+    // Drop the course/version tokens ("CCNA 2", "CCNA3 v7.0") so they are not
+    // mistaken for a module number (e.g. "CCNA 3 | Módulos 1-2").
+    const cleaned = moduleInfo
+      .replace(/\bccna\s*\d+(?:\.\d+)?\b/gi, " ")
+      .replace(/\bv\d+(?:\.\d+)?\b/gi, " ");
 
-      if (moduleNum >= 1 && moduleNum <= 4) {
-        modulesToSearch.push("1-4", `mod-${moduleNum}`);
-      } else if (moduleNum >= 5 && moduleNum <= 6) {
-        modulesToSearch.push("5-6", `mod-${moduleNum}`);
-      } else if (moduleNum >= 7 && moduleNum <= 9) {
-        modulesToSearch.push("7-9", `mod-${moduleNum}`);
-      } else if (moduleNum >= 10 && moduleNum <= 13) {
-        modulesToSearch.push("10-13", `mod-${moduleNum}`);
-      } else if (moduleNum >= 14 && moduleNum <= 16) {
-        modulesToSearch.push("14-16", `mod-${moduleNum}`);
+    // Prefer an explicit range ("Módulos 1-2", "modules 9 – 12"); else the first number.
+    const numbers: number[] = [];
+    const rangeMatch = cleaned.match(/(\d+)\s*[–-]\s*(\d+)/);
+    if (rangeMatch) {
+      numbers.push(parseInt(rangeMatch[1]), parseInt(rangeMatch[2]));
+    } else {
+      const single = cleaned.match(/\d+/);
+      if (single) numbers.push(parseInt(single[0]));
+    }
+
+    for (const moduleNum of numbers) {
+      candidates.push(`mod-${moduleNum}`);
+      // Any bank range "a-b" that contains this module number
+      // (e.g. CCNA 3 grouped checkpoints: "1-2", "3-5", "9-12", ...).
+      for (const key of bankKeys) {
+        const range = key.match(/^(\d+)-(\d+)$/);
+        if (range && moduleNum >= parseInt(range[1]) && moduleNum <= parseInt(range[2])) {
+          candidates.push(key);
+        }
       }
     }
 
+    // Legacy CCNA 2 fixed ranges (bank keys "1-4" .. "14-16").
+    const base = numbers[0];
+    if (base !== undefined) {
+      if (base >= 1 && base <= 4) candidates.push("1-4");
+      else if (base >= 5 && base <= 6) candidates.push("5-6");
+      else if (base >= 7 && base <= 9) candidates.push("7-9");
+      else if (base >= 10 && base <= 13) candidates.push("10-13");
+      else if (base >= 14 && base <= 16) candidates.push("14-16");
+    }
+
     if (/final|ptsa|habilidades|práctica/i.test(moduleInfo)) {
-      modulesToSearch.push(
+      candidates.push(
         "final-practice", "final-skills", "final-exam", "ptsa-1", "ptsa-2"
       );
     }
   }
 
-  return modulesToSearch.length > 0 ? modulesToSearch : Object.keys(bank.modules);
+  const existing = [...new Set(candidates)].filter((key) => bankKeys.includes(key));
+  return existing.length > 0 ? existing : bankKeys;
 }
 
 function findBestMatchInBank(
@@ -199,7 +200,7 @@ function findBestMatchInBank(
   normalizedQuestion: string,
   questionText: string,
   similarityThreshold: number,
-  bankModel: "questions-bank.json" | "questions-bank-ccnadesdecero.json",
+  bankModel: string,
 ): MatchedQuestion | null {
   let bestMatch: MatchedQuestion | null = null;
   let bestSimilarity = 0;
@@ -332,15 +333,19 @@ export async function findMatchingQuestion(
 
   log("[Study Assist] Question bank: Searching...");
 
-  const useMultiBank = await getUseMultiBankEnabled();
-  const primaryBank = await loadQuestionsBank();
-  const secondaryBank = useMultiBank ? await loadSecondaryQuestionsBank() : null;
+  const banks = (
+    await Promise.all(
+      BANK_FILES.map(async ({ file, name }) => ({ name, bank: await loadBank(file) })),
+    )
+  ).filter((entry): entry is { name: string; bank: QuestionsBank } => !!entry.bank);
 
-  if (!useMultiBank) {
-    log("[Study Assist] useMultiBank disabled: secondary bank lookup skipped");
+  if (banks.length === 0) return null;
+
+  if (banks.length < BANK_FILES.length) {
+    log(
+      `[Study Assist] ${BANK_FILES.length - banks.length} question bank(s) unavailable`,
+    );
   }
-
-  if (!primaryBank && !secondaryBank) return null;
 
   const normalizedQuestion = normalizeForSearch(questionText);
 
@@ -350,76 +355,61 @@ export async function findMatchingQuestion(
   const isLongText = questionText.length > 800;
   const SIMILARITY_THRESHOLD = isLongText ? 0.50 : 0.55;
 
-  const primaryModulesToSearch = primaryBank
-    ? buildModulesToSearch(moduleInfo, primaryBank)
-    : [];
-
-  const primaryMatch = primaryBank
-    ? findBestMatchInBank(
-      primaryBank,
-      primaryModulesToSearch,
+  const matches: MatchedQuestion[] = [];
+  for (const { name, bank } of banks) {
+    const modulesToSearch = buildModulesToSearch(moduleInfo, bank);
+    const match = findBestMatchInBank(
+      bank,
+      modulesToSearch,
       normalizedQuestion,
       questionText,
       SIMILARITY_THRESHOLD,
-      "questions-bank.json",
-    )
-    : null;
-
-  let secondaryMatch: MatchedQuestion | null = null;
-  if (secondaryBank) {
-    const secondaryModulesToSearch = buildModulesToSearch(moduleInfo, secondaryBank);
-    secondaryMatch = findBestMatchInBank(
-      secondaryBank,
-      secondaryModulesToSearch,
-      normalizedQuestion,
-      questionText,
-      SIMILARITY_THRESHOLD,
-      "questions-bank-ccnadesdecero.json",
+      name,
     );
+    if (match) matches.push(match);
   }
 
-  const duplicateInfo = primaryMatch && secondaryMatch
-    ? evaluateDuplicateConflict(primaryMatch, secondaryMatch)
-    : null;
-
-  if (primaryMatch && secondaryMatch && duplicateInfo) {
-    logDuplicateIfNeeded(primaryMatch, secondaryMatch, duplicateInfo);
+  if (matches.length === 0) {
+    log("[Study Assist] No match in question bank");
+    return null;
   }
 
-  let bestMatch: MatchedQuestion | null = null;
+  // The primary bank wins when it is confident; otherwise the highest score wins.
+  const primaryMatch = matches.find((m) => m.bankModel === PRIMARY_BANK_NAME) ?? null;
+  const others = matches.filter((m) => m.bankModel !== PRIMARY_BANK_NAME);
 
+  let bestMatch: MatchedQuestion;
   if (primaryMatch && primaryMatch.similarity >= 80) {
     bestMatch = primaryMatch;
-  } else if (secondaryMatch && secondaryMatch.similarity >= 80) {
-    bestMatch = secondaryMatch;
-  } else if (primaryMatch && secondaryMatch) {
-    bestMatch = primaryMatch.similarity >= secondaryMatch.similarity
-      ? primaryMatch
-      : secondaryMatch;
   } else {
-    bestMatch = primaryMatch || secondaryMatch;
+    const confident = others.filter((m) => m.similarity >= 80);
+    const pool = confident.length
+      ? confident
+      : [...others, ...(primaryMatch ? [primaryMatch] : [])];
+    bestMatch = pool.reduce((best, m) => (m.similarity > best.similarity ? m : best), pool[0]);
   }
 
-  if (bestMatch) {
-    if (duplicateInfo) {
-      bestMatch.bankConflictDetected = !duplicateInfo.answerEquivalent;
-      bestMatch.bankConflictType = duplicateInfo.answerEquivalent ? "semantic-equivalent" : "real-conflict";
-      bestMatch.bankConflictAnswerSimilarity = Math.round(duplicateInfo.answerSimilarity * 100);
-      bestMatch.bankSecondaryModel = bestMatch.bankModel === "questions-bank.json"
-        ? "questions-bank-ccnadesdecero.json"
-        : "questions-bank.json";
-    }
+  // Conflict detection against the best match coming from a different bank.
+  const runnerUp = matches
+    .filter((m) => m.bankModel !== bestMatch.bankModel)
+    .sort((a, b) => b.similarity - a.similarity)[0];
+  const duplicateInfo = runnerUp ? evaluateDuplicateConflict(bestMatch, runnerUp) : null;
 
-    log(`[Study Assist] QUESTION BANK MATCH (${bestMatch.similarity}% similarity) from module ${bestMatch.moduleRange} (${bestMatch.bankModel}):`);
-    log(`[Study Assist] Bank Q: "${bestMatch.text.substring(0, 80)}..."`);
-    log(`[Study Assist] Page text length: ${questionText.length} chars`);
-    log(`[Study Assist] Bank text length: ${bestMatch.text.length} chars`);
-    log(`[Study Assist] Page normalized: "${normalizedQuestion.substring(0, 100)}..."`);
-    log(`[Study Assist] Bank normalized: "${bestMatch.textNormalized.substring(0, 100)}..."`);
-    log(`[Study Assist] Explanation: "${bestMatch.explanation ? bestMatch.explanation.substring(0, 100) + "..." : "N/A"}"`);
-  } else {
-    log("[Study Assist] No match in question bank");
+  if (runnerUp && duplicateInfo) {
+    logDuplicateIfNeeded(bestMatch, runnerUp, duplicateInfo);
+    bestMatch.bankConflictDetected = !duplicateInfo.answerEquivalent;
+    bestMatch.bankConflictType = duplicateInfo.answerEquivalent ? "semantic-equivalent" : "real-conflict";
+    bestMatch.bankConflictAnswerSimilarity = Math.round(duplicateInfo.answerSimilarity * 100);
+    bestMatch.bankSecondaryModel = runnerUp.bankModel;
   }
+
+  log(`[Study Assist] QUESTION BANK MATCH (${bestMatch.similarity}% similarity) from module ${bestMatch.moduleRange} (${bestMatch.bankModel}):`);
+  log(`[Study Assist] Bank Q: "${bestMatch.text.substring(0, 80)}..."`);
+  log(`[Study Assist] Page text length: ${questionText.length} chars`);
+  log(`[Study Assist] Bank text length: ${bestMatch.text.length} chars`);
+  log(`[Study Assist] Page normalized: "${normalizedQuestion.substring(0, 100)}..."`);
+  log(`[Study Assist] Bank normalized: "${bestMatch.textNormalized.substring(0, 100)}..."`);
+  log(`[Study Assist] Explanation: "${bestMatch.explanation ? bestMatch.explanation.substring(0, 100) + "..." : "N/A"}"`);
 
   return bestMatch;
 }

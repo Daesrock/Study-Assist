@@ -65,7 +65,6 @@ const elements = {
   addDomainBtn: document.getElementById("add-domain-btn"),
   // Image option
   sendImages: document.getElementById("send-images"),
-  useMultiBank: document.getElementById("use-multibank"),
   // Disguise mode
   disguiseMode: document.getElementById("disguise-mode"),
   // New elements
@@ -87,7 +86,6 @@ const STORAGE_KEYS = {
   QUICK_MODE: "quickMode",
   ALLOWED_DOMAINS: "allowedDomains",
   SEND_IMAGES: "sendImages",
-  USE_MULTI_BANK: "useMultiBank",
   DISGUISE_MODE: "disguiseMode",
 };
 
@@ -139,7 +137,6 @@ async function loadSettings() {
 
     // Set send images checkbox (default: false)
     elements.sendImages.checked = result[STORAGE_KEYS.SEND_IMAGES] ?? false;
-    elements.useMultiBank.checked = result[STORAGE_KEYS.USE_MULTI_BANK] ?? true;
 
     // Load domains list
     const domains = result[STORAGE_KEYS.ALLOWED_DOMAINS] ?? DEFAULT_DOMAINS;
@@ -171,7 +168,6 @@ function setupEventListeners() {
   elements.highlightQuestions.addEventListener("change", saveSettings);
   elements.quickMode.addEventListener("change", saveSettings);
   elements.sendImages.addEventListener("change", saveSettings);
-  elements.useMultiBank.addEventListener("change", saveSettings);
   elements.disguiseMode.addEventListener("change", handleDisguiseModeToggle);
 
   // Roles
@@ -501,7 +497,6 @@ async function saveSettings() {
       [STORAGE_KEYS.HIGHLIGHT_QUESTIONS]: elements.highlightQuestions.checked,
       [STORAGE_KEYS.QUICK_MODE]: elements.quickMode.checked,
       [STORAGE_KEYS.SEND_IMAGES]: elements.sendImages.checked,
-      [STORAGE_KEYS.USE_MULTI_BANK]: elements.useMultiBank.checked,
     };
 
     await chrome.storage.local.set(settingsData);

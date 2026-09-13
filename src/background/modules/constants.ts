@@ -76,13 +76,6 @@ export function setActiveProviderController(ctrl: AbortController | null): void 
   activeProviderController = ctrl;
 }
 
-/** Cached questions bank */
-export let questionsBank: QuestionsBank | null = null;
-
-export function setQuestionsBank(bank: QuestionsBank | null): void {
-  questionsBank = bank;
-}
-
 // ============================================
 // Type Definitions
 // ============================================
@@ -115,11 +108,12 @@ export interface QuestionBankQuestion {
 export interface MatchedQuestion extends QuestionBankQuestion {
   moduleRange: string;
   similarity: number;
-  bankModel: "questions-bank.json" | "questions-bank-ccnadesdecero.json";
+  /** File name of the bank the match came from. */
+  bankModel: string;
   bankConflictDetected?: boolean;
   bankConflictType?: "semantic-equivalent" | "real-conflict";
   bankConflictAnswerSimilarity?: number;
-  bankSecondaryModel?: "questions-bank.json" | "questions-bank-ccnadesdecero.json";
+  bankSecondaryModel?: string;
 }
 
 export type ConfidenceLevel = "HIGH" | "MEDIUM" | "LOW";

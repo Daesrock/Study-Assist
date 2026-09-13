@@ -11,7 +11,6 @@ import {
   findMatchingQuestion,
   __resetQuestionBankCachesForTests,
 } from "../../src/background/modules/questionBank";
-import { mockStorage } from "../setup";
 
 describe("normalizeForSearch", () => {
   it("should lowercase text", () => {
@@ -151,7 +150,6 @@ describe("isNetAcadPage", () => {
 describe("findMatchingQuestion (hybrid banks)", () => {
   beforeEach(() => {
     __resetQuestionBankCachesForTests();
-    mockStorage.useMultiBank = true;
     vi.restoreAllMocks();
   });
 
@@ -185,6 +183,9 @@ describe("findMatchingQuestion (hybrid banks)", () => {
 
     const fetchMock = vi.fn(async (input: string | URL | Request) => {
       const url = String(input);
+      if (url.includes("questions-bank-ccna3")) {
+        return { json: async () => ({ modules: {} }) };
+      }
       if (url.includes("questions-bank-ccnadesdecero.json")) {
         return { json: async () => secondaryBank };
       }
@@ -234,6 +235,9 @@ describe("findMatchingQuestion (hybrid banks)", () => {
 
     const fetchMock = vi.fn(async (input: string | URL | Request) => {
       const url = String(input);
+      if (url.includes("questions-bank-ccna3")) {
+        return { json: async () => ({ modules: {} }) };
+      }
       if (url.includes("questions-bank-ccnadesdecero.json")) {
         return { json: async () => secondaryBank };
       }
@@ -297,6 +301,9 @@ describe("findMatchingQuestion (hybrid banks)", () => {
 
     const fetchMock = vi.fn(async (input: string | URL | Request) => {
       const url = String(input);
+      if (url.includes("questions-bank-ccna3")) {
+        return { json: async () => ({ modules: {} }) };
+      }
       if (url.includes("questions-bank-ccnadesdecero.json")) {
         return { json: async () => secondaryBank };
       }
@@ -347,6 +354,9 @@ describe("findMatchingQuestion (hybrid banks)", () => {
 
     const fetchMock = vi.fn(async (input: string | URL | Request) => {
       const url = String(input);
+      if (url.includes("questions-bank-ccna3")) {
+        return { json: async () => ({ modules: {} }) };
+      }
       if (url.includes("questions-bank-ccnadesdecero.json")) {
         return { json: async () => secondaryBank };
       }
@@ -368,34 +378,40 @@ describe("findMatchingQuestion (hybrid banks)", () => {
     expect(result?.bankConflictAnswerSimilarity).toBeLessThan(80);
   });
 
-  it("should skip secondary bank when useMultiBank is disabled", async () => {
-    mockStorage.useMultiBank = false;
-
-    const primaryQuestion = "which command shows vlan trunk details";
-    const primaryBank = {
+  it("should match a question from the CCNA 3 bank", async () => {
+    const ccna3Question = "which ospf packet contains a condensed list of the lsdb";
+    const ccna3Bank = {
       modules: {
-        "1-4": {
+        "1-2": {
           questions: [{
-            text: primaryQuestion,
-            textNormalized: normalizeForSearch(primaryQuestion),
-            options: ["show interfaces trunk"],
-            correctAnswer: "show interfaces trunk",
+            text: ccna3Question,
+            textNormalized: normalizeForSearch(ccna3Question),
+            options: ["DBD", "LSU"],
+            correctAnswer: "DBD",
           }],
         },
       },
     };
+    const emptyBank = { modules: {} };
 
-    const fetchMock = vi.fn(async () => ({ json: async () => primaryBank }));
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.includes("questions-bank-ccna3.json")) {
+        return { json: async () => ccna3Bank };
+      }
+      return { json: async () => emptyBank };
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await findMatchingQuestion(
-      primaryQuestion,
-      "CCNA 2 - Module 1",
+      ccna3Question,
+      "CCNA3 v7 ENSA | Módulos 1 – 2 Respuestas",
       "https://www.netacad.com/test",
     );
 
     expect(result).not.toBeNull();
-    expect(result?.bankModel).toBe("questions-bank.json");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(result?.bankModel).toBe("questions-bank-ccna3.json");
+    expect(result?.moduleRange).toBe("1-2");
+    expect(result?.correctAnswer).toBe("DBD");
   });
 });
