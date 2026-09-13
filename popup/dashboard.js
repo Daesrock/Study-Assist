@@ -91,20 +91,6 @@ document
     }
   });
 
-// Error log modal
-document.getElementById("error-log-btn").addEventListener("click", async () => {
-  try {
-    const result = await chrome.storage.local.get(["errorLog"]);
-    showModal(
-      "🪵 Registro de Errores",
-      null,
-      result.errorLog || "No se encontraron registros de errores.",
-    );
-  } catch (e) {
-    alert("Error: " + e.message);
-  }
-});
-
 // Last AI response → opens detail subpage for most recent record
 document.getElementById("last-response-btn").addEventListener("click", () => {
   if (cachedHistory.length > 0) {
@@ -531,7 +517,7 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
         <td>${r.costUsd == null ? "—" : "$" + r.costUsd.toFixed(6)}</td>
         <td>${(r.latencyMs / 1000).toFixed(1)}s</td>
         <td><span class="badge ${statusBadge}">${r.success ? "OK" : "ERR"}</span></td>
-        <td><button class="btn btn-detail-view" data-idx="${i}">🔎 Ver detalles</button></td>
+        <td><button class="btn btn-detail-view" data-idx="${i}">Ver detalles</button></td>
       </tr>`;
     })
     .join("");
@@ -566,7 +552,7 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
         <button class="btn swb-btn" id="trim-keep-250">Últimas 250</button>
         <button class="btn swb-btn" id="trim-30d">30 días</button>
         <button class="btn swb-btn" id="trim-60d">60 días</button>
-        <button class="btn btn-primary swb-btn" id="swb-export-btn">📤 Exportar primero</button>
+        <button class="btn btn-primary swb-btn" id="swb-export-btn">Exportar primero</button>
       </div>
     </div>`;
   }
@@ -816,19 +802,22 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
           <div class="howto-col-title">⌨️ Atajos de Teclado</div>
           <div class="howto-shortcuts">
             <div class="ks-row"><kbd>SHIFT</kbd><span>Quick Mode — responde con la letra de la opción correcta al instante</span></div>
-            <div class="ks-row"><kbd>ALT + W</kbd><span>Re-detectar preguntas en la página actual (útil tras cambiar de pregunta manualmente)</span></div>
-            <div class="ks-row"><kbd>ALT + X</kbd><span>Cancelar petición de IA en curso</span></div>
-            <div class="ks-row"><kbd>CTRL + SHIFT</kbd><span>Forzar Claude directo, saltándose DeepSeek</span></div>
+            <div class="ks-row"><kbd>CTRL + SHIFT</kbd><span>Analizar usando el validador (omite el principal); si está cargando, cancela y reintenta con él</span></div>
+            <div class="ks-row"><kbd>ALT + W</kbd><span>Re-detectar preguntas en la página actual (en quick mode)</span></div>
+            <div class="ks-row"><kbd>ALT + Q</kbd><span>Mostrar u ocultar el botón SA</span></div>
+            <div class="ks-row"><kbd>ALT + X</kbd><span>Cancelar la petición de IA en curso</span></div>
+            <div class="ks-row"><kbd>CTRL</kbd><span>Mantener para ocultar temporalmente el botón flotante de Webex</span></div>
           </div>
         </div>
 
         <div class="howto-col">
           <div class="howto-col-title">Configuración</div>
           <ul class="howto-list">
-            <li><strong>Proveedores:</strong> Configura tus claves de API en la página Proveedores. Se guardan cifradas.</li>
-            <li><strong>Principal:</strong> El modelo que analiza primero.</li>
-            <li><strong>Validador:</strong> Modelo opcional que valida o corrige cuando la confianza no es alta.</li>
-            <li><strong>Visión:</strong> Activa "Visión" por modelo para preguntas con imágenes.</li>
+            <li><strong>Proveedores:</strong> configura tus claves en la página Proveedores (se guardan cifradas). Puedes usar los integrados (Anthropic, DeepSeek, OpenAI) o añadir propios con plantillas.</li>
+            <li><strong>Modelos:</strong> detecta la lista real de cada proveedor con "Detectar modelos" y comprueba la conexión con "Probar conexión".</li>
+            <li><strong>Principal:</strong> el modelo que analiza primero.</li>
+            <li><strong>Validador:</strong> modelo opcional que valida o corrige cuando la confianza no es alta.</li>
+            <li><strong>Visión:</strong> activa "Visión" por modelo para preguntas con imágenes.</li>
           </ul>
         </div>
 
@@ -881,28 +870,28 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
       <div class="qa-platform-group">
         <div class="qa-platform-header qa-netacad-header">🔵 NetAcad</div>
         <div class="qa-actions">
-          <button class="btn" id="qa-netacad-mcq-btn" data-tooltip="Pregunta de opción múltiple en componente NetAcad">MCQ</button>
-          <button class="btn" id="qa-netacad-matching-btn" data-tooltip="Pregunta de relación tipo drag/drop en NetAcad">Matching</button>
-          <button class="btn btn-accent" id="qa-netacad-quiz-btn" data-tooltip="Quiz completo con navegación">🎯 Quiz Real</button>
+          <button class="btn" id="qa-netacad-mcq-btn">MCQ</button>
+          <button class="btn" id="qa-netacad-matching-btn">Matching</button>
+          <button class="btn btn-accent" id="qa-netacad-quiz-btn">Quiz Real</button>
         </div>
       </div>
 
       <div class="qa-platform-group">
         <div class="qa-platform-header qa-moodle-header">🟣 Moodle</div>
         <div class="qa-actions">
-          <button class="btn" id="qa-moodle-mcq-btn" data-tooltip="Moodle opción múltiple clásico">MCQ</button>
-          <button class="btn" id="qa-moodle-tf-btn" data-tooltip="Moodle verdadero/falso">V/F</button>
-          <button class="btn" id="qa-moodle-match-btn" data-tooltip="Moodle tipo relacionar (tabla con dropdowns)">Match</button>
-          <button class="btn" id="qa-moodle-shortanswer-btn" data-tooltip="Respuesta corta libre">Short Answer</button>
-          <button class="btn" id="qa-moodle-numerical-btn" data-tooltip="Respuesta numérica">Numerical</button>
-          <button class="btn" id="qa-moodle-gapselect-btn" data-tooltip="Selecciona palabras faltantes con dropdowns">Gap Select</button>
-          <button class="btn" id="qa-moodle-multi-btn" data-tooltip="Varias preguntas visibles a la vez (responde todas con SHIFT)">Multi</button>
-          <button class="btn btn-accent" id="qa-moodle-quiz-btn" data-tooltip="Quiz completo con navegación">🎯 Quiz Real</button>
+          <button class="btn" id="qa-moodle-mcq-btn">MCQ</button>
+          <button class="btn" id="qa-moodle-tf-btn">V/F</button>
+          <button class="btn" id="qa-moodle-match-btn">Match</button>
+          <button class="btn" id="qa-moodle-shortanswer-btn">Short Answer</button>
+          <button class="btn" id="qa-moodle-numerical-btn">Numerical</button>
+          <button class="btn" id="qa-moodle-gapselect-btn">Gap Select</button>
+          <button class="btn" id="qa-moodle-multi-btn">Multi</button>
+          <button class="btn btn-accent" id="qa-moodle-quiz-btn">Quiz Real</button>
         </div>
       </div>
 
       <div class="qa-actions" style="margin-top:10px">
-        <button class="btn btn-primary" id="qa-guide-btn" data-tooltip="Ver checklist detallado de pasos para validar la extensión">Ver guía completa</button>
+        <button class="btn btn-primary" id="qa-guide-btn">Ver guía completa</button>
       </div>
     </div>`;
 
@@ -910,10 +899,10 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
   html += `
     <div class="section-title">⚙️ Acciones</div>
     <div class="actions-row">
-      <button class="btn btn-reset-state" id="force-reset-btn" data-tooltip="Limpia los bloqueos de procesamiento activos (flags de petición en curso). NO borra historial ni estadísticas. Útil si la extensión queda 'colgada'.">⚡ Forzar reinicio de estado IA</button>
-      <button class="btn btn-warning" id="reset-session-btn" data-tooltip="Las estadísticas de sesión se recalculan automáticamente del historial. Usa 'Reset Completo' para borrar todo.">🔄 Reset Estadísticas Sesión</button>
-      <button class="btn btn-danger" id="full-reset-btn" data-tooltip="⚠️ Borra TODOS los datos: historial, estadísticas, logs y caché. Acción irreversible.">🗑️ Reset Completo</button>
-      <button class="btn" id="export-logs-btn" data-tooltip="Descarga un archivo JSON con el historial completo y las estadísticas de uso.">📤 Exportar Logs</button>
+      <button class="btn btn-reset-state" id="force-reset-btn">Forzar reinicio de estado IA</button>
+      <button class="btn btn-warning" id="reset-session-btn">Reset Estadísticas Sesión</button>
+      <button class="btn btn-danger" id="full-reset-btn">Reset Completo</button>
+      <button class="btn" id="export-logs-btn">Exportar Logs</button>
     </div>`;
 
   return html;
@@ -1448,32 +1437,33 @@ function showQAGuideModal() {
   const detailHtml = `
     <div class="modal-detail-grid">
       <span class="label">Objetivo:</span>
-      <span class="value">Validar detección y respuesta de la extensión sin entrar a una plataforma real.</span>
+      <span class="value">Validar la detección y la respuesta de la extensión sin entrar a una plataforma real.</span>
+
+      <span class="label">Antes de empezar:</span>
+      <span class="value">Configura un proveedor y su API key en la página <strong>Proveedores</strong>; asigna un modelo <strong>Principal</strong> (y, si quieres, un <strong>Validador</strong>). Aquí abajo elige el <strong>modelo de prueba QA</strong>.</span>
 
       <span class="label">Quick mode:</span>
-      <span class="value">SHIFT para analizar. En V/F debe mostrar <strong>V</strong> o <strong>F</strong>.</span>
+      <span class="value"><strong>SHIFT</strong> para analizar. En V/F debe mostrar <strong>V</strong> o <strong>F</strong>.</span>
 
-      <span class="label">Non-quick:</span>
-      <span class="value">Clic en badge para abrir overlay y verificar análisis completo.</span>
+      <span class="label">Modo full:</span>
+      <span class="value">Activa <strong>Modo full (streaming)</strong>; se abre el resumen y haces clic en la pregunta para ver el análisis completo en streaming.</span>
 
       <span class="label">Re-detección:</span>
-      <span class="value">ALT+W para reiniciar detección del escenario actual.</span>
+      <span class="value"><strong>ALT+W</strong> para reiniciar la detección del escenario actual.</span>
     </div>
     <h4 style="margin: 12px 0 6px;">Checklist sugerido</h4>
     <pre>
-1) Activar extensión y configurar API keys.
-2) Desde este panel ejecutar un escenario (se abrirá/reutilizará example.com).
-3) Desde este panel, ejecutar:
-   - Moodle MCQ
-   - Moodle V/F
-   - NetAcad MCQ
-   - NetAcad Matching
+1) Configurar un proveedor y su API key en la página Proveedores.
+2) Asignar Principal (y Validador opcional) y elegir el modelo de prueba QA.
+3) Desde este panel, ejecutar un escenario (se abrirá/reutilizará example.com):
+   Moodle: MCQ, V/F, Match, Short Answer, Numerical, Gap Select, Multi, Quiz Real.
+   NetAcad: MCQ, Matching, Quiz Real.
 4) Verificar:
-   - Se detecta al menos 1 pregunta
-   - Quick mode responde correctamente
-   - En Moodle V/F quick mode muestra V o F
-   - Non-quick muestra análisis sin errores
-5) Para terminar, puedes cerrar la pestaña de example.com.
+   - Se detecta al menos 1 pregunta.
+   - Quick mode (SHIFT) responde correctamente.
+   - En Moodle V/F, quick mode muestra V o F.
+   - Modo full muestra el análisis en streaming sin errores.
+5) Repetir con cada proveedor/rol que uses. Al terminar, cierra la pestaña de example.com.
     </pre>
   `;
 
