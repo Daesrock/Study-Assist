@@ -42,8 +42,6 @@ document.addEventListener("DOMContentLoaded", applyTranslations);
 // DOM Elements
 // ============================================
 const elements = {
-  extensionToggle: document.getElementById("extension-toggle"),
-  statusText: document.getElementById("status-text"),
   analyzePage: document.getElementById("analyze-page"),
   responseMode: document.getElementById("response-mode"),
   autoDetect: document.getElementById("auto-detect"),
@@ -79,7 +77,6 @@ const elements = {
 // Storage Keys
 // ============================================
 const STORAGE_KEYS = {
-  EXTENSION_ACTIVE: "extensionActive",
   RESPONSE_MODE: "responseMode",
   AUTO_DETECT: "autoDetect",
   HIGHLIGHT_QUESTIONS: "highlightQuestions",
@@ -110,7 +107,6 @@ async function initializePopup() {
 async function loadSettings() {
   try {
     const result = await chrome.storage.local.get([
-      STORAGE_KEYS.EXTENSION_ACTIVE,
       STORAGE_KEYS.RESPONSE_MODE,
       STORAGE_KEYS.AUTO_DETECT,
       STORAGE_KEYS.HIGHLIGHT_QUESTIONS,
@@ -120,19 +116,15 @@ async function loadSettings() {
       STORAGE_KEYS.DISGUISE_MODE,
     ]);
 
-    // Set toggle state
-    elements.extensionToggle.checked =
-      result[STORAGE_KEYS.EXTENSION_ACTIVE] ?? false;
-
     // Set response mode
     elements.responseMode.value =
-      result[STORAGE_KEYS.RESPONSE_MODE] ?? "guided";
+      result[STORAGE_KEYS.RESPONSE_MODE] ?? "direct";
 
     // Set checkboxes
     elements.autoDetect.checked = result[STORAGE_KEYS.AUTO_DETECT] ?? true;
     elements.highlightQuestions.checked =
       result[STORAGE_KEYS.HIGHLIGHT_QUESTIONS] ?? true;
-    elements.quickMode.checked = result[STORAGE_KEYS.QUICK_MODE] ?? false;
+    elements.quickMode.checked = result[STORAGE_KEYS.QUICK_MODE] ?? true;
 
     // Set send images checkbox (default: false)
     elements.sendImages.checked = result[STORAGE_KEYS.SEND_IMAGES] ?? false;
@@ -155,9 +147,6 @@ async function loadSettings() {
 // Setup Event Listeners
 // ============================================
 function setupEventListeners() {
-  // Extension toggle
-  elements.extensionToggle.addEventListener("change", handleToggleChange);
-
   // Action buttons
   elements.analyzePage.addEventListener("click", analyzePage);
 
@@ -193,73 +182,13 @@ function setupEventListeners() {
 }
 
 // ============================================
-// Handle Extension Toggle
-// ============================================
-async function handleToggleChange() {
-  const isActive = elements.extensionToggle.checked;
-
-  try {
-    // Save state to storage
-    await chrome.storage.local.set({
-      [STORAGE_KEYS.EXTENSION_ACTIVE]: isActive,
-    });
-
-    // Update UI
-    await updateUIState();
-
-    // Notify background script
-    await chrome.runtime.sendMessage({
-      type: "TOGGLE_EXTENSION",
-      active: isActive,
-    });
-
-    // Notify content script in active tab
-    const [tab] = await chrome.tabs.query({
-      active: true,
-      currentWindow: true,
-    });
-    if (tab?.id) {
-      try {
-        await chrome.tabs.sendMessage(tab.id, {
-          type: "EXTENSION_STATE_CHANGED",
-          active: isActive,
-        });
-      } catch (e) {
-        // Content script might not be loaded on this page
-        console.log("Could not reach content script");
-      }
-    }
-  } catch (error) {
-    console.error("Error toggling extension:", error);
-  }
-}
-
-// ============================================
 // Update UI State
 // ============================================
 async function updateUIState() {
-  const isActive = elements.extensionToggle.checked;
   const hasApiKey = !!(PROVIDER_STATE.roles && PROVIDER_STATE.roles.primary);
 
-  // Check if disguise mode is enabled
-  const result = await chrome.storage.local.get([STORAGE_KEYS.DISGUISE_MODE]);
-  const isDisguised = result[STORAGE_KEYS.DISGUISE_MODE] ?? false;
-
-  // Update status text with i18n (only show when NOT disguised)
-  if (!isDisguised) {
-    const statusKey = isActive ? "statusOn" : "statusOff";
-    const statusMessage = chrome.i18n.getMessage(statusKey);
-    elements.statusText.textContent =
-      statusMessage || (isActive ? "ACTIVADO" : "DESACTIVADO");
-    elements.statusText.className = `status-text ${isActive ? "status-on" : "status-off"}`;
-  } else {
-    // When disguised, hide the status text
-    elements.statusText.textContent = "";
-    elements.statusText.className = "status-text";
-  }
-
-  // Enable/disable analyze button
-  elements.analyzePage.disabled = !isActive || !hasApiKey;
+  // Enable/disable analyze button (needs a primary provider configured)
+  elements.analyzePage.disabled = !hasApiKey;
 }
 
 // ============================================

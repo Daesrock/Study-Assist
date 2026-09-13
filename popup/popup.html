@@ -25,25 +25,6 @@
         <span class="version">v1.3</span>
       </header>
 
-      <!-- Main Toggle Section -->
-      <section class="toggle-section">
-        <div class="toggle-info">
-          <span class="toggle-label" data-i18n="extensionStatus"
-            >Extension Status</span
-          >
-          <span
-            id="status-text"
-            class="status-text status-off"
-            data-i18n="statusOff"
-            >OFF</span
-          >
-        </div>
-        <label class="toggle-switch">
-          <input type="checkbox" id="extension-toggle" />
-          <span class="slider"></span>
-        </label>
-      </section>
-
       <!-- Roles: primary + validator -->
       <section class="api-section">
         <h2 data-i18n="primaryProvider">Proveedor principal</h2>
@@ -142,10 +123,8 @@
         <h2 data-i18n="settings">Settings</h2>
         <div class="setting-item">
           <label>
-            <input type="checkbox" id="quick-mode" />
-            <span data-i18n="quickMode"
-              >Quick Mode (minimal button, shows only answer letter)</span
-            >
+            <input type="checkbox" id="quick-mode" checked />
+            <span data-i18n="quickMode">Quick Mode</span>
           </label>
         </div>
         <div class="setting-item">
@@ -154,14 +133,14 @@
           >
           <select id="response-mode">
             <option value="guided" data-i18n="guidedLearning">
-              Guided Learning (Explain reasoning)
+              Guided Learning
             </option>
-            <option value="direct" data-i18n="directAnswer">
-              Direct Answer (With explanation)
+            <option value="direct" data-i18n="directAnswer" selected>
+              Direct Answer
             </option>
             <option value="hints" data-i18n="hintsOnly">Hints Only</option>
             <option value="explanation" data-i18n="explanationMode">
-              Modo Explicación (Educativo profundo)
+              Modo Explicación
             </option>
           </select>
         </div>
@@ -186,7 +165,7 @@
           <label>
             <input type="checkbox" id="send-images" />
             <span data-i18n="sendImages"
-              >Send images with questions (uses more tokens)</span
+              >Send images with questions</span
             >
           </label>
         </div>
@@ -194,7 +173,7 @@
           <label>
             <input type="checkbox" id="disguise-mode" />
             <span data-i18n="disguiseMode"
-              >Disguise as uBlock Origin (stealth mode)</span
+              >Disguise as uBlock Origin</span
             >
           </label>
         </div>

@@ -15,7 +15,6 @@ import {
   waitForQuizContent,
 } from "./modules/detection.js";
 import {
-  showReloadPrompt,
   createOverlayContainer,
   createQuickButton,
   highlightDetectedQuestions,
@@ -186,27 +185,26 @@ async function initialize(): Promise<void> {
     }
 
     const result = await chrome.storage.local.get([
-      "extensionActive",
       "responseMode",
       "autoDetect",
       "highlightQuestions",
       "quickMode",
       "sendImages",
       "buttonPosition",
+      "saButtonHidden",
     ]);
 
-    state.isActive = result.extensionActive ?? false;
+    // The extension no longer has a global on/off switch: it is always active
+    // and only gated by the domain allowlist (checked above).
+    state.isActive = true;
 
-    if (!state.isActive) {
-      return;
-    }
-
-    state.settings.responseMode = result.responseMode ?? "guided";
+    state.settings.responseMode = result.responseMode ?? "direct";
     state.settings.autoDetect = result.autoDetect ?? true;
     state.settings.highlightQuestions = result.highlightQuestions ?? true;
-    state.settings.quickMode = result.quickMode ?? false;
+    state.settings.quickMode = result.quickMode ?? true;
     state.settings.sendImages = result.sendImages ?? false;
     state.settings.buttonPosition = result.buttonPosition ?? "bottom-right";
+    state.saButtonHidden = result.saButtonHidden === true;
 
     state.isInitialized = true;
 
@@ -994,7 +992,6 @@ async function runQAPreview(): Promise<number> {
 // ============================================
 interface ContentMessage {
   type: string;
-  active?: boolean;
   settings?: Partial<Settings>;
   result?: string;
   question?: DetectedQuestion;
@@ -1009,23 +1006,6 @@ chrome.runtime.onMessage.addListener(
     sendResponse: (response: { success: boolean; error?: string }) => void
   ): boolean => {
     switch (message.type) {
-      case "EXTENSION_STATE_CHANGED":
-        state.isActive = message.active ?? false;
-        if (!state.isActive) {
-          clearAllHighlights();
-          hideOverlay();
-        } else if (!state.isInitialized) {
-          checkDomainAllowed().then((allowed) => {
-            if (allowed) {
-              showReloadPrompt();
-            }
-          });
-        } else if (state.isDomainAllowed && state.settings.autoDetect) {
-          runDetection();
-        }
-        sendResponse({ success: true });
-        break;
-
       case "SETTINGS_CHANGED":
         if (!state.isDomainAllowed) {
           sendResponse({ success: false, error: "Domain not allowed" });

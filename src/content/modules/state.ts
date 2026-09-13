@@ -23,10 +23,10 @@ export const state: State = {
   isDomainAllowed: false,
   isInitialized: false,
   settings: {
-    responseMode: "guided",
+    responseMode: "direct",
     autoDetect: true,
     highlightQuestions: true,
-    quickMode: false,
+    quickMode: true,
     sendImages: false,
     buttonPosition: "bottom-right",
   } as Settings,

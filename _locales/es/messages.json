@@ -7,18 +7,6 @@
     "message": "Asistente de estudio con IA para plataformas de aprendizaje en línea",
     "description": "Descripción de la extensión"
   },
-  "extensionStatus": {
-    "message": "Estado de la Extensión",
-    "description": "Etiqueta del toggle"
-  },
-  "statusOn": {
-    "message": "ACTIVADO",
-    "description": "Estado cuando está habilitada"
-  },
-  "statusOff": {
-    "message": "DESACTIVADO",
-    "description": "Estado cuando está deshabilitada"
-  },
   "quickActions": {
     "message": "Acciones Rápidas",
     "description": "Título de sección"
@@ -32,7 +20,7 @@
     "description": "Título de sección"
   },
   "quickMode": {
-    "message": "Modo Rápido (botón mínimo, muestra solo letra de respuesta)",
+    "message": "Modo Rápido",
     "description": "Opción modo rápido"
   },
   "responseMode": {
@@ -40,11 +28,11 @@
     "description": "Etiqueta modo respuesta"
   },
   "guidedLearning": {
-    "message": "Aprendizaje Guiado (Explica razonamiento)",
+    "message": "Aprendizaje Guiado",
     "description": "Opción modo guiado"
   },
   "directAnswer": {
-    "message": "Respuesta Directa (Con explicación)",
+    "message": "Respuesta Directa",
     "description": "Opción modo directo"
   },
   "hintsOnly": {
@@ -52,7 +40,7 @@
     "description": "Opción modo pistas"
   },
   "explanationMode": {
-    "message": "Modo Explicación (Educativo profundo)",
+    "message": "Modo Explicación",
     "description": "Opción modo explicación"
   },
   "autoDetect": {
@@ -64,7 +52,7 @@
     "description": "Opción resaltar"
   },
   "sendImages": {
-    "message": "Enviar imágenes con preguntas (usa más tokens)",
+    "message": "Enviar imágenes con preguntas",
     "description": "Opción enviar imágenes"
   },
   "allowedDomains": {
@@ -88,7 +76,7 @@
     "description": "Texto del pie"
   },
   "disguiseMode": {
-    "message": "Disfrazarse de uBlock Origin (modo sigiloso)",
+    "message": "Disfrazarse de uBlock Origin",
     "description": "Etiqueta del checkbox de modo disfraz"
   },
   "providersTitle": { "message": "Proveedores", "description": "Titulo de pagina de proveedores" },

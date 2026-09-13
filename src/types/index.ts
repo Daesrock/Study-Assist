@@ -83,7 +83,7 @@ export interface DetectedQuestion {
 // ============================================
 
 export interface Settings {
-  responseMode: "quick" | "guided" | "detailed" | "explanation";
+  responseMode: "guided" | "direct" | "hints" | "explanation";
   autoDetect: boolean;
   highlightQuestions: boolean;
   quickMode: boolean;

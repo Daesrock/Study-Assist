@@ -8,7 +8,7 @@ import { devLog, DEV_LOGGING } from "./modules/logger.js";
 import type { ExtensionMessage, MessageResponse } from "./modules/constants.js";
 import type { AnalysisResponse } from "../types/index.js";
 import { analyzeQuestion, analyzeQuestionStreaming, testProviderKey, testProviderConnection } from "./modules/api.js";
-import { handleToggleExtension, handleDisguiseMode, restoreDisguiseMode } from "./modules/extensionState.js";
+import { handleDisguiseMode, restoreDisguiseMode } from "./modules/extensionState.js";
 import { getUsageStats, getRecentHistory, clearUsageData, getStorageInfo, trimHistory, updateStorageBadge } from "./modules/usageTracker.js";
 import { getProviderState, saveProviderKey, clearProviderKey, setModelVision, setModelSelected, setModelEndpoint, setSelectionMode, addCustomModel, saveRoles, saveProfile, getProviderKey, applyDetectedModels, saveQaModel, saveCustomProvider, deleteCustomProvider } from "./modules/llm/profiles.js";
 import { fetchModels } from "./modules/llm/catalog.js";
@@ -66,9 +66,6 @@ async function handleMessage(
 ): Promise<MessageResponse | AnalysisResponse> {
   await ensureRegistry();
   switch (message.type) {
-    case "TOGGLE_EXTENSION":
-      return handleToggleExtension(message.active ?? false);
-
     case "TEST_PROVIDER_KEY":
       return testProviderKey(message.provider ?? "anthropic", message.apiKey ?? "");
 
@@ -399,16 +396,20 @@ chrome.runtime.onConnect.addListener((port) => {
 chrome.runtime.onInstalled.addListener(async (details: chrome.runtime.InstalledDetails) => {
   if (details.reason === "install") {
     await chrome.storage.local.set({
-      extensionActive: false,
-      responseMode: "guided",
+      responseMode: "direct",
       autoDetect: true,
       highlightQuestions: true,
-      useMultiBank: true,
-      theme: "system",
+      quickMode: true,
+      sendImages: false,
+      disguiseMode: false,
+      saButtonHidden: false,
       buttonPosition: "bottom-right",
       errorLog: "",
     });
     await chrome.action.setBadgeText({ text: "" });
+  } else {
+    // The global on/off switch was removed; clean up its storage key.
+    await chrome.storage.local.remove(["extensionActive"]).catch(() => {});
   }
   await restoreDisguiseMode();
   await updateStorageBadge();
@@ -426,14 +427,7 @@ chrome.runtime.onStartup.addListener(async () => {
 chrome.tabs.onUpdated.addListener(
   async (tabId: number, changeInfo: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) => {
     if (changeInfo.status === "complete") {
-      try {
-        const { extensionActive } = await chrome.storage.local.get("extensionActive") as { extensionActive?: boolean };
-        if (extensionActive) {
-          chrome.tabs.sendMessage(tabId, { type: "PAGE_LOADED", url: tab.url }).catch(() => {});
-        }
-      } catch (_error) {
-        // Silent fail
-      }
+      chrome.tabs.sendMessage(tabId, { type: "PAGE_LOADED", url: tab.url }).catch(() => {});
     }
   }
 );

@@ -7,18 +7,6 @@
     "message": "AI-powered study assistant for online learning platforms",
     "description": "Extension description"
   },
-  "extensionStatus": {
-    "message": "Extension Status",
-    "description": "Label for extension toggle"
-  },
-  "statusOn": {
-    "message": "ON",
-    "description": "Status when extension is enabled"
-  },
-  "statusOff": {
-    "message": "OFF",
-    "description": "Status when extension is disabled"
-  },
   "quickActions": {
     "message": "Quick Actions",
     "description": "Quick actions section title"
@@ -32,7 +20,7 @@
     "description": "Settings section title"
   },
   "quickMode": {
-    "message": "Quick Mode (minimal button, shows only answer letter)",
+    "message": "Quick Mode",
     "description": "Quick mode option"
   },
   "responseMode": {
@@ -40,11 +28,11 @@
     "description": "Response mode label"
   },
   "guidedLearning": {
-    "message": "Guided Learning (Explain reasoning)",
+    "message": "Guided Learning",
     "description": "Guided mode option"
   },
   "directAnswer": {
-    "message": "Direct Answer (With explanation)",
+    "message": "Direct Answer",
     "description": "Direct mode option"
   },
   "hintsOnly": {
@@ -52,7 +40,7 @@
     "description": "Hints mode option"
   },
   "explanationMode": {
-    "message": "Explanation Mode (Deep educational)",
+    "message": "Explanation Mode",
     "description": "Explanation mode option"
   },
   "autoDetect": {
@@ -64,7 +52,7 @@
     "description": "Highlight option"
   },
   "sendImages": {
-    "message": "Send images with questions (uses more tokens)",
+    "message": "Send images with questions",
     "description": "Send images option"
   },
   "allowedDomains": {
@@ -88,7 +76,7 @@
     "description": "Footer text"
   },
   "disguiseMode": {
-    "message": "Disguise as uBlock Origin (stealth mode)",
+    "message": "Disguise as uBlock Origin",
     "description": "Disguise mode checkbox label"
   },
   "providersTitle": { "message": "Providers", "description": "Providers page title" },

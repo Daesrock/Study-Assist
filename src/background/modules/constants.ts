@@ -266,7 +266,6 @@ export interface PrimaryAnalysisPayload {
 
 // Message types
 export type ExtensionMessageType =
-  | "TOGGLE_EXTENSION"
   | "TEST_PROVIDER_KEY"
   | "TEST_PROVIDER_CONNECTION"
   | "ANALYZE_QUESTION"
@@ -297,7 +296,6 @@ export type ExtensionMessageType =
 
 export interface ExtensionMessage {
   type: ExtensionMessageType;
-  active?: boolean;
   apiKey?: string;
   enabled?: boolean;
   provider?: string;

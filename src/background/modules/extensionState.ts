@@ -1,30 +1,10 @@
 /**
  * Background Service Worker - Extension State Management
- * Handles toggle, disguise mode, and lifecycle events
+ * Handles disguise mode and lifecycle events
  */
 
 import { log } from "./constants.js";
 import type { MessageResponse } from "./constants.js";
-
-// ============================================
-// Extension Toggle
-// ============================================
-
-export async function handleToggleExtension(isActive: boolean): Promise<MessageResponse> {
-  try {
-    const result = await chrome.storage.local.get(["disguiseMode"]) as { disguiseMode?: boolean };
-    const isDisguised = result.disguiseMode ?? false;
-
-    if (!isDisguised) {
-      await chrome.action.setBadgeText({ text: isActive ? "ON" : "" });
-      await chrome.action.setBadgeBackgroundColor({ color: isActive ? "#34a853" : "#ea4335" });
-    }
-    return { success: true };
-  } catch (error) {
-    console.error("[Study Assist] Toggle error:", error);
-    return { success: false, error: (error as Error).message };
-  }
-}
 
 // ============================================
 // Disguise Mode (uBlock Origin)
@@ -59,13 +39,7 @@ export async function handleDisguiseMode(enabled: boolean): Promise<MessageRespo
       });
       log("[Study Assist] Restoring original title...");
       await chrome.action.setTitle({ title: "Study Assist" });
-
-      const result = await chrome.storage.local.get(["extensionActive"]) as { extensionActive?: boolean };
-      const isActive = result.extensionActive ?? false;
-      if (isActive) {
-        await chrome.action.setBadgeText({ text: "ON" });
-        await chrome.action.setBadgeBackgroundColor({ color: "#34a853" });
-      }
+      await chrome.action.setBadgeText({ text: "" });
 
       log("[Study Assist] Disguise mode disabled");
     }

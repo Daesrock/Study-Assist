@@ -14,93 +14,6 @@ import {
 } from "./utils.js";
 
 // ============================================
-// Reload Prompt
-// ============================================
-
-/**
- * Show a prompt asking user to reload the page
- */
-export function showReloadPrompt(): void {
-  // Only show in main frame, not iframes
-  if (window.self !== window.top) return;
-
-  // Remove existing prompt if any
-  const existing = document.getElementById("study-assist-reload-prompt");
-  if (existing) existing.remove();
-
-  const prompt = document.createElement("div");
-  prompt.id = "study-assist-reload-prompt";
-  prompt.innerHTML = `
-    <div style="
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      background: #333;
-      color: #fff;
-      padding: 16px 20px;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-      z-index: 999999;
-      font-family: 'Segoe UI', Roboto, Arial, sans-serif;
-      font-size: 14px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      animation: slideIn 0.3s ease;
-    ">
-      <span>📚 Study Assist activado. Recarga para habilitarlo.</span>
-      <button id="study-assist-reload-btn" style="
-        background: #4285f4;
-        color: white;
-        border: none;
-        padding: 8px 16px;
-        border-radius: 4px;
-        cursor: pointer;
-        font-weight: 600;
-        font-size: 13px;
-      ">Recargar</button>
-      <button id="study-assist-dismiss-btn" style="
-        background: transparent;
-        color: #999;
-        border: none;
-        padding: 4px 8px;
-        cursor: pointer;
-        font-size: 16px;
-      ">✕</button>
-    </div>
-    <style>
-      @keyframes slideIn {
-        from { transform: translateX(100%); opacity: 0; }
-        to { transform: translateX(0); opacity: 1; }
-      }
-    </style>
-  `;
-
-  document.body.appendChild(prompt);
-
-  const reloadBtn = document.getElementById("study-assist-reload-btn") as HTMLButtonElement | null;
-  if (reloadBtn) {
-    reloadBtn.onclick = (): void => {
-      window.location.reload();
-    };
-  }
-
-  const dismissBtn = document.getElementById("study-assist-dismiss-btn") as HTMLButtonElement | null;
-  if (dismissBtn) {
-    dismissBtn.onclick = (): void => {
-      prompt.remove();
-    };
-  }
-
-  // Auto-dismiss after 10 seconds
-  setTimeout((): void => {
-    if (document.getElementById("study-assist-reload-prompt")) {
-      prompt.remove();
-    }
-  }, 10000);
-}
-
-// ============================================
 // Overlay & Container
 // ============================================
 
@@ -274,6 +187,12 @@ export function toggleSAButtonVisibility(): void {
     container.style.display = isHidden ? "" : "none";
     // Update state to track SA button visibility
     state.saButtonHidden = !isHidden;
+    // Persist so the choice survives question changes and page reloads.
+    try {
+      chrome.storage.local.set({ saButtonHidden: state.saButtonHidden }).catch(() => {});
+    } catch (_e) {
+      // storage may be unavailable (tests)
+    }
     log(`[Study Assist] SA button ${isHidden ? "shown" : "hidden"}, CTRL webex toggle ${isHidden ? "enabled" : "disabled"}`);
   } else {
     log("[Study Assist] SA button container not found");
@@ -330,11 +249,14 @@ export function createQuickButton(callbacks: QuickButtonCallbacks): void {
   const quickBtn = document.createElement("div");
   quickBtn.id = "study-assist-quick";
   quickBtn.innerHTML = `<span>SA</span>`;
-  quickBtn.title =
-    "Clic para obtener respuesta | SHIFT: Analizar | ALT+W: Re-detectar | ALT+Q: Ocultar | ALT+X: Cancelar";
   container.appendChild(quickBtn);
 
   document.body.appendChild(container);
+
+  // Keep the ALT+Q hidden state across question changes and page reloads.
+  if (state.saButtonHidden) {
+    container.style.display = "none";
+  }
 
   if (handleQuickClick) {
     quickBtn.addEventListener("click", handleQuickClick);
