@@ -5,9 +5,9 @@
 
 import { describe, it, expect } from "vitest";
 import {
-  buildDeepSeekPrompt,
-  buildDeepSeekMatchingPrompt,
-  buildClaudeValidationPrompt,
+  buildPrimaryPrompt,
+  buildPrimaryMatchingPrompt,
+  buildValidatorPrompt,
   buildAnalysisPrompt,
   buildMatchingPrompt,
   buildMessageContent,
@@ -130,13 +130,13 @@ describe("formatQuestionType", () => {
 describe("DeepSeek Prompt Building", () => {
   describe("Standard MCQ", () => {
     it("should include NetAcad expert context for Cisco pages", () => {
-      const prompt = buildDeepSeekPrompt(createMCQContext());
+      const prompt = buildPrimaryPrompt(createMCQContext());
       expect(prompt).toContain("CCNA/CCNP");
       expect(prompt).toContain("networking expert");
     });
 
     it("should use generic context for non-NetAcad pages", () => {
-      const prompt = buildDeepSeekPrompt(createMCQContext({
+      const prompt = buildPrimaryPrompt(createMCQContext({
         pageTitle: "Biology Quiz - University",
         pageUrl: "https://example.com/quiz",
       }));
@@ -145,7 +145,7 @@ describe("DeepSeek Prompt Building", () => {
     });
 
     it("should list all options", () => {
-      const prompt = buildDeepSeekPrompt(createMCQContext());
+      const prompt = buildPrimaryPrompt(createMCQContext());
       expect(prompt).toContain("A) 90");
       expect(prompt).toContain("B) 100");
       expect(prompt).toContain("C) 110");
@@ -153,12 +153,12 @@ describe("DeepSeek Prompt Building", () => {
     });
 
     it("should include question text", () => {
-      const prompt = buildDeepSeekPrompt(createMCQContext());
+      const prompt = buildPrimaryPrompt(createMCQContext());
       expect(prompt).toContain("administrative distance of OSPF");
     });
 
     it("should request ANSWER and CONFIDENCE format", () => {
-      const prompt = buildDeepSeekPrompt(createMCQContext());
+      const prompt = buildPrimaryPrompt(createMCQContext());
       expect(prompt).toContain("ANSWER:");
       expect(prompt).toContain("CONFIDENCE:");
     });
@@ -166,13 +166,13 @@ describe("DeepSeek Prompt Building", () => {
 
   describe("Multi-answer MCQ", () => {
     it("should specify exact number of required answers", () => {
-      const prompt = buildDeepSeekPrompt(createMultiAnswerContext());
+      const prompt = buildPrimaryPrompt(createMultiAnswerContext());
       expect(prompt).toContain("EXACTLY 2 correct answers");
       expect(prompt).toContain("Select exactly 2 options");
     });
 
     it("should format ANSWER as comma-separated", () => {
-      const prompt = buildDeepSeekPrompt(createMultiAnswerContext());
+      const prompt = buildPrimaryPrompt(createMultiAnswerContext());
       expect(prompt).toContain("e.g., A,C");
     });
   });
@@ -188,7 +188,7 @@ describe("DeepSeek Prompt Building", () => {
         similarity: 85,
       };
 
-      const prompt = buildDeepSeekPrompt(createMCQContext(), match);
+      const prompt = buildPrimaryPrompt(createMCQContext(), match);
       expect(prompt).toContain("REFERENCE MATERIAL");
       expect(prompt).toContain("85% match");
       expect(prompt).toContain("admin distance of 110");
@@ -197,7 +197,7 @@ describe("DeepSeek Prompt Building", () => {
 
   describe("Matching Questions", () => {
     it("should build dropdown matching prompt correctly", () => {
-      const prompt = buildDeepSeekPrompt(createMatchingContext("dropdown"));
+      const prompt = buildPrimaryPrompt(createMatchingContext("dropdown"));
       expect(prompt).toContain("MATCHING question");
       expect(prompt).toContain("A: HTTP");
       expect(prompt).toContain("1. Port 80");
@@ -205,7 +205,7 @@ describe("DeepSeek Prompt Building", () => {
     });
 
     it("should build drag-drop matching prompt correctly", () => {
-      const prompt = buildDeepSeekPrompt(createMatchingContext("drag-drop"));
+      const prompt = buildPrimaryPrompt(createMatchingContext("drag-drop"));
       expect(prompt).toContain("MATCHING question");
       expect(prompt).toContain("CATEGORIES:");
       expect(prompt).toContain("OPTIONS:");
@@ -222,7 +222,7 @@ describe("Claude Validation Prompt", () => {
       reasoning: "I know EIGRP is 90, OSPF is 110...",
     };
 
-    const prompt = buildClaudeValidationPrompt(createMCQContext(), deepseek);
+    const prompt = buildValidatorPrompt(createMCQContext(), deepseek);
     expect(prompt).toContain("DEEPSEEK'S ANALYSIS");
     expect(prompt).toContain("DeepSeek's Answer: C");
     expect(prompt).toContain("MEDIUM confidence");
@@ -238,7 +238,7 @@ describe("Claude Validation Prompt", () => {
       reasoning: null,
     };
 
-    const prompt = buildClaudeValidationPrompt(createMatchingContext("dropdown"), deepseek);
+    const prompt = buildValidatorPrompt(createMatchingContext("dropdown"), deepseek);
     expect(prompt).toContain("AVAILABLE OPTIONS:");
     expect(prompt).toContain("DESCRIPTIONS TO MATCH:");
     expect(prompt).toContain("A-1, B-2, C-3");

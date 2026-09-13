@@ -98,10 +98,10 @@ Use this reference to inform your analysis, but verify it applies to the current
 }
 
 // ============================================
-// DeepSeek Prompts
+// Primary Prompts
 // ============================================
 
-export function buildDeepSeekPrompt(
+export function buildPrimaryPrompt(
   context: AnalysisContext,
   matchedQuestion: MatchedQuestion | null = null
 ): string {
@@ -113,12 +113,12 @@ export function buildDeepSeekPrompt(
 
   // Handle matching questions
   if (questionType === "matching" && categories && matchingOptions) {
-    return buildDeepSeekMatchingPrompt(context, expertContext, referenceSection);
+    return buildPrimaryMatchingPrompt(context, expertContext, referenceSection);
   }
 
   // Handle select-missing-words questions
   if (questionType === "select-missing-words" && context.selectGaps && context.selectChoices) {
-    return buildDeepSeekSelectMissingWordsPrompt(context, expertContext);
+    return buildPrimarySelectMissingWordsPrompt(context, expertContext);
   }
 
   // Handle short-answer and numerical questions (free-text, no options)
@@ -197,7 +197,7 @@ CONFIDENCE: [LOW/MEDIUM/HIGH]`;
   return prompt;
 }
 
-export function buildDeepSeekMatchingPrompt(
+export function buildPrimaryMatchingPrompt(
   context: AnalysisContext,
   expertContext: string,
   referenceSection: string = ""
@@ -242,7 +242,7 @@ CONFIDENCE: [LOW/MEDIUM/HIGH]`;
   return prompt;
 }
 
-function buildDeepSeekSelectMissingWordsPrompt(
+function buildPrimarySelectMissingWordsPrompt(
   context: AnalysisContext,
   expertContext: string,
 ): string {
@@ -287,10 +287,10 @@ CONFIDENCE: [LOW/MEDIUM/HIGH]`;
 }
 
 // ============================================
-// Claude Validation Prompt
+// Validator Prompt
 // ============================================
 
-export function buildClaudeValidationPrompt(
+export function buildValidatorPrompt(
   context: AnalysisContext,
   primaryAnalysis: PrimaryAnalysisPayload
 ): string {
@@ -372,7 +372,7 @@ ANSWER: ${validationAnswerHint}`;
 }
 
 // ============================================
-// Claude Analysis Prompt
+// Validator Analysis Prompt
 // ============================================
 
 export function buildAnalysisPrompt(
@@ -395,7 +395,7 @@ export function buildAnalysisPrompt(
 
     // Select Missing Words quick mode
     if (questionType === "select-missing-words" && context.selectGaps && context.selectChoices) {
-      return buildDeepSeekSelectMissingWordsPrompt(context,
+      return buildPrimarySelectMissingWordsPrompt(context,
         getExpertContext(pageTitle).isNetAcad
           ? "You are a CCNA/CCNP networking expert."
           : "You are an expert exam analyst."
@@ -495,7 +495,7 @@ ${quickAnswerHint}`;
 
   // Handle select-missing-words in non-quick mode
   if (questionType === "select-missing-words" && context.selectGaps && context.selectChoices) {
-    return buildDeepSeekSelectMissingWordsPrompt(context,
+    return buildPrimarySelectMissingWordsPrompt(context,
       "You are an educational AI tutor helping a student understand a question."
     );
   }

@@ -5,8 +5,8 @@
 
 import { describe, it, expect } from "vitest";
 import {
-  parseDeepSeekResponse,
-  extractClaudeQuickAnswer,
+  parsePrimaryResponse,
+  extractQuickAnswer,
   handleApiError,
 } from "../../src/background/modules/parsing";
 import type { AnalysisContext } from "../../src/types/index";
@@ -62,11 +62,11 @@ function trueFalseContext(overrides: Partial<AnalysisContext> = {}): AnalysisCon
 // DeepSeek Response Parsing
 // ============================================
 
-describe("parseDeepSeekResponse", () => {
+describe("parsePrimaryResponse", () => {
   describe("Multiple Choice", () => {
     it("should parse a clean single answer with HIGH confidence", () => {
       const response = "Based on my analysis...\nANSWER: C\nCONFIDENCE: HIGH";
-      const result = parseDeepSeekResponse(response, mcqContext());
+      const result = parsePrimaryResponse(response, mcqContext());
 
       expect(result.success).toBe(true);
       expect(result.result).toBe("C");
@@ -76,7 +76,7 @@ describe("parseDeepSeekResponse", () => {
 
     it("should parse multiple comma-separated answers", () => {
       const response = "ANSWER: A,C\nCONFIDENCE: MEDIUM";
-      const result = parseDeepSeekResponse(response, mcqContext());
+      const result = parsePrimaryResponse(response, mcqContext());
 
       expect(result.success).toBe(true);
       expect(result.result).toBe("A,C");
@@ -85,7 +85,7 @@ describe("parseDeepSeekResponse", () => {
 
     it("should parse answers with spaces around commas", () => {
       const response = "ANSWER: A, C, D\nCONFIDENCE: HIGH";
-      const result = parseDeepSeekResponse(response, mcqContext());
+      const result = parsePrimaryResponse(response, mcqContext());
 
       expect(result.success).toBe(true);
       expect(result.result).toBe("A,C,D");
@@ -93,7 +93,7 @@ describe("parseDeepSeekResponse", () => {
 
     it("should default to LOW confidence when missing", () => {
       const response = "ANSWER: B\nSome other text";
-      const result = parseDeepSeekResponse(response, mcqContext());
+      const result = parsePrimaryResponse(response, mcqContext());
 
       expect(result.success).toBe(true);
       expect(result.result).toBe("B");
@@ -102,7 +102,7 @@ describe("parseDeepSeekResponse", () => {
 
     it("should handle lowercase answer and confidence", () => {
       const response = "answer: d\nconfidence: high";
-      const result = parseDeepSeekResponse(response, mcqContext());
+      const result = parsePrimaryResponse(response, mcqContext());
 
       expect(result.success).toBe(true);
       expect(result.result).toBe("D");
@@ -111,7 +111,7 @@ describe("parseDeepSeekResponse", () => {
 
     it("should fail when no answer found", () => {
       const response = "I think the answer might be related to OSPF but I'm not sure.";
-      const result = parseDeepSeekResponse(response, mcqContext());
+      const result = parsePrimaryResponse(response, mcqContext());
 
       expect(result.success).toBe(false);
       expect(result.error).toContain("Could not parse");
@@ -120,7 +120,7 @@ describe("parseDeepSeekResponse", () => {
     it("should preserve reasoning content", () => {
       const response = "ANSWER: B\nCONFIDENCE: HIGH";
       const reasoning = "Let me think step by step. OSPF has admin distance 110...";
-      const result = parseDeepSeekResponse(response, mcqContext(), reasoning);
+      const result = parsePrimaryResponse(response, mcqContext(), reasoning);
 
       expect(result.primaryReasoning).toBe(reasoning);
       expect(result.analysis).toBe(response);
@@ -130,7 +130,7 @@ describe("parseDeepSeekResponse", () => {
   describe("True/False", () => {
     it("should parse V/F format for true-false", () => {
       const response = "ANSWER: V\nCONFIDENCE: HIGH";
-      const result = parseDeepSeekResponse(response, trueFalseContext());
+      const result = parsePrimaryResponse(response, trueFalseContext());
 
       expect(result.success).toBe(true);
       expect(result.result).toBe("V");
@@ -139,7 +139,7 @@ describe("parseDeepSeekResponse", () => {
 
     it("should parse VERDADERO/FALSO format for true-false", () => {
       const response = "ANSWER: FALSO\nCONFIDENCE: MEDIUM";
-      const result = parseDeepSeekResponse(response, trueFalseContext());
+      const result = parsePrimaryResponse(response, trueFalseContext());
 
       expect(result.success).toBe(true);
       expect(result.result).toBe("F");
@@ -150,7 +150,7 @@ describe("parseDeepSeekResponse", () => {
   describe("Matching Questions", () => {
     it("should parse matching pairs from ANSWER line", () => {
       const response = "ANSWER: A-1, B-2\nCONFIDENCE: HIGH";
-      const result = parseDeepSeekResponse(response, matchingContext());
+      const result = parsePrimaryResponse(response, matchingContext());
 
       expect(result.success).toBe(true);
       expect(result.result).toBe("A-1, B-2");
@@ -159,7 +159,7 @@ describe("parseDeepSeekResponse", () => {
 
     it("should parse matching with more pairs", () => {
       const response = "ANSWER: A-3, B-1, C-2, D-4, E-5\nCONFIDENCE: MEDIUM";
-      const result = parseDeepSeekResponse(response, matchingContext());
+      const result = parsePrimaryResponse(response, matchingContext());
 
       expect(result.success).toBe(true);
       expect(result.result).toBe("A-3, B-1, C-2, D-4, E-5");
@@ -173,7 +173,7 @@ Therefore:
 A-1, B-2
 
 CONFIDENCE: HIGH`;
-      const result = parseDeepSeekResponse(response, matchingContext());
+      const result = parsePrimaryResponse(response, matchingContext());
 
       expect(result.success).toBe(true);
       expect(result.result).toBe("A-1, B-2");
@@ -181,7 +181,7 @@ CONFIDENCE: HIGH`;
 
     it("should parse matching with multi-digit indices (10+)", () => {
       const response = "ANSWER: A-10, B-5, C-2, D-7, E-6, F-9, G-3, H-4, I-8, J-1\nCONFIDENCE: HIGH";
-      const result = parseDeepSeekResponse(response, matchingContext());
+      const result = parsePrimaryResponse(response, matchingContext());
 
       expect(result.success).toBe(true);
       expect(result.result).toBe("A-10, B-5, C-2, D-7, E-6, F-9, G-3, H-4, I-8, J-1");
@@ -189,7 +189,7 @@ CONFIDENCE: HIGH`;
 
     it("should parse matching with double-digit indices (12, 15, etc.)", () => {
       const response = "ANSWER: A-12, B-3, C-15\nCONFIDENCE: MEDIUM";
-      const result = parseDeepSeekResponse(response, matchingContext());
+      const result = parsePrimaryResponse(response, matchingContext());
 
       expect(result.success).toBe(true);
       expect(result.result).toBe("A-12, B-3, C-15");
@@ -203,7 +203,7 @@ Therefore:
 A-10, B-2
 
 CONFIDENCE: HIGH`;
-      const result = parseDeepSeekResponse(response, matchingContext());
+      const result = parsePrimaryResponse(response, matchingContext());
 
       expect(result.success).toBe(true);
       expect(result.result).toBe("A-10, B-2");
@@ -211,7 +211,7 @@ CONFIDENCE: HIGH`;
 
     it("should fail when no matching pairs found", () => {
       const response = "I'm not sure about this matching question.\nCONFIDENCE: LOW";
-      const result = parseDeepSeekResponse(response, matchingContext());
+      const result = parsePrimaryResponse(response, matchingContext());
 
       expect(result.success).toBe(false);
     });
@@ -220,7 +220,7 @@ CONFIDENCE: HIGH`;
   describe("Short Answer, Numerical y Select Missing Words", () => {
     it("should parse short-answer free text", () => {
       const response = "ANSWER: HyperText Transfer Protocol\nCONFIDENCE: HIGH";
-      const result = parseDeepSeekResponse(
+      const result = parsePrimaryResponse(
         response,
         mcqContext({ questionType: "short-answer", options: undefined }),
       );
@@ -232,7 +232,7 @@ CONFIDENCE: HIGH`;
 
     it("should parse numerical answer", () => {
       const response = "ANSWER: 32";
-      const result = parseDeepSeekResponse(
+      const result = parsePrimaryResponse(
         response,
         mcqContext({ questionType: "numerical", options: undefined }),
       );
@@ -244,7 +244,7 @@ CONFIDENCE: HIGH`;
 
     it("should strip trailing CONFIDENCE text from numerical answer", () => {
       const response = "ANSWER: 3\nCONFIDENCE: HIGH";
-      const result = parseDeepSeekResponse(
+      const result = parsePrimaryResponse(
         response,
         mcqContext({ questionType: "numerical", options: undefined }),
       );
@@ -256,7 +256,7 @@ CONFIDENCE: HIGH`;
 
     it("should parse bare numeric response without ANSWER prefix", () => {
       const response = "3\nCONFIDENCE: MEDIUM";
-      const result = parseDeepSeekResponse(
+      const result = parsePrimaryResponse(
         response,
         mcqContext({ questionType: "numerical", options: undefined }),
       );
@@ -267,7 +267,7 @@ CONFIDENCE: HIGH`;
 
     it("should parse select-missing-words mapping", () => {
       const response = "ANSWER: [[1]]=HTTP, [[2]]=80\nCONFIDENCE: MEDIUM";
-      const result = parseDeepSeekResponse(
+      const result = parsePrimaryResponse(
         response,
         mcqContext({ questionType: "select-missing-words", options: undefined }),
       );
@@ -284,26 +284,26 @@ CONFIDENCE: HIGH`;
 // Claude Quick Answer Extraction
 // ============================================
 
-describe("extractClaudeQuickAnswer", () => {
+describe("extractQuickAnswer", () => {
   it("should extract ANSWER: X format", () => {
-    expect(extractClaudeQuickAnswer("Some analysis...\nANSWER: C")).toBe("C");
+    expect(extractQuickAnswer("Some analysis...\nANSWER: C")).toBe("C");
   });
 
   it("should extract multi-letter answer", () => {
-    expect(extractClaudeQuickAnswer("Analysis...\nANSWER: A,C")).toBe("A,C");
+    expect(extractQuickAnswer("Analysis...\nANSWER: A,C")).toBe("A,C");
   });
 
   it("should extract answer with spaces", () => {
-    expect(extractClaudeQuickAnswer("ANSWER: A, C, D")).toBe("A,C,D");
+    expect(extractQuickAnswer("ANSWER: A, C, D")).toBe("A,C,D");
   });
 
   it("should fallback to last line if just a letter", () => {
-    expect(extractClaudeQuickAnswer("The correct answer is...\nB")).toBe("B");
+    expect(extractQuickAnswer("The correct answer is...\nB")).toBe("B");
   });
 
   it("should return full text if no answer pattern found", () => {
     const text = "The answer is that OSPF uses Dijkstra algorithm.";
-    expect(extractClaudeQuickAnswer(text)).toBe(text);
+    expect(extractQuickAnswer(text)).toBe(text);
   });
 
   it("should handle ANSWER: at end of long response", () => {
@@ -313,20 +313,20 @@ describe("extractClaudeQuickAnswer", () => {
 2. Default admin distance is 110
 
 ANSWER: C`;
-    expect(extractClaudeQuickAnswer(text)).toBe("C");
+    expect(extractQuickAnswer(text)).toBe("C");
   });
 
   it("should extract true/false answer as V", () => {
-    expect(extractClaudeQuickAnswer("Análisis...\nANSWER: VERDADERO")).toBe("V");
+    expect(extractQuickAnswer("Análisis...\nANSWER: VERDADERO")).toBe("V");
   });
 
   it("should extract true/false answer as F from last line", () => {
-    expect(extractClaudeQuickAnswer("Análisis breve\nFALSO")).toBe("F");
+    expect(extractQuickAnswer("Análisis breve\nFALSO")).toBe("F");
   });
 
   it("should extract short-answer text when questionType is short-answer", () => {
     expect(
-      extractClaudeQuickAnswer(
+      extractQuickAnswer(
         "Resultado final\nANSWER: HyperText Transfer Protocol",
         "short-answer",
       ),
@@ -335,43 +335,43 @@ ANSWER: C`;
 
   it("should extract numerical text when questionType is numerical", () => {
     expect(
-      extractClaudeQuickAnswer("Resultado final\nANSWER: 32", "numerical"),
+      extractQuickAnswer("Resultado final\nANSWER: 32", "numerical"),
     ).toBe("32");
   });
 
   it("should strip trailing CONFIDENCE text from numerical quick answer", () => {
     expect(
-      extractClaudeQuickAnswer("ANSWER: 3\nCONFIDENCE: HIGH", "numerical"),
+      extractQuickAnswer("ANSWER: 3\nCONFIDENCE: HIGH", "numerical"),
     ).toBe("3");
   });
 
   it("should handle bare numerical response without ANSWER prefix", () => {
     expect(
-      extractClaudeQuickAnswer("3\nCONFIDENCE", "numerical"),
+      extractQuickAnswer("3\nCONFIDENCE", "numerical"),
     ).toBe("3");
   });
 
   it("should normalize 'A and C' format to comma-separated", () => {
     expect(
-      extractClaudeQuickAnswer("ANSWER: A and C"),
+      extractQuickAnswer("ANSWER: A and C"),
     ).toBe("A,C");
   });
 
   it("should normalize 'A y C' format to comma-separated", () => {
     expect(
-      extractClaudeQuickAnswer("ANSWER: A y C"),
+      extractQuickAnswer("ANSWER: A y C"),
     ).toBe("A,C");
   });
 
   it("should normalize 'A / C' format to comma-separated", () => {
     expect(
-      extractClaudeQuickAnswer("ANSWER: A / C"),
+      extractQuickAnswer("ANSWER: A / C"),
     ).toBe("A,C");
   });
 
   it("should extract select-missing-words mapping when questionType is select-missing-words", () => {
     expect(
-      extractClaudeQuickAnswer(
+      extractQuickAnswer(
         "ANSWER: [[1]]=HTTP, [[2]]=80",
         "select-missing-words",
       ),

@@ -2,9 +2,8 @@
  * OpenAI-compatible dialect adapter.
  *
  * Handles the `/chat/completions` wire shape shared by OpenAI, DeepSeek,
- * xAI, Groq, Mistral, Together, OpenRouter and most gateways. In the
- * current pipeline DeepSeek is the only consumer; OpenAI et al. reuse it
- * by adding a preset.
+ * xAI, Groq, Mistral, Together, OpenRouter and most gateways. Any provider
+ * using this dialect reuses the adapter by declaring a preset.
  */
 
 import type { NormalizedUsage, ReasoningKind } from "./contract.js";
@@ -53,7 +52,7 @@ export function buildOpenAiChatRequest(input: OpenAiChatRequestInput): BuiltOpen
 
   const kind = input.reasoningKind ?? "openai-effort";
   if (kind === "deepseek") {
-    // Only reasoning-capable DeepSeek models accept the thinking toggle.
+    // Only reasoning-capable models accept the thinking toggle.
     if (input.thinking) {
       body.thinking = { type: "enabled" };
       body.reasoning_effort = input.reasoningEffort ?? "high";

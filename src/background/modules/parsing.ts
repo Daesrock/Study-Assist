@@ -14,7 +14,7 @@ import type {
 // Primary Response Parsing
 // ============================================
 
-export function parseDeepSeekResponse(
+export function parsePrimaryResponse(
   response: string,
   context: AnalysisContext,
   reasoningContent: string | null = null
@@ -130,7 +130,7 @@ export function parseDeepSeekResponse(
 /**
  * Extract the answer from Claude's response for quick mode
  */
-export function extractClaudeQuickAnswer(result: string, questionType?: string): string {
+export function extractQuickAnswer(result: string, questionType?: string): string {
   // Gap-fill answer: [[1]]=word, [[2]]=word
   if (questionType === "select-missing-words") {
     const gapMatch = result.match(/ANSWER:\s*(\[\[\d+\]\]=[^\n,]+(?:,\s*\[\[\d+\]\]=[^\n,]+)*)/i);

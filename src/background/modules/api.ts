@@ -17,15 +17,15 @@ import type {
 import { logError } from "./fetchUtils.js";
 import { findMatchingQuestion, normalizeForSearch, calculateSimilarity, calculateContainment } from "./questionBank.js";
 import {
-  buildDeepSeekPrompt,
-  buildClaudeValidationPrompt,
+  buildPrimaryPrompt,
+  buildValidatorPrompt,
   buildAnalysisPrompt,
   buildMatchingPrompt,
   buildMessageContent,
 } from "./prompts.js";
 import {
-  parseDeepSeekResponse,
-  extractClaudeQuickAnswer,
+  parsePrimaryResponse,
+  extractQuickAnswer,
 } from "./parsing.js";
 import { trackUsage, estimateCost } from "./usageTracker.js";
 import { checkRateLimit, recordRequest } from "./rateLimiter.js";
@@ -613,7 +613,7 @@ export async function analyzeWithPrimary(
       context.pageUrl,
     );
 
-    const prompt = buildDeepSeekPrompt(context, matchedQuestion);
+    const prompt = buildPrimaryPrompt(context, matchedQuestion);
 
     log(`[Study Assist] Calling ${role.preset.label} (primary)...`);
 
@@ -700,7 +700,7 @@ export async function analyzeWithPrimary(
       console.log("[Study Assist] ================================");
     }
 
-    const parsed = parseDeepSeekResponse(text, context, reasoningContent);
+    const parsed = parsePrimaryResponse(text, context, reasoningContent);
     // Attach real token counts
     parsed.inputTokens = result.usage.inputTokens;
     parsed.outputTokens = result.usage.outputTokens;
@@ -822,7 +822,7 @@ export async function analyzeWithValidator(
   }
 
   const prompt = primaryAnalysis
-    ? buildClaudeValidationPrompt(context, primaryAnalysis)
+    ? buildValidatorPrompt(context, primaryAnalysis)
     : buildAnalysisPrompt(context, matchedQuestion);
 
   log("[Study Assist] Validator analysis...", primaryAnalysis ? "(validating primary)" : "");
@@ -979,7 +979,7 @@ PLEASE RESPOND AGAIN with the CORRECT matches. Only output the match pairs — n
 
   // For quick mode, extract the final answer
   if (isQuickMode && !isMatching) {
-    result = extractClaudeQuickAnswer(result, context.questionType);
+    result = extractQuickAnswer(result, context.questionType);
   }
 
   return { success: true, result, source: sourceTagForPreset(role.preset) };
