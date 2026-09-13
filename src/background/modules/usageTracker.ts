@@ -82,8 +82,6 @@ export interface UsageRecord {
   trigger?: string;
   confidence?: string;
   deepseekReasoning?: string;
-  thinkingEnabled?: boolean;
-  claudeCorrection?: string;
   reasoningText?: string;
   bankConflictDetected?: boolean;
   bankConflictType?: "semantic-equivalent" | "real-conflict";
@@ -106,9 +104,6 @@ export interface UsageStats {
   todayRequests: number;
   todayCost: number;
   todayTokens: number;
-  // Per-AI breakdowns
-  deepseek: AiStats;
-  claude: AiStats;
   /** Per-provider breakdown keyed by preset id (falls back to `source`). */
   byProvider: Record<string, AiStats>;
 }
@@ -221,8 +216,6 @@ export async function getUsageStats(): Promise<UsageStats> {
     todayRequests: 0,
     todayCost: 0,
     todayTokens: 0,
-    deepseek: emptyAi(),
-    claude: emptyAi(),
     byProvider: {},
   };
 
@@ -258,22 +251,6 @@ export async function getUsageStats(): Promise<UsageStats> {
       stats.todayRequests++;
       stats.todayCost += r.costUsd ?? 0;
       stats.todayTokens += r.inputTokens + r.outputTokens;
-    }
-
-    // Per-AI accumulation
-    const ai = r.source === "deepseek" ? stats.deepseek
-      : r.source === "claude" ? stats.claude : null;
-    if (ai) {
-      ai.totalRequests++;
-      ai.totalInputTokens += r.inputTokens;
-      ai.totalOutputTokens += r.outputTokens;
-      ai.totalCostUsd += r.costUsd ?? 0;
-      if (isToday) {
-        ai.todayRequests++;
-        ai.todayInputTokens += r.inputTokens;
-        ai.todayOutputTokens += r.outputTokens;
-        ai.todayCostUsd += r.costUsd ?? 0;
-      }
     }
 
     // Per-provider accumulation (excludes the local question bank)

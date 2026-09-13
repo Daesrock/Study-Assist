@@ -12,7 +12,6 @@ import type {
   QuestionMap,
   QuestionMapEntry,
   DetectionResult,
-  DetectionCallbacks,
   ImageData,
   MatchingCategory,
   MatchingOption,

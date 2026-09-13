@@ -141,32 +141,6 @@ export interface AnalysisResponse {
   result?: string;
   error?: string;
   source?: "deepseek" | "claude" | "openai" | "question-bank";
-  // Status flags for visual feedback in quick mode
-  deepseekRetried?: boolean; // True if DeepSeek was retried after first failure
-  claudeFallback?: boolean; // True if Claude was used as fallback after DeepSeek failures
-}
-
-// ============================================
-// Message Types
-// ============================================
-
-export type MessageType =
-  | "EXTENSION_STATE_CHANGED"
-  | "SETTINGS_CHANGED"
-  | "ANALYZE_PAGE"
-  | "CLEAR_RESULTS"
-  | "ANALYSIS_RESULT"
-  | "ANALYZE_QUESTION"
-  | "PAGE_LOADED"
-  | "CANCEL_DEEPSEEK"
-  | "STREAM_CHUNK"
-  | "STREAM_STATUS"
-  | "STREAM_COMPLETE"
-  | "STREAM_ERROR";
-
-export interface ExtensionMessage {
-  type: MessageType;
-  [key: string]: unknown;
 }
 
 // ============================================
@@ -223,25 +197,4 @@ export interface DetectionResult {
   found: boolean;
   count: number;
   retryCount: number;
-}
-
-export interface DetectionCallbacks {
-  highlightDetectedQuestions?: () => void;
-  isChildOfProcessed?: (element: Element) => boolean;
-}
-
-// ============================================
-// Question Bank Types
-// ============================================
-
-export interface QuestionBankEntry {
-  question: string;
-  answer: string;
-  type?: QuestionType;
-  options?: string[];
-}
-
-export interface QuestionBank {
-  version: string;
-  questions: QuestionBankEntry[];
 }

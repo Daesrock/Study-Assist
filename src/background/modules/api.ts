@@ -471,8 +471,6 @@ export async function analyzeQuestion(context: AnalysisContext, onStatus?: (stat
 
     let primaryAnalysisForValidator: DeepSeekAnalysisForClaude | null = null;
     let fallbackReason: string | undefined;
-    let primaryRetried = false;
-    let validatorFallback = false;
 
     if (!effectivePrimary && effectiveValidator) {
       fallbackReason = hasImages ? "images" : isMatching ? "matching" : undefined;
@@ -494,11 +492,9 @@ export async function analyzeQuestion(context: AnalysisContext, onStatus?: (stat
       } else if (!primaryResult.success) {
         if (primaryResult.skipRetry) {
           log(`[Study Assist] Primary failed (non-retryable) → validator fallback: ${primaryResult.error}`);
-          validatorFallback = true;
         } else {
           log("[Study Assist] Primary failed, retrying...");
           onStatus?.("DEEPSEEK_RETRY");
-          primaryRetried = true;
           await new Promise((r) => setTimeout(r, 1000));
           primaryResult = await analyzeWithPrimary(context, effectivePrimary);
         }
@@ -507,7 +503,6 @@ export async function analyzeQuestion(context: AnalysisContext, onStatus?: (stat
           log("[Study Assist] Primary failed → validator fallback");
           onStatus?.("CLAUDING_FALLBACK");
           fallbackReason = "primary_error";
-          validatorFallback = true;
           if (!effectiveValidator) {
             return { success: false, error: primaryResult.error || "Primary API failed and no validator is available." };
           }
@@ -535,7 +530,6 @@ export async function analyzeQuestion(context: AnalysisContext, onStatus?: (stat
           platform: detectPlatform(context.pageUrl),
           confidence: "HIGH",
           deepseekReasoning: primaryResult.deepseekReasoning ?? undefined,
-            thinkingEnabled: effectivePrimary.thinking,
         });
         return primaryResult;
       } else if (primaryResult.success) {
@@ -561,7 +555,6 @@ export async function analyzeQuestion(context: AnalysisContext, onStatus?: (stat
             platform: detectPlatform(context.pageUrl),
             confidence: primaryResult.confidence,
             deepseekReasoning: primaryResult.deepseekReasoning ?? undefined,
-          thinkingEnabled: effectivePrimary.thinking,
           });
           return primaryResult;
         }
@@ -592,10 +585,6 @@ export async function analyzeQuestion(context: AnalysisContext, onStatus?: (stat
       validatorStartTime,
       fallbackReason,
     );
-
-    // Add status flags to response for visual feedback
-    if (primaryRetried) validatorResponse.deepseekRetried = true;
-    if (validatorFallback) validatorResponse.claudeFallback = true;
 
     return validatorResponse;
   } catch (error) {

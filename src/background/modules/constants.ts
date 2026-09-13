@@ -50,8 +50,6 @@ export const ANTHROPIC_VERSION = "2023-06-01";
 // Thinking Mode Helpers
 // ============================================
 
-export const THINKING_MIN_OUTPUT_TOKENS = 1024;
-
 export function isAdaptiveThinkingModel(model: string): boolean {
   return model.includes("sonnet-4-6") || model.includes("opus-4-6") || model.includes("opus-4-7") || model.includes("mythos");
 }
