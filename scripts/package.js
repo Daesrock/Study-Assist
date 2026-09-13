@@ -186,7 +186,7 @@ async function packageExtension() {
 
 ## Prerequisites
 - A Chromium-based browser (Chrome, Edge, Brave, Vivaldi, etc.)
-- An API key from Claude (Anthropic) and/or DeepSeek
+- An API key from a supported provider (Anthropic, DeepSeek, OpenAI) or any custom OpenAI-compatible endpoint
 
 ## Installation Steps
 
@@ -215,9 +215,9 @@ Toggle the "Developer mode" switch in the top-right corner.
 
 ### First-Time Setup
 1. Click the Study Assist icon in your toolbar
-2. Enter your **Claude API Key** (get one from https://console.anthropic.com/)
-3. Enter your **DeepSeek API Key** (optional, from https://platform.deepseek.com/)
-4. Click "Save" — keys will be validated automatically
+2. Click **Configure providers** to open the Providers page
+3. Add the API key for each provider you use (built-in Anthropic, DeepSeek or OpenAI, or a custom provider); models are detected automatically
+4. Assign a **Primary** provider/model (and, optionally, a **Validator**) in the popup
 5. Add domains where you want the extension to work (Allowed Domains section)
 6. Toggle the extension **ON**
 
@@ -225,7 +225,7 @@ Toggle the "Developer mode" switch in the top-right corner.
 - **Response Mode:** Guided Learning, Direct Explanation, or Hints Only
 - **Auto-detect:** Automatically detect questions on page load
 - **Quick Mode:** Streamlined single-keypress analysis
-- **DeepSeek:** Enable hybrid AI mode (cost-effective reasoning model)
+- **Primary / Validator:** provider + model used for analysis and optional validation
 - **Allowed Domains:** Add the websites where you want Study Assist to work
 
 ## Usage
@@ -239,7 +239,7 @@ Toggle the "Developer mode" switch in the top-right corner.
 
 ### Keyboard Shortcuts
 - **SHIFT:** Analyze current question
-- **CTRL + SHIFT:** Force Claude-only analysis (skip DeepSeek)
+- **CTRL + SHIFT:** Skip the primary and use the validator
 - **ALT + W:** Reload question detection
 - **ALT + Q:** Toggle SA button visibility
 - **ALT + X:** Cancel current request
@@ -253,10 +253,9 @@ Toggle the "Developer mode" switch in the top-right corner.
 - Try refreshing the page
 
 ### API Key errors?
-- Verify your API key is correct
-- Check that you have credits in your account
-- Claude: https://console.anthropic.com/
-- DeepSeek: https://platform.deepseek.com/
+- Open the Providers page and verify the key is correct
+- Make sure the provider account has available credits
+- If models do not appear, use "Detect models" for that provider
 
 ### Extension disappeared after restart?
 - Make sure the extension folder is not deleted or moved
