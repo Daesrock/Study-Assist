@@ -186,10 +186,6 @@ body {
   background: var(--color-hybrid-bg);
   color: var(--color-hybrid);
 }
-.mode-tag.deepseek {
-  background: var(--color-deepseek-bg);
-  color: var(--color-deepseek);
-}
 .mode-tag.claude {
   background: var(--color-claude-bg);
   color: var(--color-claude);
@@ -304,12 +300,6 @@ body {
   font-weight: 600;
 }
 
-.stat-card.deepseek .stat-value {
-  color: var(--color-deepseek);
-}
-.stat-card.claude .stat-value {
-  color: var(--color-claude);
-}
 .stat-card.hybrid .stat-value {
   color: var(--color-hybrid);
 }
@@ -1112,47 +1102,6 @@ body {
   margin-bottom: 10px;
 }
 
-.ratio-bar-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.ratio-bar-track {
-  flex: 1;
-  height: 22px;
-  background: var(--bg);
-  border-radius: 6px;
-  overflow: hidden;
-  display: flex;
-}
-
-.ratio-bar-ds {
-  height: 100%;
-  background: var(--color-deepseek);
-  transition: width 0.5s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 10px;
-  font-weight: 700;
-  color: #fff;
-  min-width: 0;
-}
-
-.ratio-bar-cl {
-  height: 100%;
-  background: var(--color-claude);
-  transition: width 0.5s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 10px;
-  font-weight: 700;
-  color: #fff;
-  min-width: 0;
-}
-
 .ratio-legend {
   display: flex;
   justify-content: space-between;
@@ -1164,19 +1113,6 @@ body {
   display: flex;
   align-items: center;
   gap: 5px;
-}
-
-.ratio-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-
-.ratio-dot.ds {
-  background: var(--color-deepseek);
-}
-.ratio-dot.cl {
-  background: var(--color-claude);
 }
 
 /* ============================================
@@ -1233,39 +1169,8 @@ body {
   color: var(--text);
 }
 
-.grouped-row .g-value.ds {
-  color: var(--color-deepseek);
-}
-.grouped-row .g-value.cl {
-  color: var(--color-claude);
-}
 .grouped-row .g-value.accent {
   color: var(--primary);
-}
-
-/* ============================================
-   Per-AI Breakdown Inline
-   ============================================ */
-.ai-breakdown {
-  display: flex;
-  gap: 8px;
-  margin-top: 3px;
-}
-
-.ai-tag {
-  font-size: 9px;
-  font-weight: 600;
-  padding: 1px 6px;
-  border-radius: 4px;
-}
-
-.ai-tag.ds {
-  background: var(--color-deepseek-bg);
-  color: var(--color-deepseek);
-}
-.ai-tag.cl {
-  background: var(--color-claude-bg);
-  color: var(--color-claude);
 }
 
 /* ============================================
@@ -1694,18 +1599,6 @@ body {
   white-space: nowrap;
   flex-shrink: 0;
   line-height: 1.6;
-}
-
-.ks-click {
-  display: inline-block;
-  background: var(--color-claude-bg);
-  color: var(--color-claude);
-  border-radius: 5px;
-  padding: 2px 8px;
-  font-size: 11px;
-  font-weight: 700;
-  white-space: nowrap;
-  flex-shrink: 0;
 }
 
 .ks-row span:last-child {

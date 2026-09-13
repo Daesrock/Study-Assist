@@ -19,114 +19,6 @@
     "message": "DESACTIVADO",
     "description": "Estado cuando está deshabilitada"
   },
-  "claudeApiKey": {
-    "message": "Clave API de Claude",
-    "description": "Título de sección Claude"
-  },
-  "enterClaudeKey": {
-    "message": "Ingresa tu clave API de Claude (sk-ant-...)",
-    "description": "Placeholder para input de Claude"
-  },
-  "saveApiKey": {
-    "message": "Guardar Clave API",
-    "description": "Botón para guardar clave"
-  },
-  "claudeModel": {
-    "message": "Modelo de Claude",
-    "description": "Etiqueta del selector de modelo"
-  },
-  "modelHaiku": {
-    "message": "Claude 3 Haiku (Rápido, Económico)",
-    "description": "Opción modelo Haiku"
-  },
-  "modelHaiku35": {
-    "message": "Claude Haiku 4.5 (Más Rápido)",
-    "description": "Opción modelo Haiku 4.5"
-  },
-  "modelHaiku45": {
-    "message": "Claude Haiku 4.5 (Rápido)",
-    "description": "Opción modelo Haiku 4.5"
-  },
-  "modelSonnet4": {
-    "message": "Claude Sonnet 4 (Equilibrado)",
-    "description": "Opción modelo Sonnet 4"
-  },
-  "modelSonnet45": {
-    "message": "Claude Sonnet 4.6 (Último)",
-    "description": "Opción modelo Sonnet 4.6"
-  },
-  "modelOpus45": {
-    "message": "Claude Opus 4.6 (Más Capaz)",
-    "description": "Opción modelo Opus 4.6"
-  },
-  "useDeepSeek": {
-    "message": "Usar DeepSeek",
-    "description": "Etiqueta toggle DeepSeek"
-  },
-  "claudeAsFallback": {
-    "message": "(Claude como respaldo)",
-    "description": "Nota de respaldo DeepSeek"
-  },
-  "deepseekInfo": {
-    "message": "DeepSeek analiza primero. Si la confianza no es ALTA, Claude valida.",
-    "description": "Explicación de DeepSeek"
-  },
-  "deepseekOnly": {
-    "message": "Solo DeepSeek",
-    "description": "Etiqueta modo solo DeepSeek"
-  },
-  "noClaudeFallback": {
-    "message": "(sin respaldo de Claude)",
-    "description": "Nota sin respaldo"
-  },
-  "warnings": {
-    "message": "Advertencias:",
-    "description": "Título de advertencias"
-  },
-  "noImageSupport": {
-    "message": "Sin soporte de imágenes",
-    "description": "Advertencia"
-  },
-  "noImageSupportDesc": {
-    "message": "DeepSeek no puede leer imágenes",
-    "description": "Descripción de advertencia"
-  },
-  "lowerAccuracy": {
-    "message": "Menor precisión",
-    "description": "Advertencia"
-  },
-  "lowerAccuracyDesc": {
-    "message": "Sin validación de Claude para respuestas inciertas",
-    "description": "Descripción de advertencia"
-  },
-  "apiInstability": {
-    "message": "Inestabilidad de API",
-    "description": "Advertencia"
-  },
-  "apiInstabilityDesc": {
-    "message": "La API de DeepSeek puede fallar o expirar",
-    "description": "Descripción de advertencia"
-  },
-  "noFallback": {
-    "message": "Sin respaldo",
-    "description": "Advertencia"
-  },
-  "noFallbackDesc": {
-    "message": "Si DeepSeek falla, no obtienes respuesta",
-    "description": "Descripción de advertencia"
-  },
-  "deepseekOnlyTip": {
-    "message": "Usa solo si no tienes una clave API de Claude",
-    "description": "Consejo para modo solo DeepSeek"
-  },
-  "enterDeepseekKey": {
-    "message": "Ingresa tu clave API de DeepSeek (sk-...)",
-    "description": "Placeholder para input DeepSeek"
-  },
-  "saveDeepseekKey": {
-    "message": "Guardar Clave DeepSeek",
-    "description": "Botón para guardar clave DeepSeek"
-  },
   "quickActions": {
     "message": "Acciones Rápidas",
     "description": "Título de sección"
@@ -134,14 +26,6 @@
   "analyzePage": {
     "message": "Analizar Página Actual",
     "description": "Texto del botón analizar"
-  },
-  "clearResults": {
-    "message": "Limpiar Resultados",
-    "description": "Texto del botón limpiar"
-  },
-  "showErrorLog": {
-    "message": "Mostrar Registro de Errores",
-    "description": "Texto del botón de errores"
   },
   "settings": {
     "message": "Configuración",
@@ -195,62 +79,6 @@
     "message": "+ Agregar",
     "description": "Botón agregar dominio"
   },
-  "howToGetClaudeKey": {
-    "message": "Cómo obtener una clave API de Claude",
-    "description": "Título ayuda Claude"
-  },
-  "claudeStep1": {
-    "message": "Ve a",
-    "description": "Prefijo de paso"
-  },
-  "anthropicConsole": {
-    "message": "Consola de Anthropic",
-    "description": "Texto del enlace Anthropic"
-  },
-  "claudeStep2": {
-    "message": "Inicia sesión o crea una cuenta",
-    "description": "Paso 2"
-  },
-  "claudeStep3": {
-    "message": "Ve a la sección API Keys",
-    "description": "Paso 3"
-  },
-  "claudeStep4": {
-    "message": "Haz clic en \"Create Key\"",
-    "description": "Paso 4"
-  },
-  "claudeStep5": {
-    "message": "Copia la clave (empieza con sk-ant-) y pégala arriba",
-    "description": "Paso 5"
-  },
-  "howToGetDeepseekKey": {
-    "message": "Cómo obtener una clave API de DeepSeek",
-    "description": "Título ayuda DeepSeek"
-  },
-  "deepseekPlatform": {
-    "message": "Plataforma DeepSeek",
-    "description": "Texto del enlace DeepSeek"
-  },
-  "deepseekStep3": {
-    "message": "Ve a \"API Keys\" en el menú izquierdo",
-    "description": "Paso 3"
-  },
-  "deepseekStep4": {
-    "message": "Haz clic en \"Create new secret key\"",
-    "description": "Paso 4"
-  },
-  "deepseekStep5": {
-    "message": "Copia la clave (empieza con sk-) y pégala arriba",
-    "description": "Paso 5"
-  },
-  "deepseekPricing": {
-    "message": "Precios:",
-    "description": "Etiqueta precios"
-  },
-  "deepseekPricingInfo": {
-    "message": "~$0.14/millón tokens entrada, ~$2.19/millón tokens salida (¡mucho más barato que Claude!)",
-    "description": "Detalles de precios"
-  },
   "disclaimer": {
     "message": "Esta herramienta está diseñada solo para fines educativos. Úsala para entender conceptos y mejorar tu aprendizaje.",
     "description": "Texto de descargo"
@@ -259,45 +87,9 @@
     "message": "Hecho con ❤️ para estudiantes",
     "description": "Texto del pie"
   },
-  "errorLog": {
-    "message": "Registro de Errores",
-    "description": "Título del modal de errores"
-  },
-  "close": {
-    "message": "Cerrar",
-    "description": "Botón cerrar"
-  },
-  "apiKeySaved": {
-    "message": "Clave API guardada",
-    "description": "Mensaje de éxito"
-  },
-  "toggleVisibility": {
-    "message": "Alternar visibilidad",
-    "description": "Título del botón toggle"
-  },
   "disguiseMode": {
     "message": "Disfrazarse de uBlock Origin (modo sigiloso)",
     "description": "Etiqueta del checkbox de modo disfraz"
-  },
-  "deepseekModel": {
-    "message": "Modelo DeepSeek",
-    "description": "Etiqueta para selector de modelo DeepSeek"
-  },
-  "modelDFlash": {
-    "message": "DeepSeek V4 Flash (Rápido, Económico)",
-    "description": "Etiqueta modelo flash"
-  },
-  "modelDPro": {
-    "message": "DeepSeek V4 Pro (Potente, Preciso)",
-    "description": "Etiqueta modelo pro"
-  },
-  "deepseekThinking": {
-    "message": "Activar Modo Thinking (razonamiento profundo)",
-    "description": "Etiqueta para modo thinking"
-  },
-  "claudeThinking": {
-    "message": "Activar Modo Thinking (razonamiento adaptativo)",
-    "description": "Etiqueta para modo thinking de Claude"
   },
   "providersTitle": { "message": "Proveedores", "description": "Titulo de pagina de proveedores" },
   "providersSubtitle": { "message": "Configura tus claves de API y modelos.", "description": "Subtitulo de proveedores" },
@@ -316,8 +108,6 @@
   "providerDetectModels": { "message": "Detectar modelos", "description": "Boton detectar modelos" },
   "providerDetecting": { "message": "Detectando...", "description": "Deteccion en curso" },
   "providerDetectError": { "message": "No se pudieron detectar modelos.", "description": "Error de deteccion" },
-  "providerModelNew": { "message": "Nuevo", "description": "Insignia de modelo nuevo" },
-  "providerNoVision": { "message": "No sirve para preguntas con imagenes", "description": "Modelo sin vision" },
   "providerVisionTitle": { "message": "Este modelo acepta imagenes (vision)", "description": "Tooltip de vision" },
   "providerNoModels": { "message": "Aun no hay modelos.", "description": "Lista de modelos vacia" },
   "providerManualPlaceholder": { "message": "Agregar un model id...", "description": "Placeholder modelo manual" },
@@ -371,7 +161,6 @@
   "providerDefaultThinking": { "message": "Thinking / razonamiento por defecto", "description": "Thinking por defecto del proveedor" },
   "providerCapImages": { "message": "Admite imágenes", "description": "Capacidad de imágenes" },
   "providerCapMatching": { "message": "Admite preguntas de relación", "description": "Capacidad de matching" },
-  "providerKeyPrefixes": { "message": "Prefijos de clave (separados por coma)", "description": "Prefijos de clave" },
   "providerCancel": { "message": "Cancelar", "description": "Botón cancelar" },
   "providerSaveProvider": { "message": "Guardar proveedor", "description": "Guardar proveedor personalizado" },
   "providerCustomBadge": { "message": "Personalizado", "description": "Badge de proveedores definidos por el usuario" },
@@ -390,6 +179,5 @@
   "providerTemplateCustom": { "message": "Personalizado (vacío)", "description": "Opción de plantilla vacía" },
   "providerMultiEndpointNote": { "message": "Este proveedor usa varios endpoints (se enruta por modelo)", "description": "Nota para plantillas multi-endpoint" },
   "providerHeaders": { "message": "Cabeceras (Nombre: valor por línea)", "description": "Campo de cabeceras personalizadas" },
-  "providerDialectResponses": { "message": "OpenAI Responses", "description": "Dialecto OpenAI Responses" },
-  "providerEndpointLabel": { "message": "Endpoint", "description": "Etiqueta del selector de endpoint" }
+  "providerDialectResponses": { "message": "OpenAI Responses", "description": "Dialecto OpenAI Responses" }
 }

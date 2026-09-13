@@ -295,26 +295,6 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
       bySource: {},
       byModel: {},
       byDay: {},
-      deepseek: {
-        totalRequests: 0,
-        totalInputTokens: 0,
-        totalOutputTokens: 0,
-        totalCostUsd: 0,
-        todayRequests: 0,
-        todayInputTokens: 0,
-        todayOutputTokens: 0,
-        todayCostUsd: 0,
-      },
-      claude: {
-        totalRequests: 0,
-        totalInputTokens: 0,
-        totalOutputTokens: 0,
-        totalCostUsd: 0,
-        todayRequests: 0,
-        todayInputTokens: 0,
-        todayOutputTokens: 0,
-        todayCostUsd: 0,
-      },
     },
     stats,
   );
@@ -1560,10 +1540,7 @@ function buildRoutingLines(r) {
     lines.push(
       `${provider} (${shortModel(r.model)}) respondió directamente con contexto de imagen.`,
     );
-  } else if (
-    r.fallbackReason === "primary_error" ||
-    r.fallbackReason === "deepseek_error"
-  ) {
+  } else if (r.fallbackReason === "primary_error") {
     lines.push("El modelo principal fue contactado pero falló (error de API o red).");
     lines.push(`${provider} (${shortModel(r.model)}) actuó como fallback de error.`);
   } else if (r.fallbackReason) {
@@ -1743,16 +1720,6 @@ function renderRecordDetailPage(r, idx, history, devMode, apiData) {
       <div class="dp-section">
         <div class="dp-section-label" style="color:var(--color-claude);">Razonamiento (validador)</div>
         <pre class="dp-trace">${escapeHtml(r.reasoningText)}</pre>
-      </div>`
-          : ""
-      }
-      ${
-        r.claudeCorrection
-          ? `
-      <!-- Claude Correction -->
-      <div class="dp-section">
-        <div class="dp-section-label" style="color:var(--color-claude);">Validación / Corrección</div>
-        <pre class="dp-trace">${escapeHtml(r.claudeCorrection)}</pre>
       </div>`
           : ""
       }
