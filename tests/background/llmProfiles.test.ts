@@ -413,3 +413,50 @@ describe("custom providers", () => {
   });
 });
 
+describe("reasoning capability gating", () => {
+  beforeEach(() => {
+    clearStorage();
+    __resetRegistryForTests();
+    __setPriceIndexForTests(null);
+  });
+
+  afterEach(() => {
+    __resetRegistryForTests();
+    __setPriceIndexForTests(null);
+  });
+
+  it("trusts the thinking toggle for models unknown to LiteLLM", async () => {
+    mockStorage.customProviders = {
+      "custom-x": {
+        id: "custom-x",
+        label: "X",
+        dialect: "openai-compatible",
+        baseUrl: "https://api.x.test/v1",
+      },
+    };
+    mockStorage.providerProfiles = { "custom-x": { apiKey: "enc" } };
+
+    const resolved = await resolveRole({ provider: "custom-x", model: "brand-new-model" });
+    expect(resolved?.reasoning).toBe(true);
+  });
+
+  it("blocks models LiteLLM marks as non-reasoning", async () => {
+    __setPriceIndexForTests({
+      "claude-3-haiku-20240307": {
+        inputPer1M: 0.25,
+        outputPer1M: 1.25,
+        vision: true,
+        reasoning: false,
+        provider: "anthropic",
+      },
+    });
+    mockStorage.providerProfiles = { anthropic: { apiKey: "enc" } };
+
+    const resolved = await resolveRole({
+      provider: "anthropic",
+      model: "claude-3-haiku-20240307",
+    });
+    expect(resolved?.reasoning).toBe(false);
+  });
+});
+

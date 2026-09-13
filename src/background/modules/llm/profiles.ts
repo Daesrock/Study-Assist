@@ -173,7 +173,9 @@ export async function resolveRole(
   const visionModels = profile?.visionModels ?? [];
   const vision = visionModels.includes(model);
   const info = await resolveModelInfo(role.provider, model);
-  const reasoning = info?.reasoning === true;
+  // If LiteLLM doesn't know the model (custom providers), trust the user's
+  // thinking toggle; only block when LiteLLM explicitly says it can't reason.
+  const reasoning = info ? info.reasoning === true : true;
   const adaptiveThinking = info?.adaptive === true;
 
   return { preset, model, apiKey, thinking, vision, reasoning, adaptiveThinking };
