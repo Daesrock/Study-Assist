@@ -236,6 +236,14 @@ async function streamOpenAi(
     signal: opts.signal,
   });
 
+  log(`[Study Assist] ${opts.preset.label} streaming reasoning gate`, {
+    model: opts.model,
+    thinking: opts.thinking === true,
+    supportsReasoning: opts.supportsReasoning === true,
+    reasoningKind: opts.preset.reasoningKind ?? null,
+    sent: built.body.reasoning_effort ?? built.body.thinking ?? null,
+  });
+
   const response = await llmRequest({
     url: built.url,
     init: built.init,

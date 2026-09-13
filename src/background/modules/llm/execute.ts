@@ -172,6 +172,15 @@ function parseResponse(preset: ProviderPreset, raw: unknown) {
 export async function runProvider(opts: ProviderRunOptions): Promise<ProviderRunResult> {
   const built = buildRequest(opts);
 
+  log(`[Study Assist] ${opts.preset.label} reasoning gate`, {
+    model: opts.model,
+    dialect: opts.preset.dialect,
+    thinking: opts.thinking === true,
+    supportsReasoning: opts.supportsReasoning === true,
+    reasoningKind: opts.preset.reasoningKind ?? null,
+    sent: built.body.reasoning_effort ?? built.body.thinking ?? null,
+  });
+
   let response: Response;
   try {
     response = await llmRequest({

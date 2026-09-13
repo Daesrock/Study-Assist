@@ -178,6 +178,16 @@ export async function resolveRole(
   const reasoning = info ? info.reasoning === true : true;
   const adaptiveThinking = info?.adaptive === true;
 
+  if (thinking) {
+    logProviders("role thinking resolved", {
+      provider: role.provider,
+      model,
+      knownToLitellm: !!info,
+      litellmReasoning: info?.reasoning ?? null,
+      reasoning,
+    });
+  }
+
   return { preset, model, apiKey, thinking, vision, reasoning, adaptiveThinking };
 }
 
