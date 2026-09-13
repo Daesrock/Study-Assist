@@ -1603,8 +1603,38 @@ function renderAnswerBlock(r) {
   return `<pre class="dp-trace">${escapeHtml(raw)}</pre>`;
 }
 
+function extractReasoningFromApiData(apiData) {
+  const body = apiData && apiData.responseBody;
+  if (!body || typeof body !== "object") return "";
+
+  const chatMessage = body?.choices?.[0]?.message;
+  if (chatMessage) {
+    const text = chatMessage.reasoning_content ?? chatMessage.reasoning;
+    if (typeof text === "string" && text) return text;
+  }
+
+  if (Array.isArray(body?.output)) {
+    const text = body.output
+      .filter((item) => item?.type === "reasoning" && Array.isArray(item.summary))
+      .flatMap((item) => item.summary.map((part) => part?.text || ""))
+      .join("");
+    if (text) return text;
+  }
+
+  if (Array.isArray(body?.content)) {
+    const text = body.content
+      .filter((block) => block?.type === "thinking")
+      .map((block) => block.thinking || "")
+      .join("");
+    if (text) return text;
+  }
+
+  return "";
+}
+
 function renderRecordDetailPage(r, idx, history, devMode, apiData) {
   const pid = providerIdOf(r);
+  const reasoning = r.deepseekReasoning || extractReasoningFromApiData(apiData);
   const srcBadge = badgeClassForProvider(pid);
   const statusBadge = r.success ? "badge-success" : "badge-error";
   const time = new Date(r.timestamp).toLocaleString();
@@ -1688,12 +1718,12 @@ function renderRecordDetailPage(r, idx, history, devMode, apiData) {
       </div>
 
       ${
-        r.deepseekReasoning
+        reasoning
           ? `
-      <!-- DeepSeek Reasoning -->
+      <!-- Reasoning -->
       <div class="dp-section">
         <div class="dp-section-label" style="color:var(--color-hybrid);">Razonamiento (principal)</div>
-        <pre class="dp-trace">${escapeHtml(r.deepseekReasoning)}</pre>
+        <pre class="dp-trace">${escapeHtml(reasoning)}</pre>
       </div>`
           : ""
       }

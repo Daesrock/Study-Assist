@@ -176,6 +176,10 @@ export async function trackUsage(
       fullRecord.model,
       cost === null ? "(no price data)" : `$${cost.toFixed(6)}`,
       `${fullRecord.inputTokens}+${fullRecord.outputTokens} tokens`,
+      fullRecord.deepseekReasoning
+        ? `reasoning:${fullRecord.deepseekReasoning.length}`
+        : "reasoning:none",
+      fullRecord.reasoningText ? `thinking:${fullRecord.reasoningText.length}` : "thinking:none",
     );
   } catch (error) {
     console.error("[Study Assist] Error tracking usage:", error);
