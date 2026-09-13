@@ -519,7 +519,7 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
         <td>${trigger}</td>
         <td><span class="badge ${validated}">${r.validated ? "sí" : "no"}</span></td>
         <td>${r.inputTokens + r.outputTokens}</td>
-        <td>$${r.costUsd.toFixed(6)}</td>
+        <td>${r.costUsd == null ? "—" : "$" + r.costUsd.toFixed(6)}</td>
         <td>${(r.latencyMs / 1000).toFixed(1)}s</td>
         <td><span class="badge ${statusBadge}">${r.success ? "OK" : "ERR"}</span></td>
         <td><button class="btn btn-detail-view" data-idx="${i}">🔎 Ver detalles</button></td>
@@ -1629,7 +1629,7 @@ function renderRecordDetailPage(r, idx, history, devMode, apiData) {
     { k: "Tokens de Entrada", v: String(r.inputTokens) },
     { k: "Tokens de Salida", v: String(r.outputTokens) },
     { k: "Tokens Totales", v: String(r.inputTokens + r.outputTokens) },
-    { k: "Costo", v: "$" + r.costUsd.toFixed(6) },
+    { k: "Costo", v: r.costUsd == null ? "—" : "$" + r.costUsd.toFixed(6) },
     { k: "Latencia", v: (r.latencyMs / 1000).toFixed(2) + "s" },
     { k: "Fecha/Hora", v: time },
   ];
