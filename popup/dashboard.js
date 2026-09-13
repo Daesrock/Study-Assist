@@ -14,6 +14,9 @@ let cachedDevMode = false;
 // ============================================
 // Provider helpers
 // ============================================
+/** Loaded provider state (presets/profiles/roles); used to resolve labels. */
+let cachedProviderState = null;
+
 const PROVIDER_LABELS = {
   anthropic: "Anthropic",
   deepseek: "DeepSeek",
@@ -28,7 +31,14 @@ function providerIdOf(r) {
 }
 
 function providerLabel(id) {
-  return PROVIDER_LABELS[id] || id || "—";
+  if (!id) return "—";
+  const preset =
+    cachedProviderState &&
+    (cachedProviderState.presets || []).find((p) => p.id === id);
+  if (preset) return preset.label;
+  if (PROVIDER_LABELS[id]) return PROVIDER_LABELS[id];
+  if (id.startsWith("custom-")) return "Proveedor eliminado";
+  return id;
 }
 
 function roleLabel(role) {
@@ -112,7 +122,6 @@ document.getElementById("last-response-btn").addEventListener("click", () => {
 // Data Loading
 // ============================================
 
-let cachedProviderState = null;
 let cachedQaModel = null;
 
 function collectQaOptions(state) {
