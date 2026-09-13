@@ -47,6 +47,14 @@ function roleLabel(role) {
   return "";
 }
 
+function validationSummary(r) {
+  if (!r || r.source === "question-bank") return "—";
+  const who = `${providerLabel(providerIdOf(r))} (${shortModel(r.model)})`;
+  if (r.validated) return `✅ Sí · ${who}`;
+  if (r.role === "validator") return `Fallback · ${who}`;
+  return "No aplica (respuesta directa)";
+}
+
 function badgeClassForProvider(id) {
   if (id === "anthropic") return "badge-claude";
   if (id === "deepseek") return "badge-deepseek";
@@ -1594,7 +1602,7 @@ function renderAnswerBlock(r) {
     return `
       <div class="dp-block dp-answer">${escapeHtml(shortAnswer)}</div>
       <details class="dp-analysis-details" open>
-        <summary class="dp-analysis-summary">📄 Análisis completo de Claude</summary>
+        <summary class="dp-analysis-summary">📄 Análisis completo</summary>
         <pre class="dp-trace" style="margin-top:8px;">${escapeHtml(raw)}</pre>
       </details>`;
   }
@@ -1652,7 +1660,7 @@ function renderRecordDetailPage(r, idx, history, devMode, apiData) {
     { k: "Modo de Respuesta", v: r.responseMode || "—" },
     { k: "Trigger", v: r.trigger || "auto" },
     { k: "Confianza", v: r.confidence || "—" },
-    { k: "Validado por Claude", v: r.validated ? "✅ Sí" : "No" },
+    { k: "Validación", v: validationSummary(r) },
     { k: "Razón de Fallback", v: r.fallbackReason || "—" },
     { k: "Estado", v: r.success ? "✅ Éxito" : "❌ Error" },
     { k: "Tokens de Entrada", v: String(r.inputTokens) },
