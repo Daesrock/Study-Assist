@@ -180,10 +180,10 @@ async function runDetection(): Promise<void> {
 async function initialize(): Promise<void> {
   try {
     const domainAllowed = await checkDomainAllowed();
-    if (!domainAllowed) {
-      return;
-    }
 
+    // Load persisted settings regardless of the domain gate so the state always
+    // mirrors the user's real preferences (e.g. the QA sandbox runs on a
+    // non-allowlisted page but must behave like a real quiz).
     const result = await chrome.storage.local.get([
       "responseMode",
       "autoDetect",
@@ -194,10 +194,6 @@ async function initialize(): Promise<void> {
       "saButtonHidden",
     ]);
 
-    // The extension no longer has a global on/off switch: it is always active
-    // and only gated by the domain allowlist (checked above).
-    state.isActive = true;
-
     state.settings.responseMode = result.responseMode ?? "direct";
     state.settings.autoDetect = result.autoDetect ?? true;
     state.settings.highlightQuestions = result.highlightQuestions ?? true;
@@ -206,6 +202,13 @@ async function initialize(): Promise<void> {
     state.settings.buttonPosition = result.buttonPosition ?? "bottom-right";
     state.saButtonHidden = result.saButtonHidden === true;
 
+    if (!domainAllowed) {
+      return;
+    }
+
+    // The extension no longer has a global on/off switch: it is always active
+    // and only gated by the domain allowlist (checked above).
+    state.isActive = true;
     state.isInitialized = true;
 
     try {
