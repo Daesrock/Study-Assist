@@ -22,7 +22,7 @@ const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 // URLs de ExamenRedes para CCNA 2
-const EXAMENREDES_URLS = [
+const CCNA2_URLS = [
   // Exámenes por grupo de módulos
   {
     moduleRange: "1-4",
@@ -158,6 +158,71 @@ const EXAMENREDES_URLS = [
     url: "https://examenredes.com/ccna-2-v7-examen-final-de-srwe-preguntas-y-respuestas/",
   },
 ];
+
+// URLs de ExamenRedes para CCNA 3 (ENSA v7)
+const CCNA3_URLS = [
+  // Exámenes por grupo de módulos (checkpoints)
+  {
+    moduleRange: "1-2",
+    title: "Examen de configuración y conceptos OSPF",
+    url: "https://examenredes.com/modulos-1-2-examen-de-configuracion-y-conceptos-ospf-respuestas/",
+  },
+  {
+    moduleRange: "3-5",
+    title: "Examen de seguridad de red",
+    url: "https://examenredes.com/modulos-3-5-examen-de-seguridad-de-red-respuestas/",
+  },
+  {
+    moduleRange: "6-8",
+    title: "Examen de conceptos de WAN",
+    url: "https://examenredes.com/modulos-6-8-examen-de-conceptos-de-wan-respuestas/",
+  },
+  {
+    moduleRange: "9-12",
+    title: "Optimización, monitoreo y solución de problemas de redes",
+    url: "https://examenredes.com/modulos-9-12-examen-de-optimizacion-monitoreo-y-solucion-de-problemas-de-redes-respuestas/",
+  },
+  {
+    moduleRange: "13-14",
+    title: "Tecnologías de redes emergentes",
+    url: "https://examenredes.com/modulos-13-14-examen-de-tecnologias-de-redes-emergentes-respuestas/",
+  },
+  // Exámenes de práctica y finales
+  {
+    moduleRange: "final-skills",
+    title: "Evaluación de habilidades prácticas de PT (PTSA) ENSA",
+    url: "https://examenredes.com/evaluacion-de-habilidades-practicas-de-pt-ptsa-ensa-respuestas/",
+  },
+  {
+    moduleRange: "final-practice",
+    title: "Examen final de práctica ENSA",
+    url: "https://examenredes.com/examen-final-de-practica-ensa-preguntas-y-respuestas/",
+  },
+  {
+    moduleRange: "ptsa-1",
+    title: "Examen final de habilidades ENSA (PTSA)",
+    url: "https://examenredes.com/ccna-3-examen-final-de-habilidades-de-ensa-ptsa-respuestas/",
+  },
+  {
+    moduleRange: "final-exam",
+    title: "Examen final del curso ENSA",
+    url: "https://examenredes.com/ccna-3-v7-examen-final-de-ensa-preguntas-y-respuestas/",
+  },
+];
+
+// Course configurations: `node scrape-examenredes.js --course ccna3`
+const COURSE_CONFIGS = {
+  ccna2: {
+    course: "CCNA 2 - SRWE",
+    output: "data/questions-bank.json",
+    urls: CCNA2_URLS,
+  },
+  ccna3: {
+    course: "CCNA 3 - ENSA",
+    output: "data/questions-bank-ccna3.json",
+    urls: CCNA3_URLS,
+  },
+};
 
 // ============================================
 // Funciones de utilidad
@@ -425,12 +490,26 @@ async function main() {
   const args = process.argv.slice(2);
   const isTestMode = args.includes("--test");
 
+  const getArg = (flag, fallback) => {
+    const idx = args.indexOf(flag);
+    return idx >= 0 && args[idx + 1] ? args[idx + 1] : fallback;
+  };
+  const courseKey = getArg("--course", "ccna2");
+  const config = COURSE_CONFIGS[courseKey];
+  if (!config) {
+    console.error(
+      `Curso desconocido: ${courseKey}. Opciones: ${Object.keys(COURSE_CONFIGS).join(", ")}`,
+    );
+    process.exit(1);
+  }
+  const outputRel = getArg("--output", config.output);
+
   console.log("╔════════════════════════════════════════════════════════╗");
-  console.log("║       ExamenRedes Scraper - CCNA 2 Question Bank       ║");
+  console.log(`║       ExamenRedes Scraper - ${config.course} Question Bank`.padEnd(57) + "║");
   console.log("╚════════════════════════════════════════════════════════╝");
   console.log();
 
-  const urlsToProcess = isTestMode ? [EXAMENREDES_URLS[0]] : EXAMENREDES_URLS;
+  const urlsToProcess = isTestMode ? [config.urls[0]] : config.urls;
 
   if (isTestMode) {
     console.log("MODO TEST: Solo se procesará la primera URL\n");
@@ -440,7 +519,7 @@ async function main() {
     version: "1.0",
     generated: new Date().toISOString(),
     source: "examenredes.com",
-    course: "CCNA 2 - SRWE",
+    course: config.course,
     modules: {},
   };
 
@@ -504,12 +583,12 @@ async function main() {
   }
 
   // Guardar el banco de preguntas
-  const outputPath = path.join(__dirname, "..", "data", "questions-bank.json");
+  const outputPath = path.join(__dirname, "..", outputRel);
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   fs.writeFileSync(outputPath, JSON.stringify(questionsBank, null, 2), "utf-8");
 
   console.log("\n════════════════════════════════════════════════════════");
-  console.log(`Banco de preguntas generado: data/questions-bank.json`);
+  console.log(`Banco de preguntas generado: ${outputRel}`);
   console.log(`Total de preguntas: ${totalQuestions}`);
   console.log(
     `Módulos procesados: ${Object.keys(questionsBank.modules).length}`,

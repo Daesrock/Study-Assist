@@ -22,7 +22,7 @@ const __dirname = path.dirname(__filename);
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36";
 
-const CCNADESDECERO_URLS = [
+const CCNA2_URLS = [
   {
     moduleRange: "1-4",
     title: "Conceptos de conmutacion, VLAN y enrutamiento entre VLAN",
@@ -60,6 +60,54 @@ const CCNADESDECERO_URLS = [
   },
 ];
 
+// URLs de CCNADesdeCero para CCNA 3 (ENSA v7)
+const CCNA3_URLS = [
+  {
+    moduleRange: "1-2",
+    title: "Modulos 1-2: Conceptos y configuracion OSPF",
+    url: "https://ccnadesdecero.es/ccna3-v7-ensa-modulos-1-2-respuestas/",
+  },
+  {
+    moduleRange: "3-5",
+    title: "Modulos 3-5: Seguridad de red",
+    url: "https://ccnadesdecero.es/ccna3-v7-ensa-modulos-3-5-respuestas/",
+  },
+  {
+    moduleRange: "6-8",
+    title: "Modulos 6-8: Conceptos de WAN",
+    url: "https://ccnadesdecero.es/ccna3-v7-ensa-modulos-6-8-respuestas/",
+  },
+  {
+    moduleRange: "9-12",
+    title: "Modulos 9-12: Optimizar, monitorear y resolver problemas",
+    url: "https://ccnadesdecero.es/ccna3-v7-ensa-modulos-9-12-respuestas/",
+  },
+  {
+    moduleRange: "13-14",
+    title: "Modulos 13-14: Tecnologias de redes emergentes",
+    url: "https://ccnadesdecero.es/ccna3-v7-ensa-modulos-13-14-respuestas/",
+  },
+  {
+    moduleRange: "final-exam",
+    title: "Examen final de ENSA",
+    url: "https://ccnadesdecero.es/ccna3-v7-ensa-examen-final-respuestas/",
+  },
+];
+
+// Course configurations: `node scrape-ccnadesdecero.js --course ccna3`
+const COURSE_CONFIGS = {
+  ccna2: {
+    course: "CCNA 2 - SRWE",
+    output: "data/questions-bank-ccnadesdecero.json",
+    urls: CCNA2_URLS,
+  },
+  ccna3: {
+    course: "CCNA 3 - ENSA",
+    output: "data/questions-bank-ccna3-ccnadesdecero.json",
+    urls: CCNA3_URLS,
+  },
+};
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -79,6 +127,7 @@ function normalizeText(text) {
 function parseArgs(argv) {
   const args = {
     isTestMode: argv.includes("--test"),
+    course: null,
     url: null,
     moduleRange: null,
     output: null,
@@ -92,6 +141,9 @@ function parseArgs(argv) {
       i++;
     } else if (t === "--module" && argv[i + 1]) {
       args.moduleRange = argv[i + 1];
+      i++;
+    } else if (t === "--course" && argv[i + 1]) {
+      args.course = argv[i + 1];
       i++;
     } else if (t === "--output" && argv[i + 1]) {
       args.output = argv[i + 1];
@@ -260,6 +312,15 @@ async function scrapeInteractivePage({
 async function main() {
   const args = parseArgs(process.argv.slice(2));
 
+  const courseKey = args.course || "ccna2";
+  const config = COURSE_CONFIGS[courseKey];
+  if (!config) {
+    console.error(
+      `Curso desconocido: ${courseKey}. Opciones: ${Object.keys(COURSE_CONFIGS).join(", ")}`,
+    );
+    process.exit(1);
+  }
+
   const urlsToProcess = args.url
     ? [
         {
@@ -269,17 +330,17 @@ async function main() {
         },
       ]
     : args.isTestMode
-      ? [CCNADESDECERO_URLS[0]]
-      : CCNADESDECERO_URLS;
+      ? [config.urls[0]]
+      : config.urls;
 
   const outputPath = args.output
     ? path.isAbsolute(args.output)
       ? args.output
       : path.join(__dirname, args.output)
-    : path.join(__dirname, "..", "data", "questions-bank-ccnadesdecero.json");
+    : path.join(__dirname, "..", config.output);
 
   console.log("╔══════════════════════════════════════════════════════╗");
-  console.log("║   CCNADesdeCero Scraper - CCNA2 (Interactive Mode)   ║");
+  console.log(`║   CCNADesdeCero Scraper - ${config.course} (Interactive Mode)`.padEnd(55) + "║");
   console.log("╚══════════════════════════════════════════════════════╝");
   console.log();
 
@@ -293,7 +354,7 @@ async function main() {
     version: "1.0",
     generated: new Date().toISOString(),
     source: "ccnadesdecero.es",
-    course: "CCNA 2 - SRWE",
+    course: config.course,
     modules: {},
   };
 

@@ -9,6 +9,8 @@ const ROOT = path.resolve(__dirname, "..");
 const BANK_FILES = [
   "data/questions-bank.json",
   "data/questions-bank-ccnadesdecero.json",
+  "data/questions-bank-ccna3.json",
+  "data/questions-bank-ccna3-ccnadesdecero.json",
 ];
 
 function normalizeForSearch(text) {

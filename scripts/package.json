@@ -6,8 +6,10 @@
   "scripts": {
     "scrape": "node scrape-examenredes.js",
     "scrape:test": "node scrape-examenredes.js --test",
-    "scrape:ccna2": "node scrape-ccnadesdecero.js",
-    "scrape:ccna2:test": "node scrape-ccnadesdecero.js --test",
+    "scrape:ccna3": "node scrape-examenredes.js --course ccna3",
+    "scrape:ccna2": "node scrape-ccnadesdecero.js --course ccna2",
+    "scrape:ccna2:test": "node scrape-ccnadesdecero.js --course ccna2 --test",
+    "scrape:ccna3:cnd": "node scrape-ccnadesdecero.js --course ccna3",
     "analyze:overlap": "node analyze-bank-overlap.js"
   },
   "dependencies": {
