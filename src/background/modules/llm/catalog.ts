@@ -48,6 +48,7 @@ export async function fetchModels(
             "x-api-key": apiKey,
             "anthropic-version": ANTHROPIC_VERSION,
             "anthropic-dangerous-direct-browser-access": "true",
+            ...(preset.headers ?? {}),
           },
           signal,
         },
@@ -78,7 +79,7 @@ export async function fetchModels(
       url: `${base}/models`,
       init: {
         method: "GET",
-        headers: { Authorization: `Bearer ${apiKey}` },
+        headers: { Authorization: `Bearer ${apiKey}`, ...(preset.headers ?? {}) },
         signal,
       },
       retries: 1,

@@ -22,8 +22,8 @@ The following Moodle question types are recognised by the platform but not yet d
 
 ## Current Features
 
-- **Pluggable providers** — built-ins: Anthropic, DeepSeek, OpenAI, OpenRouter, Groq, Mistral and xAI
-- **Custom providers** — add any OpenAI-compatible or Anthropic-compatible endpoint (base URL + key); the host permission is requested on demand
+- **Pluggable providers** — built-ins: Anthropic, DeepSeek and OpenAI
+- **Custom providers & templates** — add any OpenAI-compatible, Anthropic-compatible or OpenAI Responses endpoint (base URL + key); ready-made templates for OpenRouter, Groq, Mistral, xAI, Command Code GOAT and OpenCode Go (multi-endpoint). The host permission is requested on demand
 - **Live model lists** — models are detected from each provider's `GET /models` (no hardcoded lists), with search/filter in the Providers page
 - **Role-based pipeline** — a configurable `primary` provider/model answers first; an optional `validator` validates or acts as fallback
 - **Question bank lookup** — Local NetAcad-style question bank for instant matches
@@ -70,12 +70,14 @@ Each provider also has a **Test connection** button (sends a minimal request) an
 
 ### Custom providers
 
-Besides the built-in presets (Anthropic, DeepSeek, OpenAI, OpenRouter, Groq, Mistral, xAI) you can add your own:
+Besides the three built-in providers you can add your own from the Providers page:
 
-1. Open the Providers page and click **Add provider**
-2. Enter a **name**, **base URL** (e.g. `https://api.example.com/v1`) and **dialect** (OpenAI-compatible or Anthropic-compatible)
+1. Click **Add provider** and pick a **template** (OpenRouter, Groq, Mistral, xAI, Command Code GOAT, OpenCode Go) or **Custom (blank)**
+2. Adjust the **name**, **base URL** and **dialect** (OpenAI-compatible, Anthropic-compatible or OpenAI Responses)
 3. Grant the requested **host permission** (needed to call that endpoint)
 4. Paste the API key; models are detected from `GET /models`
+
+**Multi-endpoint gateways** (OpenCode Go) expose models across several endpoints. The provider is added once and each model is routed to the right endpoint automatically (prefix rules); you can override the endpoint per model in the model list. Gateways that require extra headers (e.g. OpenCode Go's `x-opencode-session`) get them automatically or via the **Headers** field.
 
 ## Keyboard Shortcuts
 

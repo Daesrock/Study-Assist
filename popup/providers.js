@@ -232,6 +232,17 @@ function renderModelRow(profile, model) {
     : escapeHtml(t("providerPriceUnavailable"));
   const ctxText = info && info.maxInput ? formatContext(info.maxInput) : "";
 
+  const endpoints = profile.endpoints || [];
+  const endpointId = profile.modelEndpoints ? profile.modelEndpoints[model] : undefined;
+  const endpointControl = endpoints.length
+    ? `<select class="model-endpoint" title="${escapeAttr(t("providerEndpointLabel"))}">${endpoints
+        .map(
+          (ep) =>
+            `<option value="${escapeAttr(ep.id)}"${ep.id === endpointId ? " selected" : ""}>${escapeHtml(ep.id)}</option>`,
+        )
+        .join("")}</select>`
+    : "";
+
   return `
     <div class="model-row" data-model="${escapeAttr(model)}" data-selected="${included ? "1" : "0"}">
       <input type="checkbox" class="model-include" ${included ? "checked" : ""} title="${escapeAttr(t("providerIncludeTitle"))}" />
@@ -242,6 +253,7 @@ function renderModelRow(profile, model) {
           ${ctxText ? `<span class="model-ctx">ctx ${escapeHtml(ctxText)}</span>` : ""}
         </span>
       </div>
+      ${endpointControl}
       <label class="model-vision-toggle" title="${escapeAttr(t("providerVisionTitle"))}">
         <input type="checkbox" class="model-vision" ${vision ? "checked" : ""} />
         <span class="model-vision-badge">${escapeHtml(t("providerVisionBadge"))}</span>
@@ -631,6 +643,19 @@ function bindCard(card, preset, profile) {
       if (!(await applyState(res))) await loadState();
     });
   });
+
+  card.querySelectorAll(".model-endpoint").forEach((select) => {
+    select.addEventListener("change", async (event) => {
+      const model = event.target.closest(".model-row").dataset.model;
+      const res = await send({
+        type: "SET_MODEL_ENDPOINT",
+        provider,
+        model,
+        endpoint: event.target.value,
+      });
+      if (!(await applyState(res))) await loadState();
+    });
+  });
 }
 
 // ============================================
@@ -641,17 +666,85 @@ function val(id) {
   return el ? String(el.value || "").trim() : "";
 }
 
+function setVal(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.value = value == null ? "" : String(value);
+}
+
+function setChecked(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.checked = !!value;
+}
+
+function parseHeaders(text) {
+  const out = {};
+  for (const line of String(text || "").split("\n")) {
+    const idx = line.indexOf(":");
+    if (idx <= 0) continue;
+    const name = line.slice(0, idx).trim();
+    const value = line.slice(idx + 1).trim();
+    if (name) out[name] = value;
+  }
+  return out;
+}
+
+let selectedTemplate = null;
+
+function populateTemplates() {
+  const select = document.getElementById("ap-template");
+  if (!select) return;
+  const options = [`<option value="">${escapeHtml(t("providerTemplateCustom"))}</option>`];
+  for (const template of STATE.templates || []) {
+    options.push(`<option value="${escapeAttr(template.id)}">${escapeHtml(template.label)}</option>`);
+  }
+  select.innerHTML = options.join("");
+}
+
+function applyTemplateToForm(template) {
+  const note = document.getElementById("ap-endpoints-note");
+  if (!template) {
+    setVal("ap-label", "");
+    setVal("ap-baseurl", "");
+    setVal("ap-dialect", "openai-compatible");
+    setVal("ap-maxtokens", "max_tokens");
+    setVal("ap-prefixes", "");
+    setChecked("ap-thinking", false);
+    setChecked("ap-images", false);
+    setChecked("ap-matching", true);
+    if (note) note.style.display = "none";
+    return;
+  }
+
+  setVal("ap-label", template.label);
+  setVal("ap-baseurl", template.baseUrl);
+  setVal("ap-dialect", template.dialect);
+  setVal("ap-maxtokens", template.maxTokensParam || "max_tokens");
+  setVal("ap-prefixes", (template.keyPrefixes || []).join(", "));
+  setChecked("ap-thinking", !!template.defaultThinking);
+  setChecked("ap-images", !!template.capabilities?.images);
+  setChecked("ap-matching", template.capabilities?.matching !== false);
+
+  if (note) {
+    if (template.endpoints?.length) {
+      const ids = template.endpoints.map((ep) => ep.id).join(", ");
+      note.textContent = `${t("providerMultiEndpointNote")}: ${ids}`;
+      note.style.display = "block";
+    } else {
+      note.style.display = "none";
+    }
+  }
+}
+
 function resetAddProviderForm() {
-  ["ap-label", "ap-baseurl", "ap-prefixes"].forEach((id) => {
-    const el = document.getElementById(id);
-    if (el) el.value = "";
-  });
-  const thinking = document.getElementById("ap-thinking");
-  if (thinking) thinking.checked = false;
-  const images = document.getElementById("ap-images");
-  if (images) images.checked = false;
-  const matching = document.getElementById("ap-matching");
-  if (matching) matching.checked = true;
+  ["ap-label", "ap-baseurl", "ap-prefixes", "ap-headers"].forEach((id) => setVal(id, ""));
+  setVal("ap-template", "");
+  setVal("ap-maxtokens", "max_tokens");
+  setChecked("ap-thinking", false);
+  setChecked("ap-images", false);
+  setChecked("ap-matching", true);
+  selectedTemplate = null;
+  const note = document.getElementById("ap-endpoints-note");
+  if (note) note.style.display = "none";
 }
 
 async function saveCustomProviderFromForm() {
@@ -686,6 +779,7 @@ async function saveCustomProviderFromForm() {
     return;
   }
 
+  const headers = parseHeaders(val("ap-headers"));
   const customProvider = {
     id: `custom-${Date.now().toString(36)}`,
     label,
@@ -705,6 +799,15 @@ async function saveCustomProviderFromForm() {
       .map((s) => s.trim())
       .filter(Boolean),
   };
+  if (Object.keys(headers).length) customProvider.headers = headers;
+
+  // Multi-endpoint template: carry over its endpoints and routing.
+  if (selectedTemplate?.endpoints?.length) {
+    customProvider.endpoints = selectedTemplate.endpoints;
+    customProvider.defaultEndpoint = selectedTemplate.defaultEndpoint;
+    customProvider.routeRules = selectedTemplate.routeRules;
+    customProvider.modelRoutes = selectedTemplate.modelRoutes;
+  }
 
   const res = await send({ type: "SAVE_CUSTOM_PROVIDER", customProvider });
   if (!res || !res.success) {
@@ -770,6 +873,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   const saveBtn = document.getElementById("ap-save");
   if (saveBtn) saveBtn.addEventListener("click", saveCustomProviderFromForm);
 
+  const templateSelect = document.getElementById("ap-template");
+  if (templateSelect) {
+    templateSelect.addEventListener("change", () => {
+      selectedTemplate =
+        (STATE.templates || []).find((tp) => tp.id === templateSelect.value) || null;
+      applyTemplateToForm(selectedTemplate);
+    });
+  }
+
   await loadView();
   await loadState();
+  populateTemplates();
 });

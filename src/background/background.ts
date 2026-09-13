@@ -10,7 +10,7 @@ import type { AnalysisResponse } from "../types/index.js";
 import { analyzeQuestion, analyzeQuestionStreaming, testProviderKey, testProviderConnection } from "./modules/api.js";
 import { handleToggleExtension, handleDisguiseMode, restoreDisguiseMode } from "./modules/extensionState.js";
 import { getUsageStats, getRecentHistory, clearUsageData, getStorageInfo, trimHistory, updateStorageBadge } from "./modules/usageTracker.js";
-import { getProviderState, saveProviderKey, clearProviderKey, setModelVision, setModelSelected, setSelectionMode, addCustomModel, saveRoles, saveProfile, getProviderKey, applyDetectedModels, saveQaModel, saveCustomProvider, deleteCustomProvider } from "./modules/llm/profiles.js";
+import { getProviderState, saveProviderKey, clearProviderKey, setModelVision, setModelSelected, setModelEndpoint, setSelectionMode, addCustomModel, saveRoles, saveProfile, getProviderKey, applyDetectedModels, saveQaModel, saveCustomProvider, deleteCustomProvider } from "./modules/llm/profiles.js";
 import { fetchModels } from "./modules/llm/catalog.js";
 import { getPreset, ensureRegistry, resetRegistry } from "./modules/llm/registry.js";
 import { getPriceIndex, lookupModelInfo, refreshPrices } from "./modules/llm/pricing.js";
@@ -221,6 +221,14 @@ async function handleMessage(
         return { success: false, error: (error as Error).message };
       }
 
+    case "SET_MODEL_ENDPOINT":
+      try {
+        await setModelEndpoint(message.provider ?? "", message.model ?? "", message.endpoint ?? "");
+        return await withState();
+      } catch (error) {
+        return { success: false, error: (error as Error).message };
+      }
+
     case "SET_SELECTION_MODE":
       try {
         const provider = message.provider ?? "";
@@ -275,7 +283,11 @@ async function handleMessage(
         if (!config || !config.id || !config.label || !config.baseUrl || !config.dialect) {
           return { success: false, error: "Missing provider fields." };
         }
-        if (config.dialect !== "anthropic" && config.dialect !== "openai-compatible") {
+        if (
+          config.dialect !== "anthropic" &&
+          config.dialect !== "openai-compatible" &&
+          config.dialect !== "openai-responses"
+        ) {
           return { success: false, error: "Unsupported dialect." };
         }
         await saveCustomProvider(config);

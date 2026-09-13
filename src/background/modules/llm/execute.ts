@@ -27,6 +27,10 @@ import {
   buildAnthropicMessagesRequest,
   parseAnthropicMessagesResponse,
 } from "./anthropic.js";
+import {
+  buildOpenAiResponsesRequest,
+  parseOpenAiResponsesResponse,
+} from "./openaiResponses.js";
 
 const EMPTY_USAGE: NormalizedUsage = { inputTokens: 0, outputTokens: 0 };
 
@@ -85,6 +89,19 @@ function buildRequest(opts: ProviderRunOptions): {
       thinking: reasoning
         ? getClaudeThinkingConfig(opts.model, opts.supportsAdaptiveThinking)
         : undefined,
+      headers: preset.headers,
+      signal: opts.signal,
+    });
+  }
+
+  if (preset.dialect === "openai-responses") {
+    return buildOpenAiResponsesRequest({
+      baseUrl: preset.baseUrl,
+      apiKey: opts.apiKey,
+      model: opts.model,
+      input: blocksToText(opts.content),
+      maxTokens: opts.maxTokens,
+      headers: preset.headers,
       signal: opts.signal,
     });
   }
@@ -99,6 +116,7 @@ function buildRequest(opts: ProviderRunOptions): {
     thinking: reasoning,
     reasoningEffort: reasoning ? (opts.reasoningEffort ?? "high") : undefined,
     reasoningKind: preset.reasoningKind,
+    headers: preset.headers,
     signal: opts.signal,
   });
 }
@@ -146,9 +164,9 @@ function mapError(preset: ProviderPreset, status: number, raw: unknown): Provide
 }
 
 function parseResponse(preset: ProviderPreset, raw: unknown) {
-  return preset.dialect === "anthropic"
-    ? parseAnthropicMessagesResponse(raw)
-    : parseOpenAiChatResponse(raw);
+  if (preset.dialect === "anthropic") return parseAnthropicMessagesResponse(raw);
+  if (preset.dialect === "openai-responses") return parseOpenAiResponsesResponse(raw);
+  return parseOpenAiChatResponse(raw);
 }
 
 export async function runProvider(opts: ProviderRunOptions): Promise<ProviderRunResult> {

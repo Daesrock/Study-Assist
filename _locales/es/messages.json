@@ -385,5 +385,11 @@
   "providerSelectedCount": { "message": "Seleccionados", "description": "Etiqueta de conteo de seleccionados" },
   "providerShownCount": { "message": "visibles", "description": "Etiqueta de conteo de visibles" },
   "providerSelectAll": { "message": "Seleccionar todos (filtrados)", "description": "Seleccionar todos los filtrados" },
-  "providerSelectNone": { "message": "Ninguno", "description": "Deseleccionar todos los filtrados" }
+  "providerSelectNone": { "message": "Ninguno", "description": "Deseleccionar todos los filtrados" },
+  "providerTemplateLabel": { "message": "Plantilla", "description": "Etiqueta del selector de plantilla" },
+  "providerTemplateCustom": { "message": "Personalizado (vacío)", "description": "Opción de plantilla vacía" },
+  "providerMultiEndpointNote": { "message": "Este proveedor usa varios endpoints (se enruta por modelo)", "description": "Nota para plantillas multi-endpoint" },
+  "providerHeaders": { "message": "Cabeceras (Nombre: valor por línea)", "description": "Campo de cabeceras personalizadas" },
+  "providerDialectResponses": { "message": "OpenAI Responses", "description": "Dialecto OpenAI Responses" },
+  "providerEndpointLabel": { "message": "Endpoint", "description": "Etiqueta del selector de endpoint" }
 }

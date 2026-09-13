@@ -15,6 +15,7 @@ import type { ProviderPreset } from "./contract.js";
 import { llmRequest } from "./transport.js";
 import { buildAnthropicMessagesRequest } from "./anthropic.js";
 import { buildOpenAiChatRequest, describeOpenAiError } from "./openaiCompat.js";
+import { buildOpenAiResponsesRequest } from "./openaiResponses.js";
 
 export interface StreamCallbacks {
   onChunk: (text: string) => void;
@@ -124,6 +125,7 @@ async function streamAnthropic(
     thinking: reasoning
       ? getClaudeThinkingConfig(opts.model, opts.supportsAdaptiveThinking)
       : undefined,
+    headers: opts.preset.headers,
     stream: true,
     signal: opts.signal,
   });
@@ -227,6 +229,7 @@ async function streamOpenAi(
     thinking: reasoning,
     reasoningEffort: reasoning ? (opts.reasoningEffort ?? "high") : undefined,
     reasoningKind: opts.preset.reasoningKind,
+    headers: opts.preset.headers,
     stream: true,
     streamOptions:
       opts.preset.id === "openai" ? { include_usage: true } : undefined,
@@ -324,12 +327,121 @@ async function streamOpenAi(
   };
 }
 
+async function streamOpenAiResponses(
+  opts: StreamProviderOptions,
+  callbacks: StreamCallbacks,
+): Promise<StreamResult> {
+  const built = buildOpenAiResponsesRequest({
+    baseUrl: opts.preset.baseUrl,
+    apiKey: opts.apiKey,
+    model: opts.model,
+    input: blocksToText(opts.content),
+    maxTokens: opts.maxTokens,
+    headers: opts.preset.headers,
+    signal: opts.signal,
+  });
+
+  const response = await llmRequest({
+    url: built.url,
+    init: built.init,
+    retries: 0,
+    timeout: opts.thinking ? 300000 : 120000,
+  });
+
+  if (!response.ok) {
+    const raw = await errorMessageFromResponse(response, "");
+    const { error } = describeOpenAiError(response.status, raw, opts.preset.label);
+    log(`[Study Assist] ${opts.preset.label} responses HTTP ${response.status}:`, error);
+    throw new Error(error);
+  }
+
+  let fullText = "";
+  let thinkingText = "";
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let truncated = false;
+  let inputReported = false;
+  let completed = false;
+
+  await consumeSse(response, callbacks, (data) => {
+    if (data === "[DONE]") return;
+
+    let event: Record<string, unknown>;
+    try {
+      event = JSON.parse(data) as Record<string, unknown>;
+    } catch {
+      return;
+    }
+
+    const type = event.type as string | undefined;
+    switch (type) {
+      case "response.output_text.delta":
+        if (typeof event.delta === "string" && event.delta) {
+          fullText += event.delta;
+          callbacks.onChunk(event.delta);
+        }
+        break;
+      case "response.reasoning_summary_text.delta":
+      case "response.reasoning_text.delta":
+        if (typeof event.delta === "string" && event.delta) {
+          thinkingText += event.delta;
+          callbacks.onThinking?.(event.delta);
+        }
+        break;
+      case "response.completed": {
+        const payload = event.response as
+          | {
+              usage?: { input_tokens?: number; output_tokens?: number };
+            }
+          | undefined;
+        const usage = payload?.usage ?? (event.usage as { input_tokens?: number; output_tokens?: number } | undefined);
+        if (usage) {
+          inputTokens = usage.input_tokens ?? inputTokens;
+          outputTokens = usage.output_tokens ?? outputTokens;
+          if (inputTokens && !inputReported) {
+            inputReported = true;
+            callbacks.onInputTokens(inputTokens);
+          }
+        }
+        completed = true;
+        callbacks.onComplete(outputTokens);
+        break;
+      }
+      case "response.incomplete": {
+        truncated = true;
+        break;
+      }
+      case "response.failed":
+      case "error": {
+        const responseError = (event.response as { error?: { message?: string } } | undefined)?.error;
+        const directError = event.error as { message?: string } | undefined;
+        callbacks.onError(
+          responseError?.message || directError?.message || "Responses stream error",
+        );
+        break;
+      }
+    }
+  });
+
+  if (!completed) callbacks.onComplete(outputTokens);
+
+  return {
+    fullText,
+    inputTokens,
+    outputTokens,
+    thinkingText: thinkingText || undefined,
+    truncated,
+  };
+}
+
 /** Stream a request through the provider's dialect. */
 export function streamProvider(
   opts: StreamProviderOptions,
   callbacks: StreamCallbacks,
 ): Promise<StreamResult> {
-  return opts.preset.dialect === "anthropic"
-    ? streamAnthropic(opts, callbacks)
-    : streamOpenAi(opts, callbacks);
+  if (opts.preset.dialect === "anthropic") return streamAnthropic(opts, callbacks);
+  if (opts.preset.dialect === "openai-responses") {
+    return streamOpenAiResponses(opts, callbacks);
+  }
+  return streamOpenAi(opts, callbacks);
 }

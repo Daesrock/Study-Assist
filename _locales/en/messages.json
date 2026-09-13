@@ -385,5 +385,11 @@
   "providerSelectedCount": { "message": "Selected", "description": "Selected models count label" },
   "providerShownCount": { "message": "shown", "description": "Shown models count label" },
   "providerSelectAll": { "message": "Select all (filtered)", "description": "Select all filtered models" },
-  "providerSelectNone": { "message": "Select none", "description": "Deselect all filtered models" }
+  "providerSelectNone": { "message": "Select none", "description": "Deselect all filtered models" },
+  "providerTemplateLabel": { "message": "Template", "description": "Provider template selector label" },
+  "providerTemplateCustom": { "message": "Custom (blank)", "description": "Blank template option" },
+  "providerMultiEndpointNote": { "message": "This provider uses multiple endpoints (routed per model)", "description": "Note for multi-endpoint templates" },
+  "providerHeaders": { "message": "Headers (Name: value per line)", "description": "Custom request headers field" },
+  "providerDialectResponses": { "message": "OpenAI Responses", "description": "OpenAI Responses dialect" },
+  "providerEndpointLabel": { "message": "Endpoint", "description": "Endpoint selector label" }
 }

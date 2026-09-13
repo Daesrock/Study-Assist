@@ -292,6 +292,7 @@ export type ExtensionMessageType =
   | "SET_PROVIDER_THINKING"
   | "SET_MODEL_VISION"
   | "SET_MODEL_SELECTED"
+  | "SET_MODEL_ENDPOINT"
   | "SET_SELECTION_MODE"
   | "ADD_PROVIDER_MODEL"
   | "FETCH_PROVIDER_MODELS"
@@ -312,6 +313,7 @@ export interface ExtensionMessage {
   thinking?: boolean;
   vision?: boolean;
   selected?: boolean;
+  endpoint?: string;
   selectionMode?: "auto" | "manual";
   test?: boolean;
   roles?: ProviderRoles;

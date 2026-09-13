@@ -4,7 +4,7 @@
  */
 
 import { log } from "./constants.js";
-import { findPreset, ensureRegistry } from "./llm/registry.js";
+import { findPreset, ensureRegistry, resolvePresetForModel } from "./llm/registry.js";
 import { resolveModelInfo, computeUsageCost } from "./llm/pricing.js";
 
 // ============================================
@@ -41,7 +41,7 @@ export async function estimateCost(
   const info = await resolveModelInfo(providerId, model);
   if (!info) return null;
 
-  const excludesCache = findPreset(providerId)?.dialect === "anthropic";
+  const excludesCache = resolvePresetForModel(providerId, model)?.dialect === "anthropic";
   const cacheHit = usage.cacheHitTokens ?? 0;
   const missInput = excludesCache
     ? usage.inputTokens

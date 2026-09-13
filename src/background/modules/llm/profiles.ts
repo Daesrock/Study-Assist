@@ -14,8 +14,8 @@ import type {
 } from "../constants.js";
 import { logProviders } from "../constants.js";
 import { encryptApiKey, decryptApiKey, isPlainTextKey } from "../crypto.js";
-import type { ProviderPreset, CustomProviderConfig } from "./contract.js";
-import { findPreset, listPresets, ensureRegistry, resetRegistry } from "./registry.js";
+import type { ProviderPreset, ProviderEndpoint, CustomProviderConfig } from "./contract.js";
+import { findPreset, listPresets, listTemplates, ensureRegistry, resetRegistry, resolvePresetForModel, resolveEndpointId } from "./registry.js";
 import { getPriceIndex, lookupModelInfo, resolveModelInfo } from "./pricing.js";
 import { computeAutoSelection } from "./selection.js";
 import type { SelectionCandidate } from "./selection.js";
@@ -156,16 +156,17 @@ export async function resolveRole(
 ): Promise<ResolvedRole | null> {
   if (!role) return null;
   await ensureRegistry();
-  const preset = findPreset(role.provider);
-  if (!preset) return null;
-
-  const apiKey = await getProviderKey(role.provider);
-  if (!apiKey) return null;
-
   // Models come exclusively from the provider catalog (or user input); there
   // is no shipped fallback. An unassigned model makes the role unusable.
   const model = role.model?.trim();
   if (!model) return null;
+
+  // Resolve the endpoint for this model (a gateway may expose several).
+  const preset = resolvePresetForModel(role.provider, model);
+  if (!preset) return null;
+
+  const apiKey = await getProviderKey(role.provider);
+  if (!apiKey) return null;
 
   const profile = await getProfile(role.provider);
   const thinking = profile?.thinking ?? preset.defaultThinking;
@@ -194,10 +195,15 @@ export interface PublicProviderProfile {
   lastSync: number | null;
   /** LiteLLM price/capability info per visible model id (null when unknown). */
   modelInfo: Record<string, ModelPriceInfo | null>;
+  /** Gateway endpoints (empty for single-endpoint providers). */
+  endpoints: ProviderEndpoint[];
+  /** Resolved endpoint id per visible model (for the UI tag/selector). */
+  modelEndpoints: Record<string, string>;
 }
 
 export interface ProviderState {
   presets: ProviderPreset[];
+  templates: ProviderPreset[];
   profiles: PublicProviderProfile[];
   roles: ProviderRoles;
 }
@@ -212,9 +218,13 @@ export async function getProviderState(): Promise<ProviderState> {
     const profile = stored[preset.id];
     const models = profile?.models ?? [];
     const customModels = profile?.customModels ?? [];
+    const visible = [...new Set([...models, ...customModels])];
     const modelInfo: Record<string, ModelPriceInfo | null> = {};
-    for (const id of new Set([...models, ...customModels])) {
+    const modelEndpoints: Record<string, string> = {};
+    for (const id of visible) {
       modelInfo[id] = lookupModelInfo(index, preset.id, id);
+      const endpoint = resolveEndpointId(preset.id, id);
+      if (endpoint) modelEndpoints[id] = endpoint;
     }
     return {
       id: preset.id,
@@ -228,10 +238,13 @@ export async function getProviderState(): Promise<ProviderState> {
       selectionMode: profile?.selectionMode ?? "auto",
       lastSync: profile?.lastSync ?? null,
       modelInfo,
+      endpoints: preset.endpoints ?? [],
+      modelEndpoints,
     };
   });
   return {
     presets,
+    templates: listTemplates(),
     profiles,
     roles: await getRoles(),
   };
@@ -484,5 +497,24 @@ export async function deleteCustomProvider(id: string): Promise<void> {
   resetRegistry();
   await ensureRegistry();
   logProviders("custom provider deleted", { id });
+}
+
+/** Override the endpoint a model routes to (multi-endpoint providers). */
+export async function setModelEndpoint(
+  presetId: string,
+  model: string,
+  endpoint: string,
+): Promise<void> {
+  const providers = await getCustomProviders();
+  const config = providers[presetId];
+  if (!config) return;
+  providers[presetId] = {
+    ...config,
+    modelRoutes: { ...(config.modelRoutes ?? {}), [model]: endpoint },
+  };
+  await chrome.storage.local.set({ [CUSTOM_PROVIDERS_KEY]: providers });
+  resetRegistry();
+  await ensureRegistry();
+  logProviders("model endpoint set", { provider: presetId, model, endpoint });
 }
 

@@ -17,6 +17,8 @@ export interface AnthropicMessagesRequestInput {
   messages: ClaudeMessage[];
   maxTokens: number;
   thinking?: { type: string; budget_tokens?: number };
+  /** Extra request headers (merged on top of the defaults). */
+  headers?: Record<string, string>;
   /** When true, adds `stream: true` for SSE responses. */
   stream?: boolean;
   signal?: AbortSignal;
@@ -54,6 +56,7 @@ export function buildAnthropicMessagesRequest(
         "x-api-key": input.apiKey,
         "anthropic-version": ANTHROPIC_VERSION,
         "anthropic-dangerous-direct-browser-access": "true",
+        ...(input.headers ?? {}),
       },
       body: JSON.stringify(body),
       signal: input.signal,

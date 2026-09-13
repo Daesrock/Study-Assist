@@ -27,6 +27,8 @@ export interface OpenAiChatRequestInput {
   thinking?: boolean;
   reasoningEffort?: "low" | "medium" | "high";
   reasoningKind?: ReasoningKind;
+  /** Extra request headers (merged on top of the defaults). */
+  headers?: Record<string, string>;
   /** When true, adds `stream: true` for SSE responses. */
   stream?: boolean;
   /** Extra streaming options (e.g. `{ include_usage: true }` for OpenAI). */
@@ -73,6 +75,7 @@ export function buildOpenAiChatRequest(input: OpenAiChatRequestInput): BuiltOpen
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${input.apiKey}`,
+        ...(input.headers ?? {}),
       },
       body: JSON.stringify(body),
       signal: input.signal,

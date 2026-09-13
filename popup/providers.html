@@ -31,6 +31,13 @@
       <!-- Add custom provider -->
       <section id="add-provider-form" class="add-provider-form" style="display: none">
         <h2 data-i18n="providerAddProviderTitle">Add a custom provider</h2>
+
+        <label class="add-provider-template">
+          <span data-i18n="providerTemplateLabel">Template</span>
+          <select id="ap-template"></select>
+        </label>
+        <div id="ap-endpoints-note" class="add-provider-note" style="display: none"></div>
+
         <div class="add-provider-grid">
           <label>
             <span data-i18n="providerAddLabel">Name</span>
@@ -50,6 +57,9 @@
               </option>
               <option value="anthropic" data-i18n="providerDialectAnthropic">
                 Anthropic-compatible
+              </option>
+              <option value="openai-responses" data-i18n="providerDialectResponses">
+                OpenAI Responses
               </option>
             </select>
           </label>
@@ -80,6 +90,10 @@
             <label>
               <span data-i18n="providerKeyPrefixes">Key prefixes (comma-separated)</span>
               <input type="text" id="ap-prefixes" placeholder="sk-, sk-or-" autocomplete="off" />
+            </label>
+            <label class="add-provider-full">
+              <span data-i18n="providerHeaders">Headers (Name: value per line)</span>
+              <textarea id="ap-headers" rows="3" placeholder="x-opencode-session: ..."></textarea>
             </label>
           </div>
         </details>

@@ -9,8 +9,8 @@
 /** The two model slots in the hybrid pipeline. */
 export type LlmRole = "primary" | "validator";
 
-/** The two wire dialects the extension speaks. */
-export type LlmDialect = "anthropic" | "openai-compatible";
+/** The wire dialects the extension speaks. */
+export type LlmDialect = "anthropic" | "openai-compatible" | "openai-responses";
 
 export type ProviderErrorKind =
   | "auth"
@@ -75,6 +75,20 @@ export interface ProviderCapabilities {
   reasoning: boolean;
 }
 
+/** One wire endpoint of a provider (a gateway may expose several). */
+export interface ProviderEndpoint {
+  id: string;
+  dialect: LlmDialect;
+  baseUrl: string;
+  headers?: Record<string, string>;
+}
+
+/** Prefix-based routing rule: model ids starting with `prefix` use `endpoint`. */
+export interface RouteRule {
+  prefix: string;
+  endpoint: string;
+}
+
 /** Static description of a provider (data, not code). */
 export interface ProviderPreset {
   /** Stable id used in storage and the UI. */
@@ -95,6 +109,16 @@ export interface ProviderPreset {
    */
   maxTokensParam?: "max_tokens" | "max_completion_tokens";
   capabilities: ProviderCapabilities;
+  /** Extra request headers (merged on top of the defaults). */
+  headers?: Record<string, string>;
+  /** Multi-endpoint gateway: the provider may expose several dialects. */
+  endpoints?: ProviderEndpoint[];
+  /** Endpoint id used when no explicit route matches. */
+  defaultEndpoint?: string;
+  /** Explicit model id → endpoint id mapping. */
+  modelRoutes?: Record<string, string>;
+  /** Prefix-based routing for models without an explicit mapping. */
+  routeRules?: RouteRule[];
   /** True for user-defined providers (added from the Providers page). */
   custom?: boolean;
 }
@@ -110,6 +134,11 @@ export interface CustomProviderConfig {
   maxTokensParam?: "max_tokens" | "max_completion_tokens";
   capabilities?: Partial<ProviderCapabilities>;
   keyPrefixes?: string[];
+  headers?: Record<string, string>;
+  endpoints?: ProviderEndpoint[];
+  defaultEndpoint?: string;
+  modelRoutes?: Record<string, string>;
+  routeRules?: RouteRule[];
 }
 
 /** A preset resolved with the user's chosen model for a given role. */
