@@ -15,6 +15,7 @@
     "release:tag": "node scripts/tag-release.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:bank": "vitest run tests/background/questionBankRealData.test.ts",
     "test:smoke": "vitest run tests/detection/netacad.test.ts tests/detection/moodle.test.ts tests/background/parsing.test.ts",
     "test:watch": "vitest",
     "analyze:bank-overlap": "node scripts/analyze-bank-overlap.js"
