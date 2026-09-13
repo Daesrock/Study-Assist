@@ -2,7 +2,7 @@
  * Tests for Step B1: provider profiles, roles, migration and capability gating.
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mockStorage } from "../setup";
 
 import {
@@ -20,8 +20,10 @@ import {
   resolveQaModel,
   saveQaModel,
   saveProfile,
+  saveCustomProvider,
+  deleteCustomProvider,
 } from "../../src/background/modules/llm/profiles";
-import { getPreset, OPENAI_PRESET_ID } from "../../src/background/modules/llm/registry";
+import { getPreset, findPreset, __resetRegistryForTests, OPENAI_PRESET_ID } from "../../src/background/modules/llm/registry";
 import { __setPriceIndexForTests } from "../../src/background/modules/llm/pricing";
 
 function clearStorage() {
@@ -369,3 +371,45 @@ describe("resolveQaModel", () => {
     expect(await resolveQaModel()).toBeNull();
   });
 });
+
+describe("custom providers", () => {
+  beforeEach(() => {
+    clearStorage();
+    __resetRegistryForTests();
+  });
+
+  afterEach(__resetRegistryForTests);
+
+  const config = {
+    id: "custom-x",
+    label: "X",
+    dialect: "openai-compatible" as const,
+    baseUrl: "https://api.x.com/v1",
+  };
+
+  it("exposes a saved custom provider in getProviderState", async () => {
+    await saveCustomProvider(config);
+
+    const state = await getProviderState();
+    expect(state.presets.some((p) => p.id === "custom-x")).toBe(true);
+    expect(findPreset("custom-x")?.label).toBe("X");
+  });
+
+  it("deletes a custom provider, its profile and any role using it", async () => {
+    await saveCustomProvider(config);
+    mockStorage.roles = {
+      primary: { provider: "custom-x", model: "m" },
+      validator: null,
+    };
+    mockStorage.providerProfiles = { "custom-x": { apiKey: "enc" } };
+
+    await deleteCustomProvider("custom-x");
+
+    expect(findPreset("custom-x")).toBeUndefined();
+    const roles = mockStorage.roles as { primary: unknown };
+    expect(roles.primary).toBeNull();
+    const profiles = mockStorage.providerProfiles as Record<string, unknown>;
+    expect(profiles["custom-x"]).toBeUndefined();
+  });
+});
+

@@ -10,9 +10,9 @@ import type { AnalysisResponse } from "../types/index.js";
 import { analyzeQuestion, analyzeQuestionStreaming, testProviderKey, testProviderConnection } from "./modules/api.js";
 import { handleToggleExtension, handleDisguiseMode, restoreDisguiseMode } from "./modules/extensionState.js";
 import { getUsageStats, getRecentHistory, clearUsageData, getStorageInfo, trimHistory, updateStorageBadge } from "./modules/usageTracker.js";
-import { getProviderState, saveProviderKey, clearProviderKey, setModelVision, setModelSelected, setSelectionMode, addCustomModel, saveRoles, saveProfile, getProviderKey, applyDetectedModels, saveQaModel } from "./modules/llm/profiles.js";
+import { getProviderState, saveProviderKey, clearProviderKey, setModelVision, setModelSelected, setSelectionMode, addCustomModel, saveRoles, saveProfile, getProviderKey, applyDetectedModels, saveQaModel, saveCustomProvider, deleteCustomProvider } from "./modules/llm/profiles.js";
 import { fetchModels } from "./modules/llm/catalog.js";
-import { getPreset } from "./modules/llm/registry.js";
+import { getPreset, ensureRegistry, resetRegistry } from "./modules/llm/registry.js";
 import { getPriceIndex, lookupModelInfo, refreshPrices } from "./modules/llm/pricing.js";
 
 // ============================================
@@ -64,6 +64,7 @@ async function handleMessage(
   message: ExtensionMessage,
   _sender: chrome.runtime.MessageSender
 ): Promise<MessageResponse | AnalysisResponse> {
+  await ensureRegistry();
   switch (message.type) {
     case "TOGGLE_EXTENSION":
       return handleToggleExtension(message.active ?? false);
@@ -268,6 +269,29 @@ async function handleMessage(
         return { success: false, error: (error as Error).message };
       }
 
+    case "SAVE_CUSTOM_PROVIDER":
+      try {
+        const config = message.customProvider;
+        if (!config || !config.id || !config.label || !config.baseUrl || !config.dialect) {
+          return { success: false, error: "Missing provider fields." };
+        }
+        if (config.dialect !== "anthropic" && config.dialect !== "openai-compatible") {
+          return { success: false, error: "Unsupported dialect." };
+        }
+        await saveCustomProvider(config);
+        return await withState();
+      } catch (error) {
+        return { success: false, error: (error as Error).message };
+      }
+
+    case "DELETE_CUSTOM_PROVIDER":
+      try {
+        await deleteCustomProvider(message.provider ?? "");
+        return await withState();
+      } catch (error) {
+        return { success: false, error: (error as Error).message };
+      }
+
     case "FETCH_PROVIDER_MODELS":
       try {
         const provider = message.provider ?? "";
@@ -426,8 +450,13 @@ loadDebugMode();
 
 if (chrome.storage.onChanged) {
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === "local" && "debugMode" in changes) {
+    if (area !== "local") return;
+    if ("debugMode" in changes) {
       setDebugMode(changes.debugMode?.newValue === true);
+    }
+    if ("customProviders" in changes) {
+      resetRegistry();
+      ensureRegistry().catch(() => {});
     }
   });
 }

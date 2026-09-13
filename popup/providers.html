@@ -11,9 +11,14 @@
       <header class="providers-header">
         <div class="providers-header-row">
           <h1 data-i18n="providersTitle">Providers</h1>
-          <button id="refresh-prices" class="btn btn-outline" data-i18n="providerRefreshPrices">
-            Refresh prices
-          </button>
+          <div class="providers-header-actions">
+            <button id="add-provider" class="btn btn-primary" data-i18n="providerAddProvider">
+              Add provider
+            </button>
+            <button id="refresh-prices" class="btn btn-outline" data-i18n="providerRefreshPrices">
+              Refresh prices
+            </button>
+          </div>
         </div>
         <p data-i18n="providersSubtitle">
           Configure your API keys and models.
@@ -22,6 +27,68 @@
       </header>
 
       <div id="providers-error" class="providers-error"></div>
+
+      <!-- Add custom provider -->
+      <section id="add-provider-form" class="add-provider-form" style="display: none">
+        <h2 data-i18n="providerAddProviderTitle">Add a custom provider</h2>
+        <div class="add-provider-grid">
+          <label>
+            <span data-i18n="providerAddLabel">Name</span>
+            <input type="text" id="ap-label" data-i18n-placeholder="providerAddLabelPlaceholder"
+              placeholder="My provider" autocomplete="off" />
+          </label>
+          <label>
+            <span data-i18n="providerAddBaseUrl">Base URL</span>
+            <input type="text" id="ap-baseurl" data-i18n-placeholder="providerAddBaseUrlPlaceholder"
+              placeholder="https://api.example.com/v1" autocomplete="off" />
+          </label>
+          <label>
+            <span data-i18n="providerAddDialect">Dialect</span>
+            <select id="ap-dialect">
+              <option value="openai-compatible" data-i18n="providerDialectOpenAI">
+                OpenAI-compatible
+              </option>
+              <option value="anthropic" data-i18n="providerDialectAnthropic">
+                Anthropic-compatible
+              </option>
+            </select>
+          </label>
+        </div>
+
+        <details class="add-provider-advanced">
+          <summary data-i18n="providerAddAdvanced">Advanced</summary>
+          <div class="add-provider-grid">
+            <label>
+              <span data-i18n="providerMaxTokensParam">Token limit field</span>
+              <select id="ap-maxtokens">
+                <option value="max_tokens">max_tokens</option>
+                <option value="max_completion_tokens">max_completion_tokens</option>
+              </select>
+            </label>
+            <label class="add-provider-check">
+              <input type="checkbox" id="ap-thinking" />
+              <span data-i18n="providerDefaultThinking">Thinking / reasoning by default</span>
+            </label>
+            <label class="add-provider-check">
+              <input type="checkbox" id="ap-images" />
+              <span data-i18n="providerCapImages">Supports images</span>
+            </label>
+            <label class="add-provider-check">
+              <input type="checkbox" id="ap-matching" checked />
+              <span data-i18n="providerCapMatching">Supports matching questions</span>
+            </label>
+            <label>
+              <span data-i18n="providerKeyPrefixes">Key prefixes (comma-separated)</span>
+              <input type="text" id="ap-prefixes" placeholder="sk-, sk-or-" autocomplete="off" />
+            </label>
+          </div>
+        </details>
+
+        <div class="add-provider-actions">
+          <button id="ap-cancel" class="btn btn-outline" data-i18n="providerCancel">Cancel</button>
+          <button id="ap-save" class="btn btn-primary" data-i18n="providerSaveProvider">Save provider</button>
+        </div>
+      </section>
 
       <div id="providers-list"></div>
     </main>

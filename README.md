@@ -22,7 +22,9 @@ The following Moodle question types are recognised by the platform but not yet d
 
 ## Current Features
 
-- **Pluggable providers** — Anthropic, DeepSeek and OpenAI; models are detected live from each provider's `GET /models` (no hardcoded lists)
+- **Pluggable providers** — built-ins: Anthropic, DeepSeek, OpenAI, OpenRouter, Groq, Mistral and xAI
+- **Custom providers** — add any OpenAI-compatible or Anthropic-compatible endpoint (base URL + key); the host permission is requested on demand
+- **Live model lists** — models are detected from each provider's `GET /models` (no hardcoded lists), with search/filter in the Providers page
 - **Role-based pipeline** — a configurable `primary` provider/model answers first; an optional `validator` validates or acts as fallback
 - **Question bank lookup** — Local NetAcad-style question bank for instant matches
 - **Quick mode** — Trigger analysis with `SHIFT` and show compact answer directly on the SA button
@@ -65,6 +67,15 @@ npm run build
 6. Enable the extension toggle
 
 Each provider also has a **Test connection** button (sends a minimal request) and a **Detect models** button.
+
+### Custom providers
+
+Besides the built-in presets (Anthropic, DeepSeek, OpenAI, OpenRouter, Groq, Mistral, xAI) you can add your own:
+
+1. Open the Providers page and click **Add provider**
+2. Enter a **name**, **base URL** (e.g. `https://api.example.com/v1`) and **dialect** (OpenAI-compatible or Anthropic-compatible)
+3. Grant the requested **host permission** (needed to call that endpoint)
+4. Paste the API key; models are detected from `GET /models`
 
 ## Keyboard Shortcuts
 
@@ -151,4 +162,4 @@ This README is aligned with the current codebase state:
 
 ## Privacy
 
-Data is stored locally in browser storage. The extension only sends question context to the configured AI providers (Anthropic, DeepSeek and/or OpenAI) using your own keys, when analysis is explicitly triggered. It also fetches LiteLLM's public model-price catalog to display model costs/capabilities; no user data is sent with that request. No external telemetry server is used.
+Data is stored locally in browser storage. The extension only sends question context to the configured AI providers (built-in and custom) using your own keys, when analysis is explicitly triggered. It also fetches LiteLLM's public model-price catalog to display model costs/capabilities; no user data is sent with that request. Custom providers require a host permission (requested when you add them). No external telemetry server is used.

@@ -14,8 +14,8 @@ import type {
 } from "../constants.js";
 import { logProviders } from "../constants.js";
 import { encryptApiKey, decryptApiKey, isPlainTextKey } from "../crypto.js";
-import type { ProviderPreset } from "./contract.js";
-import { LLM_PRESETS } from "./registry.js";
+import type { ProviderPreset, CustomProviderConfig } from "./contract.js";
+import { findPreset, listPresets, ensureRegistry, resetRegistry } from "./registry.js";
 import { getPriceIndex, lookupModelInfo, resolveModelInfo } from "./pricing.js";
 import { computeAutoSelection } from "./selection.js";
 import type { SelectionCandidate } from "./selection.js";
@@ -155,7 +155,8 @@ export async function resolveRole(
   role: RoleAssignment | null | undefined,
 ): Promise<ResolvedRole | null> {
   if (!role) return null;
-  const preset = LLM_PRESETS[role.provider];
+  await ensureRegistry();
+  const preset = findPreset(role.provider);
   if (!preset) return null;
 
   const apiKey = await getProviderKey(role.provider);
@@ -203,9 +204,11 @@ export interface ProviderState {
 
 /** State for the providers page / popup. Never includes API keys. */
 export async function getProviderState(): Promise<ProviderState> {
+  await ensureRegistry();
+  const presets = listPresets();
   const stored = await getProviderProfiles();
   const index = await getPriceIndex();
-  const profiles: PublicProviderProfile[] = Object.values(LLM_PRESETS).map((preset) => {
+  const profiles: PublicProviderProfile[] = presets.map((preset) => {
     const profile = stored[preset.id];
     const models = profile?.models ?? [];
     const customModels = profile?.customModels ?? [];
@@ -228,7 +231,7 @@ export async function getProviderState(): Promise<ProviderState> {
     };
   });
   return {
-    presets: Object.values(LLM_PRESETS),
+    presets,
     profiles,
     roles: await getRoles(),
   };
@@ -427,3 +430,59 @@ export async function resolveQaModel(): Promise<RoleAssignment | null> {
   });
   return { provider: chosen.provider, model: chosen.model };
 }
+
+// ============================================
+// Custom providers
+// ============================================
+
+const CUSTOM_PROVIDERS_KEY = "customProviders";
+
+async function getCustomProviders(): Promise<Record<string, CustomProviderConfig>> {
+  const result = await chrome.storage.local.get([CUSTOM_PROVIDERS_KEY]);
+  const value = result[CUSTOM_PROVIDERS_KEY];
+  return isPlainObject(value)
+    ? (value as Record<string, CustomProviderConfig>)
+    : {};
+}
+
+/** Add or update a user-defined provider and refresh the registry cache. */
+export async function saveCustomProvider(config: CustomProviderConfig): Promise<void> {
+  const providers = await getCustomProviders();
+  providers[config.id] = config;
+  await chrome.storage.local.set({ [CUSTOM_PROVIDERS_KEY]: providers });
+  resetRegistry();
+  await ensureRegistry();
+  logProviders("custom provider saved", { id: config.id, dialect: config.dialect });
+}
+
+/** Remove a user-defined provider, its profile and any role using it. */
+export async function deleteCustomProvider(id: string): Promise<void> {
+  const providers = await getCustomProviders();
+  if (providers[id]) {
+    delete providers[id];
+    await chrome.storage.local.set({ [CUSTOM_PROVIDERS_KEY]: providers });
+  }
+
+  const profiles = await getProviderProfiles();
+  if (profiles[id]) {
+    delete profiles[id];
+    await chrome.storage.local.set({ [PROFILES_KEY]: profiles });
+  }
+
+  const roles = await getRoles();
+  let changed = false;
+  if (roles.primary?.provider === id) {
+    roles.primary = null;
+    changed = true;
+  }
+  if (roles.validator?.provider === id) {
+    roles.validator = null;
+    changed = true;
+  }
+  if (changed) await saveRoles(roles);
+
+  resetRegistry();
+  await ensureRegistry();
+  logProviders("custom provider deleted", { id });
+}
+

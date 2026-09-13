@@ -1,10 +1,11 @@
 /**
  * Study Assist — Providers page
- * Configure per-provider API keys, models, thinking and vision.
+ * Configure per-provider API keys, models, thinking and vision, including
+ * user-defined providers (OpenAI-compatible or Anthropic-compatible).
  *
- * Models are only shown after a valid API key is saved; saving a key
- * triggers an automatic /models fetch. Prices/vision come from the bundled
- * LiteLLM snapshot and can be refreshed live.
+ * Models are only shown after a valid API key is saved; saving a key triggers
+ * an automatic /models fetch. Prices/vision come from the bundled LiteLLM
+ * snapshot and can be refreshed live.
  */
 
 // ============================================
@@ -83,6 +84,33 @@ async function send(message) {
 // State
 // ============================================
 let STATE = { presets: [], profiles: [], roles: { primary: null, validator: null } };
+
+const VIEW_KEY = "providersView";
+/** Per-provider model-list view: { search, mode: "all" | "selected" }. */
+let VIEW = {};
+const scrollPositions = {};
+
+async function loadView() {
+  try {
+    const res = await chrome.storage.local.get(VIEW_KEY);
+    VIEW = (res && res[VIEW_KEY]) || {};
+  } catch {
+    VIEW = {};
+  }
+}
+
+function viewOf(id) {
+  if (!VIEW[id]) VIEW[id] = { search: "", mode: "all" };
+  return VIEW[id];
+}
+
+function persistView() {
+  try {
+    chrome.storage.local.set({ [VIEW_KEY]: VIEW });
+  } catch {
+    // ignore
+  }
+}
 
 /** Apply a fresh state from any provider response, falling back to a GET. */
 async function applyState(res) {
@@ -164,16 +192,33 @@ function findCard(provider) {
   );
 }
 
+function captureScroll() {
+  document.querySelectorAll(".provider-card").forEach((card) => {
+    const models = card.querySelector(".provider-models");
+    if (models) scrollPositions[card.dataset.provider] = models.scrollTop;
+  });
+}
+
+function restoreScroll() {
+  document.querySelectorAll(".provider-card").forEach((card) => {
+    const models = card.querySelector(".provider-models");
+    const pos = scrollPositions[card.dataset.provider];
+    if (models && typeof pos === "number") models.scrollTop = pos;
+  });
+}
+
 // ============================================
 // Render
 // ============================================
 function render() {
+  captureScroll();
   const list = document.getElementById("providers-list");
   list.innerHTML = "";
   for (const preset of STATE.presets) {
     list.appendChild(renderCard(preset));
   }
   applyTranslations();
+  restoreScroll();
 }
 
 function renderModelRow(profile, model) {
@@ -188,7 +233,7 @@ function renderModelRow(profile, model) {
   const ctxText = info && info.maxInput ? formatContext(info.maxInput) : "";
 
   return `
-    <div class="model-row" data-model="${escapeAttr(model)}">
+    <div class="model-row" data-model="${escapeAttr(model)}" data-selected="${included ? "1" : "0"}">
       <input type="checkbox" class="model-include" ${included ? "checked" : ""} title="${escapeAttr(t("providerIncludeTitle"))}" />
       <div class="model-main">
         <span class="model-id">${escapeHtml(model)}</span>
@@ -222,11 +267,18 @@ function renderCard(preset) {
   const card = document.createElement("section");
   card.className = "provider-card";
   card.dataset.provider = preset.id;
+  const isCustom = !!preset.custom;
+  const view = viewOf(preset.id);
 
   const statusText = profile.hasKey ? t("providerConfigured") : t("providerNoKey");
   const statusClass = profile.hasKey ? "ok" : "none";
 
-  const models = modelUnion(profile);
+  const selectedSet = new Set(profile.selectedModels || []);
+  const models = modelUnion(profile).sort(
+    (a, b) =>
+      (selectedSet.has(b) ? 1 : 0) - (selectedSet.has(a) ? 1 : 0) ||
+      a.localeCompare(b),
+  );
   const rows = models.map((model) => renderModelRow(profile, model)).join("");
 
   const modelsArea = profile.hasKey
@@ -240,6 +292,18 @@ function renderCard(preset) {
     </div>
     <div class="provider-models-legend">${escapeHtml(t("providerModelsLegend"))}</div>
     ${renderSelectionMode(profile)}
+    <div class="provider-models-toolbar">
+      <input type="search" class="model-search" placeholder="${escapeAttr(
+        t("providerSearchModels"),
+      )}" value="${escapeAttr(view.search)}" autocomplete="off" />
+      <label class="model-only-selected">
+        <input type="checkbox" class="model-filter-selected" ${view.mode === "selected" ? "checked" : ""} />
+        ${escapeHtml(t("providerOnlySelected"))}
+      </label>
+      <span class="model-count"></span>
+      <button class="btn btn-outline select-all-filtered">${escapeHtml(t("providerSelectAll"))}</button>
+      <button class="btn btn-outline select-none">${escapeHtml(t("providerSelectNone"))}</button>
+    </div>
     <div class="provider-summary"></div>
     <div class="provider-models">${
       rows || `<div class="empty">${escapeHtml(t("providerNoModels"))}</div>`
@@ -254,7 +318,11 @@ function renderCard(preset) {
 
   card.innerHTML = `
     <div class="provider-head">
-      <span class="provider-name">${escapeHtml(preset.label)}</span>
+      <span class="provider-name">${escapeHtml(preset.label)}${
+        isCustom
+          ? `<span class="provider-badge-custom">${escapeHtml(t("providerCustomBadge"))}</span>`
+          : ""
+      }</span>
       <span class="provider-status ${statusClass}">${escapeHtml(statusText)}</span>
     </div>
     <div class="provider-row">
@@ -277,9 +345,17 @@ function renderCard(preset) {
           )}</button></div>`
         : ""
     }
+    ${
+      isCustom
+        ? `<div class="provider-card-actions"><button class="btn btn-danger delete-provider">${escapeHtml(
+            t("providerDeleteProvider"),
+          )}</button></div>`
+        : ""
+    }
   `;
 
   bindCard(card, preset, profile);
+  applyModelFilter(card, profile);
   return card;
 }
 
@@ -297,6 +373,30 @@ function setSummary(card, text, kind) {
   el.className = "provider-summary" + (kind ? " " + kind : "");
 }
 
+/** Show/hide rows according to the search box and the "selected only" filter. */
+function applyModelFilter(card, profile) {
+  const view = viewOf(card.dataset.provider);
+  const query = (view.search || "").trim().toLowerCase();
+  let visible = 0;
+  card.querySelectorAll(".model-row").forEach((row) => {
+    const model = (row.dataset.model || "").toLowerCase();
+    const selected = row.dataset.selected === "1";
+    const matches = !query || model.includes(query);
+    const passesMode = view.mode !== "selected" || selected;
+    const show = matches && passesMode;
+    row.style.display = show ? "" : "none";
+    if (show) visible++;
+  });
+  const count = card.querySelector(".model-count");
+  if (count) {
+    const total = card.querySelectorAll(".model-row").length;
+    const selected = (profile.selectedModels || []).length;
+    count.textContent = `${t("providerSelectedCount")}: ${selected} / ${total}${
+      visible !== total ? ` · ${t("providerShownCount")}: ${visible}` : ""
+    }`;
+  }
+}
+
 /** Fetch /models, refresh state and return a summary (or an error). */
 async function runDetection(provider) {
   const before = profileOf(provider).models.slice();
@@ -310,6 +410,8 @@ async function runDetection(provider) {
   }
 
   const after = (res.models || []).map((m) => m.id);
+  // First detection: show the full catalog so the user sees what exists.
+  if (before.length === 0) viewOf(provider).mode = "all";
   await applyState(res);
 
   const added = after.filter((m) => !before.includes(m));
@@ -319,6 +421,21 @@ async function runDetection(provider) {
   return {
     text: `${t("providerNewLabel")}: ${added.length} · ${t("providerObsoleteLabel")}: ${removed.length} · ${t("providerTotalLabel")}: ${after.length}`,
   };
+}
+
+/** Select/deselect every currently visible (filtered) model. */
+async function setVisibleSelection(card, provider, selected) {
+  const rows = [...card.querySelectorAll(".model-row")].filter(
+    (row) => row.style.display !== "none",
+  );
+  for (const row of rows) {
+    const isSelected = row.dataset.selected === "1";
+    if (isSelected !== selected) {
+      await send({ type: "SET_MODEL_SELECTED", provider, model: row.dataset.model, selected });
+    }
+  }
+  const res = await send({ type: "GET_PROVIDER_STATE" });
+  if (!(await applyState(res))) await loadState();
 }
 
 function bindCard(card, preset, profile) {
@@ -353,6 +470,7 @@ function bindCard(card, preset, profile) {
 
     keyInput.value = "";
     const successMsg = res.warning || t("providerSaved");
+    if (before.length === 0) viewOf(provider).mode = "all";
     await applyState(res);
     if (!res.state) await loadState();
 
@@ -430,6 +548,34 @@ function bindCard(card, preset, profile) {
     });
   }
 
+  const searchInput = card.querySelector(".model-search");
+  if (searchInput) {
+    searchInput.addEventListener("input", () => {
+      viewOf(provider).search = searchInput.value;
+      persistView();
+      applyModelFilter(card, profileOf(provider));
+    });
+  }
+
+  const filterSelected = card.querySelector(".model-filter-selected");
+  if (filterSelected) {
+    filterSelected.addEventListener("change", () => {
+      viewOf(provider).mode = filterSelected.checked ? "selected" : "all";
+      persistView();
+      applyModelFilter(card, profileOf(provider));
+    });
+  }
+
+  const selectAllBtn = card.querySelector(".select-all-filtered");
+  if (selectAllBtn) {
+    selectAllBtn.addEventListener("click", () => setVisibleSelection(card, provider, true));
+  }
+
+  const selectNoneBtn = card.querySelector(".select-none");
+  if (selectNoneBtn) {
+    selectNoneBtn.addEventListener("click", () => setVisibleSelection(card, provider, false));
+  }
+
   const addBtn = card.querySelector(".add-model");
   if (addBtn) {
     addBtn.addEventListener("click", async () => {
@@ -447,6 +593,15 @@ function bindCard(card, preset, profile) {
     deleteBtn.addEventListener("click", async () => {
       if (!confirm(t("providerDeleteConfirm"))) return;
       const res = await send({ type: "DELETE_PROVIDER_KEY", provider });
+      if (!(await applyState(res))) await loadState();
+    });
+  }
+
+  const deleteProviderBtn = card.querySelector(".delete-provider");
+  if (deleteProviderBtn) {
+    deleteProviderBtn.addEventListener("click", async () => {
+      if (!confirm(t("providerDeleteProviderConfirm"))) return;
+      const res = await send({ type: "DELETE_CUSTOM_PROVIDER", provider });
       if (!(await applyState(res))) await loadState();
     });
   }
@@ -476,6 +631,92 @@ function bindCard(card, preset, profile) {
       if (!(await applyState(res))) await loadState();
     });
   });
+}
+
+// ============================================
+// Add custom provider
+// ============================================
+function val(id) {
+  const el = document.getElementById(id);
+  return el ? String(el.value || "").trim() : "";
+}
+
+function resetAddProviderForm() {
+  ["ap-label", "ap-baseurl", "ap-prefixes"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.value = "";
+  });
+  const thinking = document.getElementById("ap-thinking");
+  if (thinking) thinking.checked = false;
+  const images = document.getElementById("ap-images");
+  if (images) images.checked = false;
+  const matching = document.getElementById("ap-matching");
+  if (matching) matching.checked = true;
+}
+
+async function saveCustomProviderFromForm() {
+  const label = val("ap-label");
+  const baseUrl = val("ap-baseurl").replace(/\/+$/, "");
+  const dialect = val("ap-dialect") || "openai-compatible";
+
+  if (!label || !baseUrl) {
+    setStatus(t("providerMissingFields"), "err");
+    return;
+  }
+
+  let origin;
+  try {
+    const url = new URL(baseUrl);
+    if (url.protocol !== "https:" && url.protocol !== "http:") throw new Error("scheme");
+    origin = url.origin;
+  } catch {
+    setStatus(t("providerInvalidUrl"), "err");
+    return;
+  }
+
+  // Request the host permission (must run inside the click's user gesture).
+  let granted = false;
+  try {
+    granted = await chrome.permissions.request({ origins: [`${origin}/*`] });
+  } catch {
+    granted = false;
+  }
+  if (!granted) {
+    setStatus(t("providerHostPermissionError"), "err");
+    return;
+  }
+
+  const customProvider = {
+    id: `custom-${Date.now().toString(36)}`,
+    label,
+    baseUrl,
+    dialect,
+    maxTokensParam: val("ap-maxtokens") === "max_completion_tokens"
+      ? "max_completion_tokens"
+      : "max_tokens",
+    defaultThinking: !!document.getElementById("ap-thinking")?.checked,
+    capabilities: {
+      images: !!document.getElementById("ap-images")?.checked,
+      matching: !!document.getElementById("ap-matching")?.checked,
+      reasoning: true,
+    },
+    keyPrefixes: val("ap-prefixes")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  };
+
+  const res = await send({ type: "SAVE_CUSTOM_PROVIDER", customProvider });
+  if (!res || !res.success) {
+    setStatus((res && res.error) || t("providerError"), "err");
+    return;
+  }
+
+  resetAddProviderForm();
+  const form = document.getElementById("add-provider-form");
+  if (form) form.style.display = "none";
+  await applyState(res);
+  setStatus(t("providerSaved"), "ok");
 }
 
 // ============================================
@@ -509,7 +750,26 @@ document.addEventListener("DOMContentLoaded", async () => {
   } catch {
     DEBUG = false;
   }
+
   const refreshBtn = document.getElementById("refresh-prices");
   if (refreshBtn) refreshBtn.addEventListener("click", refreshPrices);
+
+  const addBtn = document.getElementById("add-provider");
+  const form = document.getElementById("add-provider-form");
+  if (addBtn && form) {
+    addBtn.addEventListener("click", () => {
+      form.style.display = form.style.display === "none" ? "block" : "none";
+    });
+  }
+  const cancelBtn = document.getElementById("ap-cancel");
+  if (cancelBtn && form) {
+    cancelBtn.addEventListener("click", () => {
+      form.style.display = "none";
+    });
+  }
+  const saveBtn = document.getElementById("ap-save");
+  if (saveBtn) saveBtn.addEventListener("click", saveCustomProviderFromForm);
+
+  await loadView();
   await loadState();
 });

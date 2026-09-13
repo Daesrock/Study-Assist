@@ -3,6 +3,7 @@
  */
 
 import { devLog, DEV_LOGGING } from "./logger.js";
+import type { CustomProviderConfig } from "./llm/contract.js";
 
 // ============================================
 // Debug Mode
@@ -297,6 +298,8 @@ export type ExtensionMessageType =
   | "UPDATE_MODEL_PRICES"
   | "SAVE_QA_MODEL"
   | "SAVE_ROLES"
+  | "SAVE_CUSTOM_PROVIDER"
+  | "DELETE_CUSTOM_PROVIDER"
   | "DEV_LOG";
 
 export interface ExtensionMessage {
@@ -313,6 +316,7 @@ export interface ExtensionMessage {
   test?: boolean;
   roles?: ProviderRoles;
   qaModel?: RoleAssignment | null;
+  customProvider?: CustomProviderConfig;
   context?: import("../../types/index").AnalysisContext;
   url?: string;
   rawKey?: string;

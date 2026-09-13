@@ -95,6 +95,21 @@ export interface ProviderPreset {
    */
   maxTokensParam?: "max_tokens" | "max_completion_tokens";
   capabilities: ProviderCapabilities;
+  /** True for user-defined providers (added from the Providers page). */
+  custom?: boolean;
+}
+
+/** User-provided configuration for a custom provider. */
+export interface CustomProviderConfig {
+  id: string;
+  label: string;
+  dialect: LlmDialect;
+  baseUrl: string;
+  reasoningKind?: ReasoningKind;
+  defaultThinking?: boolean;
+  maxTokensParam?: "max_tokens" | "max_completion_tokens";
+  capabilities?: Partial<ProviderCapabilities>;
+  keyPrefixes?: string[];
 }
 
 /** A preset resolved with the user's chosen model for a given role. */
