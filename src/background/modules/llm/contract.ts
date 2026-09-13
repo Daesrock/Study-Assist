@@ -98,8 +98,6 @@ export interface ProviderPreset {
   dialect: LlmDialect;
   /** API root, without the endpoint path (the adapter appends it). */
   baseUrl: string;
-  /** Accepted API key prefixes, used for validation. */
-  keyPrefixes: string[];
   reasoningKind: ReasoningKind;
   /** Default thinking/reasoning state for this provider. */
   defaultThinking: boolean;
@@ -133,7 +131,6 @@ export interface CustomProviderConfig {
   defaultThinking?: boolean;
   maxTokensParam?: "max_tokens" | "max_completion_tokens";
   capabilities?: Partial<ProviderCapabilities>;
-  keyPrefixes?: string[];
   headers?: Record<string, string>;
   endpoints?: ProviderEndpoint[];
   defaultEndpoint?: string;

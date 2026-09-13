@@ -54,15 +54,7 @@ export async function decryptApiKey(encryptedKey: string): Promise<string> {
     const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
     return new TextDecoder().decode(decrypted);
   } catch {
-    // If decryption fails, the key might still be stored in plain text (pre-migration)
+    // If decryption fails, the key might still be stored in plain text.
     return encryptedKey;
   }
-}
-
-/**
- * Detect whether a stored value is in plain text or already encrypted
- */
-export function isPlainTextKey(value: string): boolean {
-  // Claude keys start with "sk-ant-", DeepSeek keys start with "sk-"
-  return value.startsWith("sk-ant-") || (value.startsWith("sk-") && !value.startsWith("sk-ant-"));
 }

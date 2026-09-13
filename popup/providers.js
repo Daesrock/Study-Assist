@@ -694,7 +694,6 @@ function applyTemplateToForm(template) {
   setVal("ap-baseurl", template.baseUrl);
   setVal("ap-dialect", template.dialect);
   setVal("ap-maxtokens", template.maxTokensParam || "max_tokens");
-  setVal("ap-prefixes", (template.keyPrefixes || []).join(", "));
   setChecked("ap-thinking", !!template.defaultThinking);
   setChecked("ap-images", !!template.capabilities?.images);
   setChecked("ap-matching", template.capabilities?.matching !== false);
@@ -711,7 +710,7 @@ function applyTemplateToForm(template) {
 }
 
 function resetAddProviderForm() {
-  ["ap-label", "ap-baseurl", "ap-prefixes", "ap-headers"].forEach((id) => setVal(id, ""));
+  ["ap-label", "ap-baseurl", "ap-headers"].forEach((id) => setVal(id, ""));
   setVal("ap-template", "");
   setVal("ap-maxtokens", "max_tokens");
   setChecked("ap-thinking", false);
@@ -769,10 +768,6 @@ async function saveCustomProviderFromForm() {
       matching: !!document.getElementById("ap-matching")?.checked,
       reasoning: true,
     },
-    keyPrefixes: val("ap-prefixes")
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean),
   };
   if (Object.keys(headers).length) customProvider.headers = headers;
 

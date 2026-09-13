@@ -13,7 +13,7 @@ import type {
   ModelPriceInfo,
 } from "../constants.js";
 import { logProviders } from "../constants.js";
-import { encryptApiKey, decryptApiKey, isPlainTextKey } from "../crypto.js";
+import { encryptApiKey, decryptApiKey } from "../crypto.js";
 import type { ProviderPreset, ProviderEndpoint, CustomProviderConfig } from "./contract.js";
 import { findPreset, listPresets, listTemplates, ensureRegistry, resetRegistry, resolvePresetForModel, resolveEndpointId } from "./registry.js";
 import { getPriceIndex, lookupModelInfo, resolveModelInfo } from "./pricing.js";
@@ -76,18 +76,11 @@ export async function saveProfile(
 
 /**
  * Decrypted API key for a provider, or null.
- * Transparently migrates plain-text values to encrypted.
  */
 export async function getProviderKey(presetId: string): Promise<string | null> {
   const profile = await getProfile(presetId);
   const stored = profile?.apiKey;
   if (!stored) return null;
-
-  if (isPlainTextKey(stored)) {
-    const encrypted = await encryptApiKey(stored);
-    await saveProfile(presetId, { apiKey: encrypted });
-    return stored;
-  }
   return decryptApiKey(stored);
 }
 
