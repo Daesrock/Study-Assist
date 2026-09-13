@@ -91,17 +91,23 @@ describe("resolvePresetForModel", () => {
     expect(resolveEndpointId("openai", "gpt-5.1")).toBeUndefined();
   });
 
-  it("routes models to endpoints by prefix", async () => {
-    const opencode = listTemplates().find((t) => t.id === "opencode-go")!;
+  it("routes models to endpoints by prefix (custom multi-endpoint)", async () => {
     mockStorage.customProviders = {
       "custom-go": {
         id: "custom-go",
-        label: "OpenCode Go",
-        dialect: opencode.dialect,
-        baseUrl: opencode.baseUrl,
-        endpoints: opencode.endpoints,
-        defaultEndpoint: opencode.defaultEndpoint,
-        routeRules: opencode.routeRules,
+        label: "Gateway",
+        dialect: "openai-compatible",
+        baseUrl: "https://gw.test/v1",
+        endpoints: [
+          { id: "chat", dialect: "openai-compatible", baseUrl: "https://gw.test/v1" },
+          { id: "messages", dialect: "anthropic", baseUrl: "https://gw.test" },
+          { id: "responses", dialect: "openai-responses", baseUrl: "https://gw.test/v1" },
+        ],
+        defaultEndpoint: "chat",
+        routeRules: [
+          { prefix: "grok", endpoint: "responses" },
+          { prefix: "minimax", endpoint: "messages" },
+        ],
       },
     };
     await ensureRegistry();

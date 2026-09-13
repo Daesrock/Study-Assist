@@ -123,19 +123,6 @@ export const PROVIDER_TEMPLATES: ProviderPreset[] = [
     defaultThinking: false,
     maxTokensParam: "max_tokens",
     capabilities: { images: false, matching: true, reasoning: true },
-    endpoints: [
-      { id: "chat", dialect: "openai-compatible", baseUrl: "https://opencode.ai/zen/go/v1" },
-      { id: "messages", dialect: "anthropic", baseUrl: "https://opencode.ai/zen/go" },
-      { id: "responses", dialect: "openai-responses", baseUrl: "https://opencode.ai/zen/go/v1" },
-    ],
-    defaultEndpoint: "chat",
-    routeRules: [
-      { prefix: "grok", endpoint: "responses" },
-      { prefix: "gpt-5.6-luna", endpoint: "responses" },
-      { prefix: "muse-spark", endpoint: "responses" },
-      { prefix: "minimax", endpoint: "messages" },
-      { prefix: "qwen", endpoint: "messages" },
-    ],
   },
 ];
 

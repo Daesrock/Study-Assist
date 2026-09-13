@@ -77,7 +77,7 @@ Besides the three built-in providers you can add your own from the Providers pag
 3. Grant the requested **host permission** (needed to call that endpoint)
 4. Paste the API key; models are detected from `GET /models`
 
-**Multi-endpoint gateways** (OpenCode Go) expose models across several endpoints. The provider is added once and each model is routed to the right endpoint automatically (prefix rules); you can override the endpoint per model in the model list. Gateways that require extra headers (e.g. OpenCode Go's `x-opencode-session`) get them automatically or via the **Headers** field.
+Gateways that require extra headers (e.g. OpenCode Go's `x-opencode-session`) get them automatically or via the **Headers** field. Pick the **OpenAI Responses** dialect when an endpoint only speaks the Responses API.
 
 ## Keyboard Shortcuts
 

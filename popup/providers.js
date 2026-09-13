@@ -232,17 +232,6 @@ function renderModelRow(profile, model) {
     : escapeHtml(t("providerPriceUnavailable"));
   const ctxText = info && info.maxInput ? formatContext(info.maxInput) : "";
 
-  const endpoints = profile.endpoints || [];
-  const endpointId = profile.modelEndpoints ? profile.modelEndpoints[model] : undefined;
-  const endpointControl = endpoints.length
-    ? `<select class="model-endpoint" title="${escapeAttr(t("providerEndpointLabel"))}">${endpoints
-        .map(
-          (ep) =>
-            `<option value="${escapeAttr(ep.id)}"${ep.id === endpointId ? " selected" : ""}>${escapeHtml(ep.id)}</option>`,
-        )
-        .join("")}</select>`
-    : "";
-
   return `
     <div class="model-row" data-model="${escapeAttr(model)}" data-selected="${included ? "1" : "0"}">
       <input type="checkbox" class="model-include" ${included ? "checked" : ""} title="${escapeAttr(t("providerIncludeTitle"))}" />
@@ -253,7 +242,6 @@ function renderModelRow(profile, model) {
           ${ctxText ? `<span class="model-ctx">ctx ${escapeHtml(ctxText)}</span>` : ""}
         </span>
       </div>
-      ${endpointControl}
       <label class="model-vision-toggle" title="${escapeAttr(t("providerVisionTitle"))}">
         <input type="checkbox" class="model-vision" ${vision ? "checked" : ""} />
         <span class="model-vision-badge">${escapeHtml(t("providerVisionBadge"))}</span>
@@ -639,19 +627,6 @@ function bindCard(card, preset, profile) {
         provider,
         model,
         selected: event.target.checked,
-      });
-      if (!(await applyState(res))) await loadState();
-    });
-  });
-
-  card.querySelectorAll(".model-endpoint").forEach((select) => {
-    select.addEventListener("change", async (event) => {
-      const model = event.target.closest(".model-row").dataset.model;
-      const res = await send({
-        type: "SET_MODEL_ENDPOINT",
-        provider,
-        model,
-        endpoint: event.target.value,
       });
       if (!(await applyState(res))) await loadState();
     });
