@@ -17,16 +17,16 @@ const { __testOnlyQuickMode } = await import("../../src/content/modules/api.js")
 const { showQuickEmoji, STATUS_EMOJIS } = __testOnlyQuickMode;
 
 describe("STATUS_EMOJIS mapping", () => {
-  it("should map DEEPSEEK_RETRY to ⚠️", () => {
-    expect(STATUS_EMOJIS.DEEPSEEK_RETRY).toBe("⚠️");
+  it("should map PRIMARY_RETRY to ⚠️", () => {
+    expect(STATUS_EMOJIS.PRIMARY_RETRY).toBe("⚠️");
   });
 
-  it("should map CLAUDING_FALLBACK to 🔄", () => {
-    expect(STATUS_EMOJIS.CLAUDING_FALLBACK).toBe("🔄");
+  it("should map VALIDATOR_FALLBACK to 🔄", () => {
+    expect(STATUS_EMOJIS.VALIDATOR_FALLBACK).toBe("🔄");
   });
 
-  it("should map CLAUDING_VALIDATING to 🔍", () => {
-    expect(STATUS_EMOJIS.CLAUDING_VALIDATING).toBe("🔍");
+  it("should map VALIDATOR_VALIDATING to 🔍", () => {
+    expect(STATUS_EMOJIS.VALIDATOR_VALIDATING).toBe("🔍");
   });
 });
 
@@ -39,18 +39,18 @@ describe("showQuickEmoji", () => {
     btn.innerHTML = `<span>SA</span>`;
   });
 
-  it("should show ⚠️ on button for DEEPSEEK_RETRY", () => {
-    showQuickEmoji("DEEPSEEK_RETRY");
+  it("should show ⚠️ on button for PRIMARY_RETRY", () => {
+    showQuickEmoji("PRIMARY_RETRY");
     expect(btn.innerHTML).toContain("⚠️");
   });
 
-  it("should show 🔄 on button for CLAUDING_FALLBACK", () => {
-    showQuickEmoji("CLAUDING_FALLBACK");
+  it("should show 🔄 on button for VALIDATOR_FALLBACK", () => {
+    showQuickEmoji("VALIDATOR_FALLBACK");
     expect(btn.innerHTML).toContain("🔄");
   });
 
-  it("should show 🔍 on button for CLAUDING_VALIDATING", () => {
-    showQuickEmoji("CLAUDING_VALIDATING");
+  it("should show 🔍 on button for VALIDATOR_VALIDATING", () => {
+    showQuickEmoji("VALIDATOR_VALIDATING");
     expect(btn.innerHTML).toContain("🔍");
   });
 
@@ -62,6 +62,6 @@ describe("showQuickEmoji", () => {
   it("should not throw when button does not exist", () => {
     // Temporarily remove the button
     btn.remove();
-    expect(() => showQuickEmoji("CLAUDING_FALLBACK")).not.toThrow();
+    expect(() => showQuickEmoji("VALIDATOR_FALLBACK")).not.toThrow();
   });
 });

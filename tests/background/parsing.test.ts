@@ -122,8 +122,8 @@ describe("parseDeepSeekResponse", () => {
       const reasoning = "Let me think step by step. OSPF has admin distance 110...";
       const result = parseDeepSeekResponse(response, mcqContext(), reasoning);
 
-      expect(result.deepseekReasoning).toBe(reasoning);
-      expect(result.deepseekAnalysis).toBe(response);
+      expect(result.primaryReasoning).toBe(reasoning);
+      expect(result.analysis).toBe(response);
     });
   });
 

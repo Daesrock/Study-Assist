@@ -42,8 +42,8 @@ export const state: State = {
   isRequestInProgress: false,
   // Block new requests when valid answer is displayed (until reload)
   hasValidAnswer: false,
-  // Skip DeepSeek and use Claude directly (CTRL+SHIFT)
-  skipDeepSeek: false,
+  // Skip primary and use the validator directly (CTRL+SHIFT)
+  skipPrimary: false,
   // Slow connection timer
   slowConnectionTimer: null,
   // Request cancelled by user (ALT+X)

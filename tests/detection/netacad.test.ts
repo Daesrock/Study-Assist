@@ -31,7 +31,7 @@ vi.mock("../../src/content/modules/state", () => ({
     questionChangeInterval: null,
     isRequestInProgress: false,
     hasValidAnswer: false,
-    skipDeepSeek: false,
+    skipPrimary: false,
     slowConnectionTimer: null,
     requestCancelled: false,
     pendingQuestionChange: null,

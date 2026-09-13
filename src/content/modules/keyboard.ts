@@ -22,7 +22,7 @@ export function setupKeyboardHandlers(callbacks: KeyboardCallbacks): void {
  * Inject keyboard handlers for:
  * - Ctrl hold to hide Webex button
  * - Shift click to trigger analysis
- * - Ctrl+Shift click to use Claude directly
+ * - Ctrl+Shift click to use the validator directly
  * - Alt+W to reload/re-detect question
  * - Alt+Q to toggle SA button visibility
  * - Alt+X to cancel current request
@@ -214,8 +214,8 @@ export function injectWebexToggleWithCtrl(callbacks: KeyboardCallbacks): void {
     }
 
     // SHIFT key - Send question to API automatically
-    // CTRL+SHIFT - Send question directly to Claude (skip DeepSeek)
-    // If CTRL+SHIFT while loading - Cancel DeepSeek and use Claude
+    // CTRL+SHIFT - Send question directly to the validator (skip primary)
+    // If CTRL+SHIFT while loading - Cancel the current request and use the validator
     // Only trigger if:
     // 1. Not a key repeat (prevents spam from holding key)
     // 2. Not typing in an input field (user may be typing uppercase)
@@ -231,15 +231,15 @@ export function injectWebexToggleWithCtrl(callbacks: KeyboardCallbacks): void {
         e.preventDefault();
 
         if (isLoading && e.ctrlKey) {
-          // CTRL+SHIFT while loading - Cancel DeepSeek request
+          // CTRL+SHIFT while loading - Cancel the current request
           log(
-            "[Study Assist] CTRL+SHIFT pressed while loading - cancelling DeepSeek request",
+            "[Study Assist] CTRL+SHIFT pressed while loading - cancelling current request",
           );
           chrome.runtime
-            .sendMessage({ type: "CANCEL_DEEPSEEK" })
+            .sendMessage({ type: "CANCEL_ANALYSIS" })
             .then((result: { cancelled?: boolean } | undefined) => {
               if (result && result.cancelled) {
-                log("[Study Assist] DeepSeek cancelled, Claude will take over");
+                log("[Study Assist] Request cancelled, validator will take over");
               }
             })
             .catch((err: Error) => {
@@ -247,11 +247,11 @@ export function injectWebexToggleWithCtrl(callbacks: KeyboardCallbacks): void {
             });
         } else if (!isLoading) {
           // Not loading - start new analysis
-          // If CTRL is also pressed, skip DeepSeek and use Claude directly
-          state.skipDeepSeek = e.ctrlKey;
-          if (state.skipDeepSeek) {
+          // If CTRL is also pressed, skip the primary and use the validator directly
+          state.skipPrimary = e.ctrlKey;
+          if (state.skipPrimary) {
             log(
-              "[Study Assist] CTRL+SHIFT pressed - will skip DeepSeek, use Claude directly",
+              "[Study Assist] CTRL+SHIFT pressed - will skip primary, use validator directly",
             );
           }
           triggerQuickAnalysis();

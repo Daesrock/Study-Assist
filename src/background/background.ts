@@ -3,7 +3,7 @@
  * Routes messages and manages lifecycle events
  */
 
-import { log, logProviders, setDebugMode, activeDeepSeekController, setActiveDeepSeekController } from "./modules/constants.js";
+import { log, logProviders, setDebugMode, activeProviderController, setActiveProviderController } from "./modules/constants.js";
 import { devLog, DEV_LOGGING } from "./modules/logger.js";
 import type { ExtensionMessage, MessageResponse } from "./modules/constants.js";
 import type { AnalysisResponse } from "../types/index.js";
@@ -94,11 +94,11 @@ async function handleMessage(
     case "ANALYZE_QUESTION":
       return analyzeQuestion(message.context!);
 
-    case "CANCEL_DEEPSEEK":
-      if (activeDeepSeekController) {
-        log("[Study Assist] Cancelling DeepSeek...");
-        activeDeepSeekController.abort();
-        setActiveDeepSeekController(null);
+    case "CANCEL_ANALYSIS":
+      if (activeProviderController) {
+        log("[Study Assist] Cancelling analysis...");
+        activeProviderController.abort();
+        setActiveProviderController(null);
         return { success: true, cancelled: true };
       }
       return { success: true, cancelled: false };

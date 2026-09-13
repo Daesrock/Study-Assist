@@ -1077,7 +1077,7 @@ chrome.runtime.onMessage.addListener(
         // Reset all processing locks without clearing UI or history
         state.isRequestInProgress = false;
         state.hasValidAnswer = false;
-        state.skipDeepSeek = false;
+        state.skipPrimary = false;
         state.requestCancelled = false;
         state.pendingQuestionChange = null;
         if (state.slowConnectionTimer) {

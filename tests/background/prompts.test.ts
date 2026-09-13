@@ -15,7 +15,7 @@ import {
   formatQuestionType,
 } from "../../src/background/modules/prompts";
 import type { AnalysisContext } from "../../src/types/index";
-import type { MatchedQuestion, DeepSeekAnalysisForClaude } from "../../src/background/modules/constants";
+import type { MatchedQuestion, PrimaryAnalysisPayload } from "../../src/background/modules/constants";
 
 // ============================================
 // Helper factories
@@ -215,7 +215,7 @@ describe("DeepSeek Prompt Building", () => {
 
 describe("Claude Validation Prompt", () => {
   it("should include DeepSeek analysis", () => {
-    const deepseek: DeepSeekAnalysisForClaude = {
+    const deepseek: PrimaryAnalysisPayload = {
       answer: "C",
       confidence: "MEDIUM",
       analysis: "OSPF default admin distance is 110.",
@@ -231,7 +231,7 @@ describe("Claude Validation Prompt", () => {
   });
 
   it("should handle matching questions in validation", () => {
-    const deepseek: DeepSeekAnalysisForClaude = {
+    const deepseek: PrimaryAnalysisPayload = {
       answer: "A-1, B-2, C-3",
       confidence: "LOW",
       analysis: "HTTP=80, HTTPS=443, SSH=22",

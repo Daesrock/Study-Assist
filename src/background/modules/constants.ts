@@ -69,11 +69,11 @@ export function getClaudeThinkingConfig(
 // Mutable Shared State
 // ============================================
 
-/** Active DeepSeek AbortController for cancellation */
-export let activeDeepSeekController: AbortController | null = null;
+/** Active provider AbortController for cancellation */
+export let activeProviderController: AbortController | null = null;
 
-export function setActiveDeepSeekController(ctrl: AbortController | null): void {
-  activeDeepSeekController = ctrl;
+export function setActiveProviderController(ctrl: AbortController | null): void {
+  activeProviderController = ctrl;
 }
 
 /** Cached questions bank */
@@ -245,16 +245,16 @@ export interface ClaudeApiResponse {
   parseError?: string;
 }
 
-export interface DeepSeekAnalysisResult {
+export interface PrimaryAnalysisResult {
   success: boolean;
   result?: string;
   error?: string;
   source?: "deepseek" | "claude" | "question-bank";
   confidence?: ConfidenceLevel;
-  deepseekAnalysis?: string;
-  deepseekReasoning?: string | null;
+  analysis?: string;
+  primaryReasoning?: string | null;
   cancelled?: boolean;
-  /** When true, the orchestrator should NOT retry — go directly to Claude fallback */
+  /** When true, the orchestrator should NOT retry — go directly to validator fallback */
   skipRetry?: boolean;
   explanation?: string;
   inputTokens?: number;
@@ -263,7 +263,7 @@ export interface DeepSeekAnalysisResult {
   cacheWriteTokens?: number;
 }
 
-export interface DeepSeekAnalysisForClaude {
+export interface PrimaryAnalysisPayload {
   answer: string;
   confidence: ConfidenceLevel;
   analysis: string;
@@ -276,7 +276,7 @@ export type ExtensionMessageType =
   | "TEST_PROVIDER_KEY"
   | "TEST_PROVIDER_CONNECTION"
   | "ANALYZE_QUESTION"
-  | "CANCEL_DEEPSEEK"
+  | "CANCEL_ANALYSIS"
   | "TOGGLE_DISGUISE_MODE"
   | "PAGE_LOADED"
   | "GET_USAGE_STATS"

@@ -90,8 +90,8 @@ export function cancelCurrentRequest(): void {
     state.slowConnectionTimer = null;
   }
 
-  // Cancel any pending DeepSeek request
-  chrome.runtime.sendMessage({ type: "CANCEL_DEEPSEEK" }).catch(() => {});
+  // Cancel any pending analysis request
+  chrome.runtime.sendMessage({ type: "CANCEL_ANALYSIS" }).catch(() => {});
 
   // Reset UI
   quickBtn.innerHTML = `<span>SA</span>`;
@@ -382,7 +382,7 @@ export async function extractImagesForQuestion(
 export function buildQuickContext(
   question: DetectedQuestion,
   images: ImageData[],
-  skipDeepSeek: boolean,
+  skipPrimary: boolean,
 ): AnalysisContext {
   if (question.type === "matching") {
     // Matching question context
@@ -396,7 +396,7 @@ export function buildQuickContext(
       pageTitle: document.title,
       pageUrl: window.location.href,
       responseMode: "quick",
-      skipDeepSeek,
+      skipPrimary,
       courseName: question.courseName, // Academic course for context
       qaMode: isQASandboxActive(),
     };
@@ -410,7 +410,7 @@ export function buildQuickContext(
       pageTitle: document.title,
       pageUrl: window.location.href,
       responseMode: "quick",
-      skipDeepSeek,
+      skipPrimary,
       courseName: question.courseName,
       qaMode: isQASandboxActive(),
     };
@@ -422,7 +422,7 @@ export function buildQuickContext(
       pageTitle: document.title,
       pageUrl: window.location.href,
       responseMode: "quick",
-      skipDeepSeek,
+      skipPrimary,
       courseName: question.courseName,
       qaMode: isQASandboxActive(),
     };
@@ -436,7 +436,7 @@ export function buildQuickContext(
       pageTitle: document.title,
       pageUrl: window.location.href,
       responseMode: "quick",
-      skipDeepSeek,
+      skipPrimary,
       courseName: question.courseName, // Academic course for context
       qaMode: isQASandboxActive(),
     };
@@ -530,9 +530,9 @@ export async function handleQuickMulti(
   if (!quickBtn) return;
   const container = document.getElementById("study-assist-quick-container");
 
-  // Capture the one-shot force-Claude flag once for the whole batch
-  const forceClaude = state.skipDeepSeek;
-  state.skipDeepSeek = false;
+  // Capture the one-shot force-validator flag once for the whole batch
+  const forceValidator = state.skipPrimary;
+  state.skipPrimary = false;
 
   const pairs: string[] = [];
   let anySuccess = false;
@@ -553,7 +553,7 @@ export async function handleQuickMulti(
 
     try {
       const images = await extractImagesForQuestion(q);
-      const context = buildQuickContext(q, images, forceClaude);
+      const context = buildQuickContext(q, images, forceValidator);
       const response = await sendQuickAnalysis(context);
 
       if (state.requestCancelled) {
@@ -690,7 +690,7 @@ export async function handleQuickClick(
   quickBtn.innerHTML = `<span class="study-assist-quick-loading"></span>`;
   quickBtn.classList.add("loading");
 
-  // Start slow connection timer (20 seconds - DeepSeek Reasoner can take 15-20s normally)
+  // Start slow connection timer (reasoning models can take 15-20s normally)
   state.slowConnectionTimer = setTimeout(() => {
     if (state.isRequestInProgress && quickBtn.classList.contains("loading")) {
       quickBtn.classList.add("slow-connection");
@@ -728,10 +728,10 @@ export async function handleQuickClick(
     const images = await extractImagesForQuestion(question);
 
     // Build context based on question type (shared with multi-question mode)
-    const context = buildQuickContext(question, images, state.skipDeepSeek);
+    const context = buildQuickContext(question, images, state.skipPrimary);
 
-    // Reset skipDeepSeek flag after use
-    state.skipDeepSeek = false;
+    // Reset skipPrimary flag after use
+    state.skipPrimary = false;
 
     // Debug: Log what we're sending to API
     log("[Study Assist] Sending to API:", {
@@ -1133,9 +1133,9 @@ export async function analyzeQuestion(
 // ============================================
 
 const STATUS_EMOJIS: Record<string, string> = {
-  DEEPSEEK_RETRY: "⚠️",
-  CLAUDING_FALLBACK: "🔄",
-  CLAUDING_VALIDATING: "🔍",
+  PRIMARY_RETRY: "⚠️",
+  VALIDATOR_FALLBACK: "🔄",
+  VALIDATOR_VALIDATING: "🔍",
 };
 
 /**

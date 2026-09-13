@@ -1,18 +1,18 @@
 /**
  * Background Service Worker - API Communication
- * Handles Claude and DeepSeek API calls, streaming, rate limiting, and usage tracking
+ * Handles provider API calls, streaming, rate limiting, and usage tracking
  */
 
 import type { AnalysisContext, AnalysisResponse } from "../../types/index.js";
 import {
   log,
   DEBUG_MODE,
-  setActiveDeepSeekController,
+  setActiveProviderController,
 } from "./constants.js";
 import type {
   MessageResponse,
-  DeepSeekAnalysisResult,
-  DeepSeekAnalysisForClaude,
+  PrimaryAnalysisResult,
+  PrimaryAnalysisPayload,
 } from "./constants.js";
 import { logError } from "./fetchUtils.js";
 import { findMatchingQuestion, normalizeForSearch, calculateSimilarity, calculateContainment } from "./questionBank.js";
@@ -72,7 +72,7 @@ function detectPlatform(pageUrl?: string): string {
  * Map a provider preset to the legacy UsageRecord.source value used by the
  * dashboard until Step B2 switches it to provider/role.
  */
-function legacySource(preset: ProviderPreset): "claude" | "deepseek" | "openai" {
+function sourceTagForPreset(preset: ProviderPreset): "claude" | "deepseek" | "openai" {
   if (preset.dialect === "anthropic" || preset.id === "anthropic") return "claude";
   if (preset.id === "deepseek") return "deepseek";
   return "openai";
@@ -422,7 +422,7 @@ export async function analyzeQuestion(context: AnalysisContext, onStatus?: (stat
 
     const hasImages = !!(context.images && context.images.length > 0);
     const isMatching = context.questionType === "matching";
-    const skipPrimary = context.skipDeepSeek === true;
+    const skipPrimary = context.skipPrimary === true;
 
     // Resolve the configured pipeline roles (primary → validator).
     const roles = await getRoles();
@@ -469,7 +469,7 @@ export async function analyzeQuestion(context: AnalysisContext, onStatus?: (stat
       return { success: false, error: `No configured provider supports ${reason}.` };
     }
 
-    let primaryAnalysisForValidator: DeepSeekAnalysisForClaude | null = null;
+    let primaryAnalysisForValidator: PrimaryAnalysisPayload | null = null;
     let fallbackReason: string | undefined;
 
     if (!effectivePrimary && effectiveValidator) {
@@ -494,14 +494,14 @@ export async function analyzeQuestion(context: AnalysisContext, onStatus?: (stat
           log(`[Study Assist] Primary failed (non-retryable) → validator fallback: ${primaryResult.error}`);
         } else {
           log("[Study Assist] Primary failed, retrying...");
-          onStatus?.("DEEPSEEK_RETRY");
+          onStatus?.("PRIMARY_RETRY");
           await new Promise((r) => setTimeout(r, 1000));
           primaryResult = await analyzeWithPrimary(context, effectivePrimary);
         }
 
         if (!primaryResult.success && !primaryResult.cancelled) {
           log("[Study Assist] Primary failed → validator fallback");
-          onStatus?.("CLAUDING_FALLBACK");
+          onStatus?.("VALIDATOR_FALLBACK");
           fallbackReason = "primary_error";
           if (!effectiveValidator) {
             return { success: false, error: primaryResult.error || "Primary API failed and no validator is available." };
@@ -516,7 +516,7 @@ export async function analyzeQuestion(context: AnalysisContext, onStatus?: (stat
           questionText: context.questionText.substring(0, 200),
           questionType: context.questionType,
           answer: primaryResult.result,
-          source: legacySource(effectivePrimary.preset),
+          source: sourceTagForPreset(effectivePrimary.preset),
           provider: effectivePrimary.preset.id,
           role: "primary",
           model: effectivePrimary.model,
@@ -529,7 +529,7 @@ export async function analyzeQuestion(context: AnalysisContext, onStatus?: (stat
           latencyMs: Date.now() - startTime,
           platform: detectPlatform(context.pageUrl),
           confidence: "HIGH",
-          deepseekReasoning: primaryResult.deepseekReasoning ?? undefined,
+          deepseekReasoning: primaryResult.primaryReasoning ?? undefined,
         });
         return primaryResult;
       } else if (primaryResult.success) {
@@ -541,7 +541,7 @@ export async function analyzeQuestion(context: AnalysisContext, onStatus?: (stat
             questionText: context.questionText.substring(0, 200),
             questionType: context.questionType,
             answer: primaryResult.result,
-            source: legacySource(effectivePrimary.preset),
+            source: sourceTagForPreset(effectivePrimary.preset),
             provider: effectivePrimary.preset.id,
             role: "primary",
             model: effectivePrimary.model,
@@ -554,18 +554,18 @@ export async function analyzeQuestion(context: AnalysisContext, onStatus?: (stat
             latencyMs: Date.now() - startTime,
             platform: detectPlatform(context.pageUrl),
             confidence: primaryResult.confidence,
-            deepseekReasoning: primaryResult.deepseekReasoning ?? undefined,
+            deepseekReasoning: primaryResult.primaryReasoning ?? undefined,
           });
           return primaryResult;
         }
 
         log(`[Study Assist] Primary ${primaryResult.confidence} → validator validation`);
-        onStatus?.("CLAUDING_VALIDATING");
+        onStatus?.("VALIDATOR_VALIDATING");
         primaryAnalysisForValidator = {
           answer: primaryResult.result!,
           confidence: primaryResult.confidence!,
-          analysis: primaryResult.deepseekAnalysis!,
-          reasoning: primaryResult.deepseekReasoning ?? null,
+          analysis: primaryResult.analysis!,
+          reasoning: primaryResult.primaryReasoning ?? null,
         };
       }
     }
@@ -599,13 +599,13 @@ export async function analyzeQuestion(context: AnalysisContext, onStatus?: (stat
 }
 
 // ============================================
-// DeepSeek Analysis
+// Primary Analysis
 // ============================================
 
 export async function analyzeWithPrimary(
   context: AnalysisContext,
   role: ResolvedRole,
-): Promise<DeepSeekAnalysisResult> {
+): Promise<PrimaryAnalysisResult> {
   try {
     const matchedQuestion = await findMatchingQuestion(
       context.questionText,
@@ -618,7 +618,7 @@ export async function analyzeWithPrimary(
     log(`[Study Assist] Calling ${role.preset.label} (primary)...`);
 
     const controller = new AbortController();
-    setActiveDeepSeekController(controller);
+    setActiveProviderController(controller);
 
     let maxTokens = 2048;
     if (role.preset.id === "openai" && role.reasoning) {
@@ -641,7 +641,7 @@ export async function analyzeWithPrimary(
       signal: controller.signal,
     });
 
-    setActiveDeepSeekController(null);
+    setActiveProviderController(null);
 
     await logError({
       type: "analyzeWithPrimary",
@@ -708,7 +708,7 @@ export async function analyzeWithPrimary(
     parsed.cacheWriteTokens = result.usage.cacheWriteTokens;
     return parsed;
   } catch (error) {
-    setActiveDeepSeekController(null);
+    setActiveProviderController(null);
     if ((error as Error).name === "AbortError") {
       log("[Study Assist] Primary request cancelled");
       return { success: false, error: "Primary cancelled", cancelled: true };
@@ -802,13 +802,13 @@ function validateMatchingAnswer(
 }
 
 // ============================================
-// Claude Analysis
+// Validator Analysis
 // ============================================
 
 export async function analyzeWithValidator(
   context: AnalysisContext,
   role: ResolvedRole,
-  primaryAnalysis: DeepSeekAnalysisForClaude | null = null,
+  primaryAnalysis: PrimaryAnalysisPayload | null = null,
   startTime: number = Date.now(),
   fallbackReasonOverride?: string,
 ): Promise<AnalysisResponse> {
@@ -958,7 +958,7 @@ PLEASE RESPOND AGAIN with the CORRECT matches. Only output the match pairs — n
     questionText: context.questionText.substring(0, 200),
     questionType: context.questionType,
     answer: result,
-    source: legacySource(role.preset),
+    source: sourceTagForPreset(role.preset),
     provider: role.preset.id,
     role: "validator",
     model: role.model,
@@ -982,7 +982,7 @@ PLEASE RESPOND AGAIN with the CORRECT matches. Only output the match pairs — n
     result = extractClaudeQuickAnswer(result, context.questionType);
   }
 
-  return { success: true, result, source: legacySource(role.preset) };
+  return { success: true, result, source: sourceTagForPreset(role.preset) };
 }
 
 // ============================================
@@ -1074,7 +1074,7 @@ export async function analyzeQuestionStreaming(
 
     const hasImages = !!(context.images && context.images.length > 0);
     const isMatching = context.questionType === "matching";
-    const order = context.skipDeepSeek ? [validator, primary] : [primary, validator];
+    const order = context.skipPrimary ? [validator, primary] : [primary, validator];
     const role = order.find((r) => r && canRoleHandle(r, hasImages, isMatching)) ?? null;
 
     if (!role) {
@@ -1098,7 +1098,7 @@ export async function analyzeQuestionStreaming(
     if (maxTokens < 2048) maxTokens = 2048;
 
     const controller = new AbortController();
-    setActiveDeepSeekController(controller);
+    setActiveProviderController(controller);
 
     port.postMessage({ type: "STREAM_STATUS", status: "started" });
 
@@ -1137,7 +1137,7 @@ export async function analyzeQuestionStreaming(
         },
       );
     } finally {
-      setActiveDeepSeekController(null);
+      setActiveProviderController(null);
     }
 
     if (result.truncated) {
@@ -1151,7 +1151,7 @@ export async function analyzeQuestionStreaming(
       questionText: context.questionText.substring(0, 200),
       questionType: context.questionType,
       answer: result.fullText.substring(0, 200),
-      source: legacySource(role.preset),
+      source: sourceTagForPreset(role.preset),
       provider: role.preset.id,
       role: role === primary ? "primary" : "validator",
       model: role.model,

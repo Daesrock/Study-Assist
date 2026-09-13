@@ -1,24 +1,24 @@
 /**
  * Background Service Worker - Response Parsing
- * Parses DeepSeek and Claude API responses
+ * Parses provider API responses
  */
 
 import type { AnalysisContext, AnalysisResponse } from "../../types/index.js";
 import type {
   ConfidenceLevel,
-  DeepSeekAnalysisResult,
+  PrimaryAnalysisResult,
   ClaudeApiResponse,
 } from "./constants.js";
 
 // ============================================
-// DeepSeek Response Parsing
+// Primary Response Parsing
 // ============================================
 
 export function parseDeepSeekResponse(
   response: string,
   context: AnalysisContext,
   reasoningContent: string | null = null
-): DeepSeekAnalysisResult {
+): PrimaryAnalysisResult {
   const isMatching = context.questionType === "matching";
   const isTrueFalse = context.questionType === "true-false";
   const isShortAnswer = context.questionType === "short-answer";
@@ -110,21 +110,21 @@ export function parseDeepSeekResponse(
   }
 
   if (!answer) {
-    return { success: false, error: "Could not parse DeepSeek answer" };
+    return { success: false, error: "Could not parse answer" };
   }
 
   return {
     success: true,
     result: answer,
     confidence,
-    deepseekAnalysis: response,
-    deepseekReasoning: reasoningContent,
+    analysis: response,
+    primaryReasoning: reasoningContent,
     source: "deepseek",
   };
 }
 
 // ============================================
-// Claude Response Extraction
+// Quick Answer Extraction
 // ============================================
 
 /**
@@ -224,13 +224,13 @@ export function handleApiError(
     case 429:
       return { success: false, error: "Rate limit exceeded. Please wait and try again." };
     case 500:
-      return { success: false, error: `Claude internal server error. ${errorMessage}` };
+      return { success: false, error: `Provider internal server error. ${errorMessage}` };
     case 502:
-      return { success: false, error: "Claude service temporarily unavailable (502)." };
+      return { success: false, error: "Provider service temporarily unavailable (502)." };
     case 503:
-      return { success: false, error: "Claude service temporarily unavailable (503)." };
+      return { success: false, error: "Provider service temporarily unavailable (503)." };
     case 529:
-      return { success: false, error: "Claude API is overloaded. Please try again later." };
+      return { success: false, error: "Provider API is overloaded. Please try again later." };
     default:
       return { success: false, error: `API error (${status}): ${errorMessage}` };
   }

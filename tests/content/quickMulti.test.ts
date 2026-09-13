@@ -130,7 +130,7 @@ describe("buildQuickContext", () => {
     expect(ctx.questionType).toBe("matching");
     expect(ctx.categories).toEqual([{ letter: "A", text: "Uno" }]);
     expect(ctx.responseMode).toBe("quick");
-    expect(ctx.skipDeepSeek).toBe(false);
+    expect(ctx.skipPrimary).toBe(false);
   });
 
   it("maps true-false and multiple-choice types", () => {
@@ -148,9 +148,9 @@ describe("buildQuickContext", () => {
     ).toBe("short-answer");
   });
 
-  it("passes skipDeepSeek through", () => {
+  it("passes skipPrimary through", () => {
     const ctx = buildQuickContext(makeQuestion(), [], true);
-    expect(ctx.skipDeepSeek).toBe(true);
+    expect(ctx.skipPrimary).toBe(true);
   });
 });
 
@@ -162,7 +162,7 @@ describe("sendQuickAnalysis", () => {
   it("resolves with RESULT and shows STATUS emoji on the button", async () => {
     stubQuickPort([
       {
-        status: "CLAUDING_FALLBACK",
+        status: "VALIDATOR_FALLBACK",
         result: { success: true, result: "B" },
       },
     ]);
@@ -188,7 +188,7 @@ describe("handleQuickMulti", () => {
     state.requestCancelled = false;
     state.slowConnectionTimer = null;
     state.lastAnsweredQuestionNum = null;
-    state.skipDeepSeek = false;
+    state.skipPrimary = false;
     state.pendingQuestionChange = null;
     callbacks.startQuestionChangeObserver.mockClear();
   });

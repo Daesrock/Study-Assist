@@ -105,7 +105,7 @@ export interface State {
   questionChangeInterval: ReturnType<typeof setInterval> | null;
   isRequestInProgress: boolean;
   hasValidAnswer: boolean;
-  skipDeepSeek: boolean;
+  skipPrimary: boolean;
   slowConnectionTimer: ReturnType<typeof setTimeout> | null;
   requestCancelled: boolean;
   pendingQuestionChange: number | null;
@@ -128,7 +128,7 @@ export interface AnalysisContext {
   pageTitle: string;
   pageUrl: string;
   responseMode: string;
-  skipDeepSeek?: boolean;
+  skipPrimary?: boolean;
   courseName?: string; // Academic course name for better context
   qaMode?: boolean;
   // For select-missing-words questions

@@ -8,7 +8,7 @@ import type { ImageData } from "../../types/index.js";
 import { querySelectorAllDeep } from "./utils.js";
 
 /**
- * Check if a URL is a publicly accessible HTTP(S) URL that Claude can fetch.
+ * Check if a URL is a publicly accessible HTTP(S) URL the provider can fetch.
  * Excludes data URIs, blob URIs, extension URLs, and localhost.
  */
 export function isPublicImageUrl(src: string): boolean {
@@ -80,7 +80,7 @@ export async function extractImagesAsBase64(root: Element): Promise<ImageData[]>
       if (isPublicImageUrl(imgSrc)) {
         images.push({
           url: imgSrc,
-          mediaType: "image/jpeg", // Claude doesn't need this for URL type
+          mediaType: "image/jpeg", // Not needed for the URL type
         });
       } else {
         // For non-public images (data:, blob:, CORS-restricted), convert to base64

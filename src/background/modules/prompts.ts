@@ -1,13 +1,13 @@
 /**
  * Background Service Worker - Prompt Building
- * Constructs prompts for Claude and DeepSeek APIs
+ * Constructs prompts for the provider APIs
  */
 
 import type { AnalysisContext, ImageData } from "../../types/index.js";
 import type {
   MatchedQuestion,
   NumberWordMap,
-  DeepSeekAnalysisForClaude,
+  PrimaryAnalysisPayload,
   ClaudeContentBlock,
 } from "./constants.js";
 
@@ -292,7 +292,7 @@ CONFIDENCE: [LOW/MEDIUM/HIGH]`;
 
 export function buildClaudeValidationPrompt(
   context: AnalysisContext,
-  deepseekAnalysis: DeepSeekAnalysisForClaude
+  primaryAnalysis: PrimaryAnalysisPayload
 ): string {
   const { questionText, questionType, options, categories, matchingOptions, matchingStyle, courseName } = context;
   const { expertContext } = getExpertContext(context.pageTitle);
@@ -334,22 +334,22 @@ export function buildClaudeValidationPrompt(
 
   let prompt = `${expertContext}${academicContext}
 
-IMPORTANT: Another AI (DeepSeek) has already analyzed this question but reported ${deepseekAnalysis.confidence} confidence. We need your help to verify or correct the answer.
+IMPORTANT: Another AI (DeepSeek) has already analyzed this question but reported ${primaryAnalysis.confidence} confidence. We need your help to verify or correct the answer.
 
 ${questionSection}
 
 === DEEPSEEK'S ANALYSIS ===
-DeepSeek's Answer: ${deepseekAnalysis.answer}
-DeepSeek's Confidence: ${deepseekAnalysis.confidence}
+DeepSeek's Answer: ${primaryAnalysis.answer}
+DeepSeek's Confidence: ${primaryAnalysis.confidence}
 
 DeepSeek's Full Response:
-${deepseekAnalysis.analysis}
+${primaryAnalysis.analysis}
 `;
 
-  if (deepseekAnalysis.reasoning) {
+  if (primaryAnalysis.reasoning) {
     prompt += `
 DeepSeek's Chain-of-Thought Reasoning:
-${deepseekAnalysis.reasoning}
+${primaryAnalysis.reasoning}
 `;
   }
 
@@ -357,9 +357,9 @@ ${deepseekAnalysis.reasoning}
 === END DEEPSEEK ANALYSIS ===
 
 YOUR TASK:
-Since DeepSeek had ${deepseekAnalysis.confidence} confidence, please:
+Since DeepSeek had ${primaryAnalysis.confidence} confidence, please:
 1. Review DeepSeek's analysis and reasoning carefully
-2. Verify if the answer "${deepseekAnalysis.answer}" is correct
+2. Verify if the answer "${primaryAnalysis.answer}" is correct
 3. If DeepSeek made any errors in reasoning, identify and correct them
 4. Provide the CORRECT answer
 

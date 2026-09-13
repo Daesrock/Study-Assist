@@ -126,12 +126,12 @@ export const NON_RETRYABLE_STATUSES = [400, 401, 402, 422, 429, 503];
 
 /**
  * Map an HTTP failure to a user-facing message + retry policy.
- * `label` keeps the provider name in the message (e.g. "DeepSeek").
+ * `label` keeps the provider name in the message (e.g. "OpenAI").
  */
 export function describeOpenAiError(
   status: number,
   errorMsg: string,
-  label = "DeepSeek",
+  label = "Provider",
 ): { error: string; skipRetry: boolean } {
   const skipRetry = NON_RETRYABLE_STATUSES.includes(status);
   let error: string;
@@ -150,13 +150,13 @@ export function describeOpenAiError(
       error = `${label}: Invalid parameters. ${errorMsg}`;
       break;
     case 429:
-      error = `${label}: Rate limit reached. Switching to Claude.`;
+      error = `${label}: Rate limit reached. Switching to the validator.`;
       break;
     case 500:
       error = `${label}: Server error. ${errorMsg}`;
       break;
     case 503:
-      error = `${label}: Server overloaded. Switching to Claude.`;
+      error = `${label}: Server overloaded. Switching to the validator.`;
       break;
     default:
       error = `${label} API Error (${status}): ${errorMsg}`;
