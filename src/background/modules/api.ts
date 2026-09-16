@@ -566,6 +566,7 @@ export async function analyzeQuestion(context: AnalysisContext, onStatus?: (stat
           confidence: primaryResult.confidence!,
           analysis: primaryResult.analysis!,
           reasoning: primaryResult.primaryReasoning ?? null,
+          providerLabel: effectivePrimary.preset.label,
         };
       }
     }

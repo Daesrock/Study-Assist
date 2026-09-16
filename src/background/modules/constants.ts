@@ -262,6 +262,8 @@ export interface PrimaryAnalysisPayload {
   confidence: ConfidenceLevel;
   analysis: string;
   reasoning: string | null;
+  /** Human-readable label of the primary provider (e.g. "Anthropic", "OpenAI"). */
+  providerLabel: string;
 }
 
 // Message types

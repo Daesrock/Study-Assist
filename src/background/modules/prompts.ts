@@ -332,38 +332,40 @@ export function buildValidatorPrompt(
     ? "[[1]]=word, [[2]]=word, etc."
     : "[correct answer - single letter or comma-separated letters]";
 
+  const primaryLabel = primaryAnalysis.providerLabel || "Primary AI";
+
   let prompt = `${expertContext}${academicContext}
 
-IMPORTANT: Another AI (DeepSeek) has already analyzed this question but reported ${primaryAnalysis.confidence} confidence. We need your help to verify or correct the answer.
+IMPORTANT: Another AI (${primaryLabel}) has already analyzed this question but reported ${primaryAnalysis.confidence} confidence. We need your help to verify or correct the answer.
 
 ${questionSection}
 
-=== DEEPSEEK'S ANALYSIS ===
-DeepSeek's Answer: ${primaryAnalysis.answer}
-DeepSeek's Confidence: ${primaryAnalysis.confidence}
+=== ${primaryLabel.toUpperCase()}'S ANALYSIS ===
+${primaryLabel}'s Answer: ${primaryAnalysis.answer}
+${primaryLabel}'s Confidence: ${primaryAnalysis.confidence}
 
-DeepSeek's Full Response:
+${primaryLabel}'s Full Response:
 ${primaryAnalysis.analysis}
 `;
 
   if (primaryAnalysis.reasoning) {
     prompt += `
-DeepSeek's Chain-of-Thought Reasoning:
+${primaryLabel}'s Chain-of-Thought Reasoning:
 ${primaryAnalysis.reasoning}
 `;
   }
 
   prompt += `
-=== END DEEPSEEK ANALYSIS ===
+=== END ${primaryLabel.toUpperCase()} ANALYSIS ===
 
 YOUR TASK:
-Since DeepSeek had ${primaryAnalysis.confidence} confidence, please:
-1. Review DeepSeek's analysis and reasoning carefully
+Since ${primaryLabel} had ${primaryAnalysis.confidence} confidence, please:
+1. Review ${primaryLabel}'s analysis and reasoning carefully
 2. Verify if the answer "${primaryAnalysis.answer}" is correct
-3. If DeepSeek made any errors in reasoning, identify and correct them
+3. If ${primaryLabel} made any errors in reasoning, identify and correct them
 4. Provide the CORRECT answer
 
-If you agree with DeepSeek's answer, confirm it. If you disagree, explain why briefly and give the correct answer.
+If you agree with ${primaryLabel}'s answer, confirm it. If you disagree, explain why briefly and give the correct answer.
 
 RESPONSE FORMAT (use exactly this format):
 ANSWER: ${validationAnswerHint}`;

@@ -213,35 +213,40 @@ describe("DeepSeek Prompt Building", () => {
   });
 });
 
-describe("Claude Validation Prompt", () => {
-  it("should include DeepSeek analysis", () => {
-    const deepseek: PrimaryAnalysisPayload = {
+describe("Validator Prompt", () => {
+  it("should include primary provider analysis with its label", () => {
+    const primaryPayload: PrimaryAnalysisPayload = {
       answer: "C",
       confidence: "MEDIUM",
       analysis: "OSPF default admin distance is 110.",
       reasoning: "I know EIGRP is 90, OSPF is 110...",
+      providerLabel: "OpenAI",
     };
 
-    const prompt = buildValidatorPrompt(createMCQContext(), deepseek);
-    expect(prompt).toContain("DEEPSEEK'S ANALYSIS");
-    expect(prompt).toContain("DeepSeek's Answer: C");
+    const prompt = buildValidatorPrompt(createMCQContext(), primaryPayload);
+    expect(prompt).toContain("OPENAI'S ANALYSIS");
+    expect(prompt).toContain("OpenAI's Answer: C");
     expect(prompt).toContain("MEDIUM confidence");
     expect(prompt).toContain("Chain-of-Thought Reasoning");
     expect(prompt).toContain("I know EIGRP is 90");
+    expect(prompt).not.toContain("DeepSeek");
   });
 
   it("should handle matching questions in validation", () => {
-    const deepseek: PrimaryAnalysisPayload = {
+    const primaryPayload: PrimaryAnalysisPayload = {
       answer: "A-1, B-2, C-3",
       confidence: "LOW",
       analysis: "HTTP=80, HTTPS=443, SSH=22",
       reasoning: null,
+      providerLabel: "Anthropic",
     };
 
-    const prompt = buildValidatorPrompt(createMatchingContext("dropdown"), deepseek);
+    const prompt = buildValidatorPrompt(createMatchingContext("dropdown"), primaryPayload);
     expect(prompt).toContain("AVAILABLE OPTIONS:");
     expect(prompt).toContain("DESCRIPTIONS TO MATCH:");
     expect(prompt).toContain("A-1, B-2, C-3");
+    expect(prompt).toContain("ANTHROPIC'S ANALYSIS");
+    expect(prompt).not.toContain("DeepSeek");
   });
 });
 
