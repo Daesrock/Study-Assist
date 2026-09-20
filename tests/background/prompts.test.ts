@@ -144,6 +144,31 @@ describe("DeepSeek Prompt Building", () => {
       expect(prompt).not.toContain("CCNA");
     });
 
+    it("should detect NetAcad from the URL even when the page title is generic", () => {
+      const pageUrl = "https://www.netacad.com/courses/ccna/quiz";
+      const prompt = buildPrimaryPrompt(createMCQContext({
+        pageTitle: "Quiz",
+        pageUrl,
+      }));
+
+      expect(prompt).toContain("PLATFORM CONTEXT:");
+      expect(prompt).toContain("Cisco Networking Academy (NetAcad)");
+      expect(prompt).toContain("exact networking concept, protocol, or command");
+      expect(prompt).not.toContain(pageUrl);
+    });
+
+    it("should bound and clean the NetAcad page label", () => {
+      const prompt = buildPrimaryPrompt(createMCQContext({
+        pageTitle: `  CCNA\nModule\t${"x".repeat(300)}  `,
+        pageUrl: "https://www.netacad.com/quiz",
+      }));
+      const labelLine = prompt.split("\n").find((line) => line.includes("Page label (metadata only)"));
+
+      expect(labelLine).toBeTruthy();
+      expect(labelLine!.length).toBeLessThan(210);
+      expect(labelLine).not.toContain("\t");
+    });
+
     it("should list all options", () => {
       const prompt = buildPrimaryPrompt(createMCQContext());
       expect(prompt).toContain("A) 90");
@@ -232,6 +257,22 @@ describe("Validator Prompt", () => {
     expect(prompt).not.toContain("DeepSeek");
   });
 
+  it("should include explicit NetAcad context in validator prompts", () => {
+    const prompt = buildValidatorPrompt(createMCQContext({
+      pageTitle: "Quiz",
+      pageUrl: "https://www.netacad.com/courses/ccna/quiz",
+    }), {
+      answer: "C",
+      confidence: "MEDIUM",
+      analysis: "OSPF uses a default administrative distance of 110.",
+      reasoning: null,
+      providerLabel: "DeepSeek",
+    });
+
+    expect(prompt).toContain("Cisco Networking Academy (NetAcad)");
+    expect(prompt).toContain("exact networking concept, protocol, or command");
+  });
+
   it("should handle matching questions in validation", () => {
     const primaryPayload: PrimaryAnalysisPayload = {
       answer: "A-1, B-2, C-3",
@@ -256,6 +297,15 @@ describe("Claude Analysis Prompt", () => {
       const prompt = buildAnalysisPrompt(createMCQContext());
       expect(prompt).toContain("Think step-by-step");
       expect(prompt).toContain("ANSWER: X");
+    });
+
+    it("should include explicit NetAcad context in quick prompts", () => {
+      const prompt = buildAnalysisPrompt(createMCQContext({
+        pageTitle: "Quiz",
+        pageUrl: "https://www.netacad.com/courses/ccna/quiz",
+      }));
+      expect(prompt).toContain("Cisco Networking Academy (NetAcad)");
+      expect(prompt).toContain("exact networking concept, protocol, or command");
     });
 
     it("should include image analysis instructions when images present", () => {
