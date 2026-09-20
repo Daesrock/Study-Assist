@@ -157,10 +157,13 @@ async function trackUsageInternal(
     ...(cost === null ? {} : { costUsd: cost }),
   };
   const { historyContent } = await chrome.storage.local.get("historyContent");
-  fullRecord.questionText = historyContent === true ? record.questionText.slice(0, 200) : "";
-  fullRecord.answer = historyContent === true ? record.answer?.slice(0, 4000) : undefined;
-  fullRecord.deepseekReasoning = historyContent === true ? record.deepseekReasoning?.slice(0, 4000) : undefined;
-  fullRecord.reasoningText = historyContent === true ? record.reasoningText?.slice(0, 4000) : undefined;
+  // Content history is enabled by default so the dashboard can show answers
+  // for new records. Users can still disable it, which redacts future content.
+  const shouldKeepContent = historyContent !== false;
+  fullRecord.questionText = shouldKeepContent ? record.questionText.slice(0, 200) : "";
+  fullRecord.answer = shouldKeepContent ? record.answer?.slice(0, 4000) : undefined;
+  fullRecord.deepseekReasoning = shouldKeepContent ? record.deepseekReasoning?.slice(0, 4000) : undefined;
+  fullRecord.reasoningText = shouldKeepContent ? record.reasoningText?.slice(0, 4000) : undefined;
 
   try {
     const result = await chrome.storage.local.get([STORAGE_KEY]);

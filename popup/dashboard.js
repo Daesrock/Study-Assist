@@ -563,8 +563,8 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
         </div>
       </div>
       <div class="banner-right">
-        <label title="Conserva texto de preguntas, respuestas y razonamiento en este navegador. Desactivado por defecto.">
-          <input type="checkbox" id="history-content-toggle" ${config.historyContent === true ? "checked" : ""} /> Guardar contenido del historial
+        <label title="Conserva texto de preguntas, respuestas y razonamiento en este navegador. Activado por defecto; puedes desactivarlo.">
+          <input type="checkbox" id="history-content-toggle" ${config.historyContent !== false ? "checked" : ""} /> Guardar contenido del historial
         </label>
         <div class="dev-toggle">
           <span>Dev Mode</span>

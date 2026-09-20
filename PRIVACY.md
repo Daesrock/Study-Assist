@@ -16,7 +16,7 @@ Study Assist is a browser extension that provides AI-powered study explanations.
 When you explicitly activate the extension on an allowed domain, it reads visible text content (questions, answer options) from the current page. This content is:
 
 - Sent to AI API endpoints for analysis (see Section 3)
-- Not retained in the local usage history by default. If you enable "Guardar contenido del historial", up to 200 characters of each question and 4,000 characters each of answers and reasoning may be stored locally, within the 500-record limit.
+- Retained locally in the usage history by default, limited to 200 characters of each question and 4,000 characters each of answers and reasoning, within the 500-record limit. You can disable this with "Guardar contenido del historial"; disabling it redacts retained content and prevents future content from being stored.
 - Never transmitted to any party other than the AI APIs you configure
 
 On allowlisted sites, automatic detection may read question text locally to highlight questions. Sending a question to an AI provider requires an analysis action. If image sending is enabled, relevant images are also sent; potentially signed/private image URLs are converted to image data when the browser permits it.

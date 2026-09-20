@@ -92,10 +92,17 @@ describe("sender and domain checks", () => {
 
 describe("privacy and concurrent accounting", () => {
   const record = { timestamp: Date.now(), questionText: "private question", questionType: "short-answer", answer: "private answer", reasoningText: "private reasoning", source: "openai" as const, model: "unpriced", inputTokens: 3, outputTokens: 2, responseMode: "quick", success: true, latencyMs: 1 };
-  it("keeps every concurrent record without retaining content by default", async () => {
+  it("keeps every concurrent record without retaining content when disabled", async () => {
+    mockStorage.historyContent = false;
     await Promise.all(Array.from({ length: 25 }, () => trackUsage(record)));
     expect((mockStorage.usageRecords as any[])).toHaveLength(25);
     expect(JSON.stringify(mockStorage.usageRecords)).not.toContain("private");
+  });
+  it("retains bounded content by default for dashboard details", async () => {
+    await trackUsage(record);
+    expect((mockStorage.usageRecords as any[])[0].questionText).toBe("private question");
+    expect((mockStorage.usageRecords as any[])[0].answer).toBe("private answer");
+    expect((mockStorage.usageRecords as any[])[0].reasoningText).toBe("private reasoning");
   });
   it("retains bounded text only with consent, and can redact it", async () => {
     mockStorage.historyContent = true;
