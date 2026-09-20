@@ -51,7 +51,7 @@ export async function validateAnalysis(context: AnalysisContext, sender: chrome.
 /** Traces never keep prompts, responses, headers, URLs or arbitrary error text. */
 export function diagnosticMetadata(value: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(value).filter(([key, val]) =>
-    ["timestamp", "type", "status", "hasImages"].includes(key) &&
+    ["timestamp", "type", "status", "hasImages", "errorKind"].includes(key) &&
     ["string", "number", "boolean"].includes(typeof val)).map(([key, val]) =>
       [key, typeof val === "string" ? val.slice(0, 100) : val]));
 }

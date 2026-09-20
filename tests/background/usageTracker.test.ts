@@ -108,4 +108,73 @@ describe("trackUsage", () => {
     });
     expect(record.costUsd).toBeUndefined();
   });
+
+  it("keeps normalized failure diagnostics without provider payloads", async () => {
+    const record = await trackUsage({
+      timestamp: Date.now(),
+      questionText: "q",
+      questionType: "multiple-choice",
+      source: "deepseek",
+      provider: "deepseek",
+      role: "primary",
+      model: "deepseek-chat",
+      inputTokens: 0,
+      outputTokens: 0,
+      responseMode: "quick",
+      success: false,
+      usageComplete: false,
+      errorKind: "auth",
+      errorStatus: 401,
+      latencyMs: 10,
+    });
+
+    expect(record.errorKind).toBe("auth");
+    expect(record.errorStatus).toBe(401);
+    expect(JSON.stringify(record)).not.toContain("sk-");
+  });
+
+  it("stores the final reasoning excerpt and marks it as truncated", async () => {
+    const reasoning = `${"early ".repeat(900)}TAIL-REASONING`;
+    const record = await trackUsage({
+      timestamp: Date.now(),
+      questionText: "q",
+      questionType: "multiple-choice",
+      source: "deepseek",
+      provider: "deepseek",
+      role: "primary",
+      model: "deepseek-v4-flash",
+      inputTokens: 10,
+      outputTokens: 4500,
+      responseMode: "quick",
+      success: true,
+      reasoningText: reasoning,
+      latencyMs: 10,
+    });
+
+    expect(record.reasoningText).toHaveLength(4000);
+    expect(record.reasoningText).toMatch(/TAIL-REASONING$/);
+    expect(record.reasoningTruncated).toBe(true);
+  });
+
+  it("keeps output-limit token usage eligible for cost accounting", async () => {
+    const record = await trackUsage({
+      timestamp: Date.now(),
+      questionText: "q",
+      questionType: "multiple-choice",
+      source: "deepseek",
+      provider: "deepseek",
+      role: "primary",
+      model: "deepseek-v4-flash",
+      inputTokens: 1000,
+      outputTokens: 500,
+      responseMode: "quick",
+      success: false,
+      usageComplete: true,
+      errorKind: "output_limit",
+      errorStatus: 200,
+      latencyMs: 10,
+    });
+
+    expect(record.costUsd).toBeCloseTo((1000 * 0.44 + 500 * 1.32) / 1e6, 10);
+  });
 });

@@ -20,6 +20,9 @@ export type ProviderErrorKind =
   | "network"
   | "overloaded"
   | "insufficient_balance"
+  | "output_limit"
+  | "incomplete"
+  | "content_filter"
   | "unknown";
 
 export interface ProviderError {

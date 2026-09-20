@@ -1515,6 +1515,7 @@ async function openRecordDetail(idx) {
 function buildRoutingLines(r) {
   const lines = [];
   const provider = providerLabel(providerIdOf(r));
+  const confidence = confidenceFromRecord(r);
 
   if (r.source === "question-bank") {
     lines.push(
@@ -1528,13 +1529,13 @@ function buildRoutingLines(r) {
     lines.push(
       `${provider} (${shortModel(r.model)}) analizó la pregunta como modelo principal.`,
     );
-    lines.push(`Confianza: ${r.confidence || "—"}`);
-    if (r.confidence === "HIGH") {
+    lines.push(`Confianza: ${confidence || "No registrada"}`);
+    if (confidence === "HIGH") {
       lines.push("Confianza alta → respuesta final directa, sin validación.");
+    } else if (confidence) {
+      lines.push(`Confianza ${confidence}; no se solicitó validación en este caso.`);
     } else {
-      lines.push(
-        "Confianza baja o media (no se solicitó validación en este caso).",
-      );
+      lines.push("No se registró nivel de confianza; no se puede inferir el nivel.");
     }
     return lines;
   }
@@ -1565,6 +1566,16 @@ function buildRoutingLines(r) {
     );
   }
   return lines;
+}
+
+function confidenceFromRecord(r) {
+  const direct = typeof r.confidence === "string" ? r.confidence.trim().toUpperCase() : "";
+  if (direct) return direct;
+  const text = [r.answer, r.reasoningText, r.deepseekReasoning]
+    .filter((value) => typeof value === "string")
+    .join("\n");
+  const match = text.match(/\bCONFIDENCE\s*:\s*(HIGH|MEDIUM|LOW)\b/i);
+  return match ? match[1].toUpperCase() : "";
 }
 
 function renderAnswerBlock(r) {
@@ -1600,6 +1611,43 @@ function renderAnswerBlock(r) {
   return `<pre class="dp-trace">${escapeHtml(raw)}</pre>`;
 }
 
+// Error diagnostics intentionally use only the normalized category and HTTP
+// status recorded by the background worker. Provider response bodies and
+// arbitrary error messages are never persisted because they may contain
+// prompts or other sensitive data.
+function providerErrorLabel(kind) {
+  const labels = {
+    auth: "Autenticación rechazada: revisa la API key.",
+    rate_limit: "Límite de solicitudes alcanzado.",
+    timeout: "La solicitud agotó el tiempo de espera.",
+    bad_request: "La solicitud fue rechazada por parámetros inválidos.",
+    overloaded: "El proveedor está temporalmente sobrecargado.",
+    insufficient_balance: "El proveedor indica saldo o crédito insuficiente.",
+    output_limit: "La respuesta alcanzó el límite de salida antes de terminar.",
+    incomplete: "El proveedor no completó la respuesta y no indicó un límite de salida.",
+    content_filter: "La respuesta fue detenida por el filtro de contenido del proveedor.",
+    network: "No se pudo completar la conexión con el proveedor.",
+    unknown: "El proveedor devolvió un error no identificado.",
+  };
+  return labels[kind] || "No hay un diagnóstico de proveedor disponible.";
+}
+
+function renderErrorDiagnostic(r) {
+  if (r.success) return "";
+  const hasDiagnostic = r.errorKind || Number.isFinite(r.errorStatus);
+  const status = Number.isFinite(r.errorStatus) ? `HTTP ${r.errorStatus}` : "sin HTTP status (red/timeout)";
+  const explanation = providerErrorLabel(r.errorKind);
+  return `
+      <div class="dp-section dp-error-diagnostic">
+        <div class="dp-section-label">⚠️ Motivo del error</div>
+        <div class="dp-block">
+          <strong>${escapeHtml(explanation)}</strong>
+          <div class="dp-muted" style="margin-top:6px;">${escapeHtml(status)}</div>
+          ${hasDiagnostic ? "" : '<div class="dp-muted" style="margin-top:6px;">Este registro es anterior al diagnóstico detallado. Repite la petición para capturar la categoría de forma segura.</div>'}
+        </div>
+      </div>`;
+}
+
 function extractReasoningFromApiData(apiData) {
   const body = apiData && apiData.responseBody;
   if (!body || typeof body !== "object") return "";
@@ -1631,7 +1679,15 @@ function extractReasoningFromApiData(apiData) {
 
 function renderRecordDetailPage(r, idx, history, devMode, apiData) {
   const pid = providerIdOf(r);
-  const reasoning = r.deepseekReasoning || extractReasoningFromApiData(apiData);
+  const confidence = confidenceFromRecord(r);
+  // Current records use reasoningText for both roles. Legacy records may use
+  // deepseekReasoning or the transient developer trace, so prefer the first
+  // available source and label it from the recorded pipeline role.
+  const reasoning = r.reasoningText || r.deepseekReasoning || extractReasoningFromApiData(apiData);
+  const reasoningLabel = r.role === "validator" ? "Razonamiento (validador)" : "Razonamiento (principal)";
+  const reasoningNotice = r.reasoningTruncated
+    ? '<div class="dp-muted" style="margin-bottom:8px;">Extracto: se muestran los últimos 4,000 caracteres del razonamiento original.</div>'
+    : "";
   const srcBadge = badgeClassForProvider(pid);
   const statusBadge = r.success ? "badge-success" : "badge-error";
   const time = new Date(r.timestamp).toLocaleString();
@@ -1648,10 +1704,14 @@ function renderRecordDetailPage(r, idx, history, devMode, apiData) {
     { k: "Tipo de Pregunta", v: r.questionType || "—" },
     { k: "Modo de Respuesta", v: r.responseMode || "—" },
     { k: "Trigger", v: r.trigger || "auto" },
-    { k: "Confianza", v: r.confidence || "—" },
+    { k: "Confianza", v: confidence || "—" },
     { k: "Validación", v: validationSummary(r) },
     { k: "Razón de Fallback", v: r.fallbackReason || "—" },
     { k: "Estado", v: r.success ? "✅ Éxito" : "❌ Error" },
+    ...(!r.success ? [
+      { k: "Tipo de Error", v: r.errorKind || "—" },
+      { k: "HTTP Status", v: Number.isFinite(r.errorStatus) ? String(r.errorStatus) : "—" },
+    ] : []),
     { k: "Tokens de Entrada", v: String(r.inputTokens) },
     { k: "Tokens de Salida", v: String(r.outputTokens) },
     { k: "Tokens Totales", v: String(r.inputTokens + r.outputTokens) },
@@ -1697,6 +1757,8 @@ function renderRecordDetailPage(r, idx, history, devMode, apiData) {
         ${renderAnswerBlock(r)}
       </div>
 
+      ${renderErrorDiagnostic(r)}
+
       <!-- Routing -->
       <div class="dp-section">
         <div class="dp-section-label">🔀 Decisión de Enrutamiento</div>
@@ -1719,19 +1781,9 @@ function renderRecordDetailPage(r, idx, history, devMode, apiData) {
           ? `
       <!-- Reasoning -->
       <div class="dp-section">
-        <div class="dp-section-label" style="color:var(--color-hybrid);">Razonamiento (principal)</div>
+        <div class="dp-section-label" style="color:var(--color-hybrid);">${reasoningLabel}</div>
+        ${reasoningNotice}
         <pre class="dp-trace">${escapeHtml(reasoning)}</pre>
-      </div>`
-          : ""
-      }
-
-      ${
-        r.reasoningText
-          ? `
-      <!-- Reasoning -->
-      <div class="dp-section">
-        <div class="dp-section-label" style="color:var(--color-claude);">Razonamiento (validador)</div>
-        <pre class="dp-trace">${escapeHtml(r.reasoningText)}</pre>
       </div>`
           : ""
       }
@@ -1759,6 +1811,7 @@ function renderRecordDetailPage(r, idx, history, devMode, apiData) {
         <div class="dp-trace-subtitle" style="margin-top:18px;">🔧 Metadata de la Llamada a la API</div>
         <pre class="dp-trace">Tipo:          ${escapeHtml(apiData.type || "—")}
 HTTP Status:   ${apiData.status || "—"}
+Tipo de error: ${escapeHtml(apiData.errorKind || "—")}
 ¿Con imágenes?: ${apiData.hasImages ? "Sí" : "No"}
 Timestamp:     ${apiData.timestamp ? new Date(apiData.timestamp).toLocaleString() : "—"}</pre>
 

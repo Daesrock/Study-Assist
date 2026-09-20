@@ -67,6 +67,10 @@ export interface ParsedOpenAiResponses {
   text: string | null;
   reasoning: string | null;
   usage: NormalizedUsage;
+  /** Responses API lifecycle status (e.g. `completed` or `incomplete`). */
+  status?: string | null;
+  /** Explicit reason supplied when the Responses API marks output incomplete. */
+  incompleteReason?: string | null;
 }
 
 /** Extract text, reasoning and usage from a `/responses` response. */
@@ -78,6 +82,8 @@ export function parseOpenAiResponsesResponse(json: unknown): ParsedOpenAiRespons
       summary?: Array<{ type?: string; text?: string }>;
     }>;
     output_text?: string;
+    status?: string | null;
+    incomplete_details?: { reason?: string | null } | null;
     usage?: {
       input_tokens?: number;
       output_tokens?: number;
@@ -105,6 +111,8 @@ export function parseOpenAiResponsesResponse(json: unknown): ParsedOpenAiRespons
   return {
     text: text || null,
     reasoning: reasoning || null,
+    status: body?.status ?? null,
+    incompleteReason: body?.incomplete_details?.reason ?? null,
     usage: {
       inputTokens: body?.usage?.input_tokens ?? 0,
       outputTokens: body?.usage?.output_tokens ?? 0,

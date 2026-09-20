@@ -104,11 +104,12 @@ describe("openaiCompat.buildOpenAiChatRequest", () => {
 describe("openaiCompat.parseOpenAiChatResponse", () => {
   it("extracts text, reasoning_content and usage", () => {
     const parsed = parseOpenAiChatResponse({
-      choices: [{ message: { content: "ANSWER: B", reasoning_content: "thinking..." } }],
+      choices: [{ finish_reason: "stop", message: { content: "ANSWER: B", reasoning_content: "thinking..." } }],
       usage: { prompt_tokens: 120, completion_tokens: 30, prompt_cache_hit_tokens: 40 },
     });
     expect(parsed.text).toBe("ANSWER: B");
     expect(parsed.reasoning).toBe("thinking...");
+    expect(parsed.finishReason).toBe("stop");
     expect(parsed.usage).toEqual({
       inputTokens: 120,
       outputTokens: 30,
@@ -129,6 +130,15 @@ describe("openaiCompat.parseOpenAiChatResponse", () => {
     const parsed = parseOpenAiChatResponse({});
     expect(parsed.text).toBeNull();
     expect(parsed.reasoning).toBeNull();
+  });
+
+  it("exposes a length finish reason when reasoning consumed the budget", () => {
+    const parsed = parseOpenAiChatResponse({
+      choices: [{ finish_reason: "length", message: { content: null, reasoning_content: "long reasoning" } }],
+    });
+    expect(parsed.text).toBeNull();
+    expect(parsed.reasoning).toBe("long reasoning");
+    expect(parsed.finishReason).toBe("length");
   });
 });
 
@@ -187,6 +197,7 @@ describe("anthropic.parseAnthropicMessagesResponse", () => {
         { type: "thinking", thinking: "let me think" },
         { type: "text", text: "ANSWER: A" },
       ],
+      stop_reason: "end_turn",
       usage: {
         input_tokens: 200,
         output_tokens: 50,
@@ -195,6 +206,7 @@ describe("anthropic.parseAnthropicMessagesResponse", () => {
     });
     expect(parsed.text).toBe("ANSWER: A");
     expect(parsed.reasoning).toBe("let me think");
+    expect(parsed.stopReason).toBe("end_turn");
     expect(parsed.usage.inputTokens).toBe(200);
     expect(parsed.usage.cacheHitTokens).toBe(150);
   });
@@ -203,6 +215,15 @@ describe("anthropic.parseAnthropicMessagesResponse", () => {
     const parsed = parseAnthropicMessagesResponse({ content: [] });
     expect(parsed.text).toBeNull();
     expect(parsed.reasoning).toBeNull();
+  });
+
+  it("exposes max_tokens termination for truncated responses", () => {
+    const parsed = parseAnthropicMessagesResponse({
+      content: [{ type: "thinking", thinking: "partial" }],
+      stop_reason: "max_tokens",
+    });
+    expect(parsed.text).toBeNull();
+    expect(parsed.stopReason).toBe("max_tokens");
   });
 });
 

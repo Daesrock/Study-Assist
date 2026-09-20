@@ -162,6 +162,38 @@ function parseResponse(preset: ProviderPreset, raw: unknown) {
   return parseOpenAiChatResponse(raw);
 }
 
+function explicitTerminationReason(parsed: ReturnType<typeof parseResponse>): string {
+  if ("finishReason" in parsed && typeof parsed.finishReason === "string") return parsed.finishReason;
+  if ("stopReason" in parsed && typeof parsed.stopReason === "string") return parsed.stopReason;
+  // Responses exposes the lifecycle status separately from the reason. Only
+  // the explicit max_output_tokens reason is an output-limit diagnostic.
+  if ("incompleteReason" in parsed && typeof parsed.incompleteReason === "string") return parsed.incompleteReason;
+  return "";
+}
+
+function responseStatus(parsed: ReturnType<typeof parseResponse>, raw: unknown): string {
+  if ("status" in parsed && typeof parsed.status === "string") return parsed.status.toLowerCase();
+  const status = (raw as { status?: unknown } | null)?.status;
+  return typeof status === "string" ? status.toLowerCase() : "";
+}
+
+function classifyIncompleteResponse(
+  parsed: ReturnType<typeof parseResponse>,
+  raw: unknown,
+  hasText: boolean,
+): ProviderErrorKind | null {
+  const reason = explicitTerminationReason(parsed).toLowerCase();
+  if (["length", "max_tokens", "max_output_tokens"].includes(reason)) return "output_limit";
+  if (reason === "content_filter") return "content_filter";
+
+  const status = responseStatus(parsed, raw);
+  if (["incomplete", "failed", "cancelled"].includes(status)) return "incomplete";
+  // A successful HTTP response without a final text answer is incomplete even
+  // when the provider omitted an explicit stop/incomplete reason.
+  if (!hasText) return "incomplete";
+  return null;
+}
+
 export async function runProvider(opts: ProviderRunOptions): Promise<ProviderRunResult> {
   const built = buildRequest(opts);
 
@@ -244,11 +276,28 @@ export async function runProvider(opts: ProviderRunOptions): Promise<ProviderRun
 
   const parsed = parseResponse(opts.preset, raw);
   const responseState = (raw as { status?: string; error?: unknown } | null);
-  const success = !!parsed.text?.trim() && !responseState?.error && !["failed", "incomplete", "cancelled"].includes(responseState?.status ?? "");
+  const hasText = !!parsed.text?.trim();
+  const classifiedKind = classifyIncompleteResponse(parsed, raw, hasText);
+  const failureKind: ProviderErrorKind | null = responseState?.error
+    ? "bad_request"
+    : classifiedKind;
+  const success = hasText && !responseState?.error && !failureKind;
   return {
     result: {
       success,
-      ...(success ? {} : { error: { kind: "bad_request" as const, message: "Provider returned an empty, failed or incomplete response", retryable: false } }),
+      ...(success ? {} : {
+        error: {
+          kind: failureKind ?? "unknown",
+          message: failureKind === "output_limit"
+            ? "Provider response reached the output token limit before producing a complete answer"
+            : failureKind === "content_filter"
+              ? "Provider response was stopped by its content filter"
+              : failureKind === "incomplete"
+                ? "Provider returned an incomplete response without a final answer"
+                : "Provider returned an empty, failed or invalid response",
+          retryable: false,
+        },
+      }),
       text: parsed.text ?? undefined,
       reasoning: parsed.reasoning,
       usage: parsed.usage,

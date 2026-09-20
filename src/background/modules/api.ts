@@ -35,7 +35,7 @@ import { runProvider } from "./llm/execute.js";
 import type { ProviderRunOptions, ProviderRunResult } from "./llm/execute.js";
 import { streamProvider } from "./llm/stream.js";
 import type { StreamResult } from "./llm/stream.js";
-import { resolveModelInfo } from "./llm/pricing.js";
+import { resolveOutputBudget } from "./llm/outputBudget.js";
 import { fetchModels } from "./llm/catalog.js";
 import { getRoles, resolveRole, canRoleHandle, resolveQaModel, getProviderState } from "./llm/profiles.js";
 import type { ResolvedRole } from "./llm/profiles.js";
@@ -49,15 +49,28 @@ import type { ProviderPreset } from "./llm/contract.js";
 async function runTrackedProvider(context: AnalysisContext, role: ResolvedRole, roleName: "primary" | "validator", opts: ProviderRunOptions, metadata: Partial<UsageRecord> = {}): Promise<ProviderRunResult> {
   const started = Date.now();
   const run = await runProvider(opts);
+  const confidenceMatch = run.result.text?.match(/\bCONFIDENCE\s*:\s*(HIGH|MEDIUM|LOW)\b/i);
+  const extractedConfidence = confidenceMatch?.[1]?.toUpperCase();
+  // Output-limit responses still contain authoritative token counts. Keep them
+  // eligible for cost accounting even though the analysis itself is a failure.
+  const usageComplete = run.result.success || run.result.error?.kind === "output_limit";
   await trackUsage({
     timestamp: Date.now(), analysisId: context.analysisId,
     questionText: context.questionText, questionType: context.questionType,
     answer: run.result.text, source: sourceTagForPreset(role.preset),
     provider: role.preset.id, role: roleName, model: role.model,
     ...run.result.usage, responseMode: context.responseMode,
-    success: run.result.success, usageComplete: run.result.success, latencyMs: Date.now() - started,
+    success: run.result.success, usageComplete, latencyMs: Date.now() - started,
     platform: detectPlatform(context.pageUrl), reasoningText: run.result.reasoning ?? undefined,
+    // Keep only the normalized failure metadata. Provider payloads and error
+    // messages can echo prompts or other sensitive data, so they stay out of
+    // history and are never persisted here.
+    errorKind: run.result.error?.kind,
+    errorStatus: run.result.error
+      ? (run.result.error.status ?? (run.status ?? undefined))
+      : undefined,
     ...metadata,
+    confidence: metadata.confidence || extractedConfidence,
   });
   return run;
 }
@@ -610,11 +623,13 @@ export async function analyzeWithPrimary(
     session.primaryController = controller;
     if (session.skipPrimary) controller.abort();
 
-    let maxTokens = 2048;
-    if (role.preset.id === "openai" && role.reasoning) {
-      // Reasoning tokens count toward the completion budget on OpenAI models.
-      maxTokens = 8192;
-    }
+    // Reasoning and visible output share the provider budget. Keep this path
+    // aligned with streaming and cap it to the selected model's known limit.
+    const maxTokens = await resolveOutputBudget(
+      role.preset.id,
+      role.model,
+      role.thinking === true && role.reasoning === true,
+    );
 
     const run = await runTrackedProvider(context, role, "primary", {
       preset: role.preset,
@@ -649,6 +664,7 @@ export async function analyzeWithPrimary(
           url: run.url,
           status: run.status,
           hasImages: false,
+          errorKind: run.result.error?.kind,
           requestBody: run.requestBody,
           responseBody: run.raw,
         }),
@@ -823,17 +839,12 @@ export async function analyzeWithValidator(
   const isQuickMode = context.responseMode === "quick";
   const isMatching = context.questionType === "matching";
   const hasImages = !!(context.images && context.images.length > 0);
-  let maxTokens = primaryAnalysis ? 2048 : 1024;
-
   const shouldUseThinking = role.thinking === true;
-
-  if (shouldUseThinking) {
-    maxTokens = 4096;
-  }
-  if (role.preset.id === "openai" && role.reasoning) {
-    // Reasoning tokens count toward the completion budget on OpenAI models.
-    maxTokens = 8192;
-  }
+  const maxTokens = await resolveOutputBudget(
+    role.preset.id,
+    role.model,
+    shouldUseThinking && role.reasoning === true,
+  );
 
   log("[Study Assist] Validator config:", { model: role.model, maxTokens, hasImages, hasPrimaryAnalysis: !!primaryAnalysis, thinking: shouldUseThinking });
 
@@ -869,6 +880,7 @@ export async function analyzeWithValidator(
         url: run.url,
         status: run.status,
         hasImages: hasImages || false,
+        errorKind: run.result.error?.kind,
         requestBody: run.requestBody,
         responseBody: run.raw,
       }),
@@ -1058,14 +1070,12 @@ export async function analyzeQuestionStreaming(
     const prompt = buildAnalysisPrompt(context, matchedQuestion);
     const messageContent = buildMessageContent(prompt, context.images);
 
-    // Model-aware output budget. `max_tokens` is only an upper bound (billed
-    // on actual output), so we keep it generous and cap it to the model limit.
-    const info = await resolveModelInfo(role.preset.id, role.model);
-    const modelMax = info?.maxOutput ?? 0;
-    let maxTokens = 8192;
-    if (role.thinking && role.reasoning) maxTokens = 16384;
-    if (modelMax > 0 && modelMax < maxTokens) maxTokens = modelMax;
-    if (maxTokens < 2048) maxTokens = 2048;
+    // Keep streaming and quick mode on the same model-aware output budget.
+    const maxTokens = await resolveOutputBudget(
+      role.preset.id,
+      role.model,
+      role.thinking === true && role.reasoning === true,
+    );
 
     session.check();
     const controller = session.controller;
@@ -1132,6 +1142,8 @@ export async function analyzeQuestionStreaming(
       cacheWriteTokens: result.cacheWriteTokens,
       responseMode: context.responseMode,
       success: !result.truncated,
+      usageComplete: result.truncated ? true : undefined,
+      errorKind: result.truncated ? "output_limit" : undefined,
       latencyMs: Date.now() - startTime,
       platform: detectPlatform(context.pageUrl),
       reasoningText: thinkingText || result.thinkingText || undefined,
@@ -1158,6 +1170,7 @@ export async function analyzeQuestionStreaming(
         model: attemptedRole.model, inputTokens: partialInputTokens, outputTokens: 0,
         responseMode: context.responseMode, success: false, usageComplete: false,
         latencyMs: Date.now() - startTime, platform: detectPlatform(context.pageUrl),
+        errorKind: (error as Error).name === "AbortError" ? "timeout" : "network",
       });
     }
     if ((error as Error).name !== "AbortError") {

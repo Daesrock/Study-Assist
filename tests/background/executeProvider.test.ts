@@ -55,6 +55,30 @@ describe("runProvider — Anthropic dialect", () => {
     expect((init.headers as Record<string, string>)["x-api-key"]).toBe("sk-ant-test");
   });
 
+  it("classifies Anthropic max_tokens termination as an output limit", async () => {
+    setLlmFetch((async () => jsonResponse({
+      content: [{ type: "thinking", thinking: "partial reasoning" }],
+      stop_reason: "max_tokens",
+      usage: { input_tokens: 10, output_tokens: 1024 },
+    })) as unknown as typeof fetch);
+
+    const run = await runProvider({
+      preset: getPreset("anthropic"),
+      apiKey: "sk-ant-test",
+      model: "claude-haiku-4-5-20251001",
+      content: "prompt",
+      maxTokens: 1024,
+      thinking: true,
+      supportsReasoning: true,
+      retries: 0,
+    });
+
+    expect(run.status).toBe(200);
+    expect(run.result.success).toBe(false);
+    expect(run.result.error?.kind).toBe("output_limit");
+    expect(run.result.reasoning).toBe("partial reasoning");
+  });
+
   it("omits thinking for models that do not support it", async () => {
     const fetchFn = vi.fn(async () =>
       jsonResponse({ content: [{ type: "text", text: "OK" }] }),
@@ -178,6 +202,99 @@ describe("runProvider — OpenAI-compatible dialect", () => {
     const body = JSON.parse(init.body as string);
     expect(body.thinking).toEqual({ type: "enabled" });
     expect(body.reasoning_effort).toBe("high");
+  });
+
+  it("classifies HTTP 200 reasoning-only output as an output limit", async () => {
+    setLlmFetch((async () => jsonResponse({
+      choices: [{
+        finish_reason: "length",
+        message: { content: null, reasoning_content: "reasoning consumed the budget" },
+      }],
+      usage: { prompt_tokens: 50, completion_tokens: 2048 },
+    })) as unknown as typeof fetch);
+
+    const run = await runProvider({
+      preset: getPreset("deepseek"),
+      apiKey: "sk-test",
+      model: "deepseek-reasoner",
+      content: "prompt",
+      maxTokens: 2048,
+      thinking: true,
+      supportsReasoning: true,
+      retries: 0,
+    });
+
+    expect(run.status).toBe(200);
+    expect(run.result.success).toBe(false);
+    expect(run.result.error?.kind).toBe("output_limit");
+    expect(run.result.reasoning).toContain("consumed the budget");
+  });
+
+  it("classifies an incomplete Responses API result as an output limit", async () => {
+    setLlmFetch((async () => jsonResponse({
+      status: "incomplete",
+      incomplete_details: { reason: "max_output_tokens" },
+      output: [{ type: "reasoning", summary: [{ text: "partial reasoning" }] }],
+    })) as unknown as typeof fetch);
+
+    const run = await runProvider({
+      preset: { ...getPreset("openai"), dialect: "openai-responses" },
+      apiKey: "sk-test",
+      model: "gpt-5.1",
+      content: "prompt",
+      maxTokens: 2048,
+      thinking: true,
+      supportsReasoning: true,
+      retries: 0,
+    });
+
+    expect(run.status).toBe(200);
+    expect(run.result.success).toBe(false);
+    expect(run.result.error?.kind).toBe("output_limit");
+    expect(run.result.reasoning).toBe("partial reasoning");
+  });
+
+  it("keeps a generic HTTP 200 incomplete Responses result distinct from output limits", async () => {
+    setLlmFetch((async () => jsonResponse({
+      status: "incomplete",
+      output: [{ type: "reasoning", summary: [{ text: "partial reasoning" }] }],
+    })) as unknown as typeof fetch);
+
+    const run = await runProvider({
+      preset: { ...getPreset("openai"), dialect: "openai-responses" },
+      apiKey: "sk-test",
+      model: "gpt-5.1",
+      content: "prompt",
+      maxTokens: 2048,
+      thinking: true,
+      supportsReasoning: true,
+      retries: 0,
+    });
+
+    expect(run.status).toBe(200);
+    expect(run.result.success).toBe(false);
+    expect(run.result.error?.kind).toBe("incomplete");
+    expect(run.result.error?.kind).not.toBe("bad_request");
+  });
+
+  it("classifies an empty HTTP 200 Chat Completions response as incomplete", async () => {
+    setLlmFetch((async () => jsonResponse({
+      choices: [{ message: { content: "" } }],
+      usage: { prompt_tokens: 10, completion_tokens: 2 },
+    })) as unknown as typeof fetch);
+
+    const run = await runProvider({
+      preset: getPreset("deepseek"),
+      apiKey: "sk-test",
+      model: "deepseek-chat",
+      content: "prompt",
+      maxTokens: 2048,
+      retries: 0,
+    });
+
+    expect(run.status).toBe(200);
+    expect(run.result.success).toBe(false);
+    expect(run.result.error?.kind).toBe("incomplete");
   });
 
   it("omits reasoning_effort for non-reasoning OpenAI models", async () => {

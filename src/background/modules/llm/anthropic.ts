@@ -68,12 +68,15 @@ export interface ParsedAnthropicResponse {
   text: string | null;
   reasoning: string | null;
   usage: NormalizedUsage;
+  /** Provider termination reason (e.g. `end_turn` or `max_tokens`). */
+  stopReason?: string | null;
 }
 
 /** Extract text, thinking and usage from an Anthropic Messages response. */
 export function parseAnthropicMessagesResponse(json: unknown): ParsedAnthropicResponse {
   const body = json as {
     content?: Array<{ type?: string; text?: string; thinking?: string }>;
+    stop_reason?: string | null;
     usage?: {
       input_tokens?: number;
       output_tokens?: number;
@@ -88,6 +91,7 @@ export function parseAnthropicMessagesResponse(json: unknown): ParsedAnthropicRe
   return {
     text: textBlock?.text ?? null,
     reasoning: thinkingBlock?.thinking ?? null,
+    stopReason: body?.stop_reason ?? null,
     usage: {
       inputTokens: body?.usage?.input_tokens ?? 0,
       outputTokens: body?.usage?.output_tokens ?? 0,

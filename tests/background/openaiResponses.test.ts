@@ -39,11 +39,13 @@ describe("parseOpenAiResponsesResponse", () => {
         { type: "reasoning", summary: [{ text: "thinking..." }] },
         { type: "message", content: [{ type: "output_text", text: "ANSWER: A" }] },
       ],
+      status: "completed",
       usage: { input_tokens: 120, output_tokens: 30 },
     });
 
     expect(parsed.text).toBe("ANSWER: A");
     expect(parsed.reasoning).toBe("thinking...");
+    expect(parsed.status).toBe("completed");
     expect(parsed.usage.inputTokens).toBe(120);
     expect(parsed.usage.outputTokens).toBe(30);
   });
@@ -53,5 +55,16 @@ describe("parseOpenAiResponsesResponse", () => {
     expect(parsed.text).toBeNull();
     expect(parsed.reasoning).toBeNull();
     expect(parsed.usage.inputTokens).toBe(0);
+  });
+
+  it("exposes an incomplete response status", () => {
+    const parsed = parseOpenAiResponsesResponse({
+      status: "incomplete",
+      incomplete_details: { reason: "max_output_tokens" },
+      output: [{ type: "reasoning", summary: [{ text: "partial reasoning" }] }],
+    });
+    expect(parsed.text).toBeNull();
+    expect(parsed.status).toBe("incomplete");
+    expect(parsed.incompleteReason).toBe("max_output_tokens");
   });
 });

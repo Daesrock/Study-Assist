@@ -6,6 +6,7 @@
 import { log } from "./constants.js";
 import { findPreset, ensureRegistry, resolvePresetForModel } from "./llm/registry.js";
 import { resolveModelInfo, computeUsageCost } from "./llm/pricing.js";
+import type { ProviderErrorKind } from "./llm/contract.js";
 
 // ============================================
 // Cost Calculation (LiteLLM-driven)
@@ -77,6 +78,10 @@ export interface UsageRecord {
   costUsd?: number;
   responseMode: string;
   success: boolean;
+  /** Normalized provider failure category; never contains provider payload text. */
+  errorKind?: ProviderErrorKind;
+  /** HTTP status for a failed provider request, when one was received. */
+  errorStatus?: number;
   latencyMs: number;
   platform?: string;
   // Routing metadata (v2)
@@ -86,6 +91,8 @@ export interface UsageRecord {
   confidence?: string;
   deepseekReasoning?: string;
   reasoningText?: string;
+  /** True when the stored reasoning is only the final 4,000-character excerpt. */
+  reasoningTruncated?: boolean;
   bankConflictDetected?: boolean;
   bankConflictType?: "semantic-equivalent" | "real-conflict";
   bankConflictAnswerSimilarity?: number;
@@ -162,8 +169,19 @@ async function trackUsageInternal(
   const shouldKeepContent = historyContent !== false;
   fullRecord.questionText = shouldKeepContent ? record.questionText.slice(0, 200) : "";
   fullRecord.answer = shouldKeepContent ? record.answer?.slice(0, 4000) : undefined;
-  fullRecord.deepseekReasoning = shouldKeepContent ? record.deepseekReasoning?.slice(0, 4000) : undefined;
-  fullRecord.reasoningText = shouldKeepContent ? record.reasoningText?.slice(0, 4000) : undefined;
+  const excerpt = (value: string | undefined): { value?: string; truncated: boolean } => {
+    if (typeof value !== "string") return { truncated: false };
+    return value.length > 4000
+      ? { value: value.slice(-4000), truncated: true }
+      : { value, truncated: false };
+  };
+  const deepseekExcerpt = excerpt(record.deepseekReasoning);
+  const reasoningExcerpt = excerpt(record.reasoningText);
+  fullRecord.deepseekReasoning = shouldKeepContent ? deepseekExcerpt.value : undefined;
+  fullRecord.reasoningText = shouldKeepContent ? reasoningExcerpt.value : undefined;
+  fullRecord.reasoningTruncated = shouldKeepContent && (deepseekExcerpt.truncated || reasoningExcerpt.truncated)
+    ? true
+    : undefined;
 
   try {
     const result = await chrome.storage.local.get([STORAGE_KEY]);
@@ -389,6 +407,7 @@ export function redactHistory(): Promise<void> {
       delete record.answer;
       delete record.deepseekReasoning;
       delete record.reasoningText;
+      delete record.reasoningTruncated;
     }
     await chrome.storage.local.set({ [STORAGE_KEY]: records });
     await chrome.storage.local.remove(["lastAiResponse", "lastApiRequestData", "errorLog"]);
