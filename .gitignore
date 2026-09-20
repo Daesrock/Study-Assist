@@ -27,6 +27,7 @@ coverage/
 *.log
 npm-debug.log*
 logs/
+reports/
 
 # Environment files
 .env
