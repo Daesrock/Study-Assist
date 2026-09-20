@@ -165,3 +165,15 @@ This README is aligned with the current codebase state:
 ## Privacy
 
 Data is stored locally in browser storage. The extension only sends question context to the configured AI providers (built-in and custom) using your own keys, when analysis is explicitly triggered. It also fetches LiteLLM's public model-price catalog to display model costs/capabilities; no user data is sent with that request. Custom providers require a host permission (requested when you add them). No external telemetry server is used.
+
+## Security update (September 2026)
+
+Requires Chrome/Chromium 102+; development and testing use Node.js 24+.
+API keys remain saved until changed or deleted. They and custom header values
+use AES-GCM with a random local wrapping key. This is not an OS-backed vault
+and cannot protect a stolen complete browser profile. See [PRIVACY.md](PRIVACY.md).
+
+Question/answer history content is now opt-in in the dashboard; token/cost
+metrics remain available. On upgrade, old content and raw diagnostics are
+removed while metrics and provider settings are preserved. Production builds
+reject enabled development logging or HTTP development host permissions.

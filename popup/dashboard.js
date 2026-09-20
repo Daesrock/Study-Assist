@@ -239,7 +239,7 @@ async function loadData() {
         chrome.runtime
           .sendMessage({ type: "GET_USAGE_HISTORY", limit: 50 })
           .catch(() => ({ success: false, history: [] })),
-        chrome.storage.local.get(["roles", "providerProfiles"]),
+        chrome.storage.local.get(["roles", "historyContent"]),
         chrome.storage.local.get(["dashboardDevMode"]),
         chrome.runtime
           .sendMessage({ type: "GET_STORAGE_INFO" })
@@ -471,7 +471,7 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
               : "fill-default";
           return `
         <div class="chart-bar-row">
-          <span class="chart-bar-label">${shortModel(model)}</span>
+          <span class="chart-bar-label">${escapeHtml(shortModel(model))}</span>
           <div class="chart-bar-track">
             <div class="chart-bar-fill ${fill}" style="width:${(count / maxMdl) * 100}%"></div>
           </div>
@@ -497,9 +497,9 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
         <td>${time}</td>
         <td><span class="text-truncate" title="${escapeAttr(r.questionText)}">${escapeHtml(r.questionText)}</span></td>
         <td><span class="badge ${srcBadge}">${escapeHtml(providerLabel(pid))}</span>${r.role ? ` <span class="role-tag">${escapeHtml(roleLabel(r.role))}</span>` : ""}</td>
-        <td>${r.model ? shortModel(r.model) : "—"}</td>
-        <td>${isQA ? '<span class="badge badge-qa-manual">QA</span>' : `<span class="badge badge-platform">${plat}</span>`}</td>
-        <td>${trigger}</td>
+        <td>${r.model ? escapeHtml(shortModel(r.model)) : "—"}</td>
+        <td>${isQA ? '<span class="badge badge-qa-manual">QA</span>' : `<span class="badge badge-platform">${escapeHtml(plat)}</span>`}</td>
+        <td>${escapeHtml(trigger)}</td>
         <td><span class="badge ${validated}">${r.validated ? "sí" : "no"}</span></td>
         <td>${r.inputTokens + r.outputTokens}</td>
         <td>${r.costUsd == null ? "—" : "$" + r.costUsd.toFixed(6)}</td>
@@ -551,18 +551,21 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
       <div class="mode-info">
         <div class="mode-item">
           <span class="label">Modo:</span>
-          <span class="mode-tag ${modeCss}">${activeMode}</span>
+          <span class="mode-tag ${modeCss}">${escapeHtml(activeMode)}</span>
         </div>
         <div class="mode-item">
           <span class="label">Principal:</span>
-          <span class="value">${primaryRole ? `${escapeHtml(primaryLabel)} · ${shortModel(primaryRole.model)}` : "—"}</span>
+          <span class="value">${primaryRole ? `${escapeHtml(primaryLabel)} · ${escapeHtml(shortModel(primaryRole.model))}` : "—"}</span>
         </div>
         <div class="mode-item">
           <span class="label">Validador:</span>
-          <span class="value">${validatorRole ? `${escapeHtml(validatorLabel)} · ${shortModel(validatorRole.model)}` : "Ninguno"}</span>
+          <span class="value">${validatorRole ? `${escapeHtml(validatorLabel)} · ${escapeHtml(shortModel(validatorRole.model))}` : "Ninguno"}</span>
         </div>
       </div>
       <div class="banner-right">
+        <label title="Conserva texto de preguntas, respuestas y razonamiento en este navegador. Desactivado por defecto.">
+          <input type="checkbox" id="history-content-toggle" ${config.historyContent === true ? "checked" : ""} /> Guardar contenido del historial
+        </label>
         <div class="dev-toggle">
           <span>Dev Mode</span>
           <label class="switch">
@@ -664,7 +667,7 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
     </div>`;
 
   // — Dev Mode Panel —
-  html += `<div id="dev-panel-area">${devMode ? '<div class="dev-panel-hint">🛠️ <strong>Dev Mode activo</strong> — Haz clic en <strong>🔎 Ver detalles</strong> en cualquier fila del historial para inspeccionar el trace completo de esa petición.</div>' : ""}</div>`;
+  html += `<div id="dev-panel-area">${devMode ? '<div class="dev-panel-hint">🛠️ <strong>Dev Mode activo</strong> — Abre <strong>🔎 Ver detalles</strong> para inspeccionar métricas y metadatos. No se guardan cuerpos completos de la API.</div>' : ""}</div>`;
 
   // — Charts (hidden if insufficient data) —
   const hasSourceData = sourceEntries.length > 0;
@@ -698,7 +701,7 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
   // — History Table —
   const platformOptions = platforms.length
     ? platforms
-        .map((p) => `<option value="${escapeAttr(p)}">${p}</option>`)
+        .map((p) => `<option value="${escapeAttr(p)}">${escapeHtml(p)}</option>`)
         .join("")
     : "";
   const providerIds = [...new Set(history.map((r) => providerIdOf(r)))].sort();
@@ -901,6 +904,13 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
 // ============================================
 
 function bindDynamicEvents(history, devMode) {
+  document.getElementById("history-content-toggle")?.addEventListener("change", async (event) => {
+    await chrome.storage.local.set({ historyContent: event.target.checked });
+    if (!event.target.checked) {
+      await chrome.runtime.sendMessage({ type: "REDACT_HISTORY" });
+      await loadData();
+    }
+  });
   // ---- Storage Warning Actions ----
   const swbDismiss = document.getElementById("swb-dismiss-btn");
   if (swbDismiss) {
@@ -982,7 +992,7 @@ function bindDynamicEvents(history, devMode) {
       const area = document.getElementById("dev-panel-area");
       if (area) {
         area.innerHTML = on
-          ? '<div class="dev-panel-hint">🛠️ <strong>Dev Mode activo</strong> — Haz clic en <strong>🔎 Ver detalles</strong> en cualquier fila del historial para inspeccionar el trace completo de esa petición.</div>'
+          ? '<div class="dev-panel-hint">🛠️ <strong>Dev Mode activo</strong> — Abre <strong>🔎 Ver detalles</strong> para inspeccionar métricas y metadatos. No se guardan cuerpos completos de la API.</div>'
           : "";
       }
     });
@@ -1165,6 +1175,8 @@ function bindDynamicEvents(history, devMode) {
   const runQAScenario = async (scenario) => {
     try {
       const tabId = await getUsableQATabId();
+      const registration = await chrome.runtime.sendMessage({ type: "REGISTER_QA_TAB", tabId });
+      if (!registration?.success) throw new Error(registration?.error || "QA registration failed");
       const fullModeEl = document.getElementById("qa-full-mode");
       const fullMode = !!(fullModeEl && fullModeEl.checked);
       await sendQAMessageWithRetry(tabId, {
@@ -1735,8 +1747,8 @@ function renderRecordDetailPage(r, idx, history, devMode, apiData) {
           ? `
       <!-- Dev Trace Completo -->
       <div class="dp-section dp-trace-section">
-        <div class="dp-section-label">🔍 Trace Completo <span class="dp-dev-badge">DEV MODE</span></div>
-        <p class="dp-muted" style="margin-bottom:12px;">Toda la información almacenada sobre esta petición, incluyendo el payload enviado a la API y la respuesta raw recibida.</p>
+        <div class="dp-section-label">🔍 Diagnóstico local <span class="dp-dev-badge">DEV MODE</span></div>
+        <p class="dp-muted" style="margin-bottom:12px;">Métricas y metadatos guardados. Por privacidad no se conservan cuerpos completos de solicitudes ni respuestas. El contenido del historial requiere activación explícita.</p>
 
         <div class="dp-trace-subtitle">📋 Registro de Uso (JSON completo del UsageRecord)</div>
         <pre class="dp-trace">${escapeHtml(JSON.stringify(r, null, 2))}</pre>
@@ -1746,19 +1758,13 @@ function renderRecordDetailPage(r, idx, history, devMode, apiData) {
             ? `
         <div class="dp-trace-subtitle" style="margin-top:18px;">🔧 Metadata de la Llamada a la API</div>
         <pre class="dp-trace">Tipo:          ${escapeHtml(apiData.type || "—")}
-URL:           ${escapeHtml(apiData.url || "—")}
 HTTP Status:   ${apiData.status || "—"}
 ¿Con imágenes?: ${apiData.hasImages ? "Sí" : "No"}
 Timestamp:     ${apiData.timestamp ? new Date(apiData.timestamp).toLocaleString() : "—"}</pre>
 
-        <div class="dp-trace-subtitle" style="margin-top:18px;">📤 Request Body — Prompt enviado a la API</div>
-        <pre class="dp-trace dp-trace-tall">${escapeHtml(JSON.stringify(apiData.requestBody, null, 2))}</pre>
-
-        <div class="dp-trace-subtitle" style="margin-top:18px;">📥 Response Body — Respuesta raw de la API</div>
-        <pre class="dp-trace dp-trace-tall">${escapeHtml(JSON.stringify(apiData.responseBody, null, 2))}</pre>`
+        <div class="dp-trace-unavail">Los cuerpos de las solicitudes y respuestas no se guardan.</div>`
             : `
-        <div class="dp-trace-subtitle" style="margin-top:18px;">📤 Request / 📥 Response — Raw API Data</div>
-        <div class="dp-trace-unavail">Los datos raw de la API solo están disponibles para la petición más reciente (máx. 90 segundos de antigüedad). Ejecuta una pregunta nueva y abre los detalles inmediatamente.</div>`
+        <div class="dp-trace-unavail">No hay metadatos recientes para esta petición. Los cuerpos completos de la API no se conservan.</div>`
         }
       </div>`
           : ""

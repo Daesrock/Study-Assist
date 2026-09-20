@@ -55,6 +55,9 @@ export async function estimateCost(
 // ============================================
 
 export interface UsageRecord {
+  analysisId?: string;
+  /** False when the connection failed before final usage was delivered. */
+  usageComplete?: boolean;
   id: string;
   timestamp: number;
   questionText: string;
@@ -125,16 +128,24 @@ export interface AiStats {
 
 const MAX_RECORDS = 500;
 const STORAGE_KEY = "usageRecords";
+let writeChain: Promise<unknown> = Promise.resolve();
+function serializeWrite<T>(operation: () => Promise<T>): Promise<T> {
+  const run = writeChain.then(operation);
+  writeChain = run.catch(() => {});
+  return run;
+}
 
 // ============================================
 // Track Usage
 // ============================================
 
-export async function trackUsage(
+async function trackUsageInternal(
   record: Omit<UsageRecord, "id" | "costUsd">,
 ): Promise<UsageRecord> {
+  const count = (value: number | undefined): number => typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+  record = { ...record, inputTokens: count(record.inputTokens), outputTokens: count(record.outputTokens), cacheHitTokens: count(record.cacheHitTokens), cacheWriteTokens: count(record.cacheWriteTokens) };
   const providerId = record.provider ?? providerFromSource(record.source);
-  const cost = await estimateCost(providerId, record.model, {
+  const cost = record.usageComplete === false ? null : await estimateCost(providerId, record.model, {
     inputTokens: record.inputTokens,
     outputTokens: record.outputTokens,
     cacheHitTokens: record.cacheHitTokens,
@@ -145,6 +156,11 @@ export async function trackUsage(
     id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     ...(cost === null ? {} : { costUsd: cost }),
   };
+  const { historyContent } = await chrome.storage.local.get("historyContent");
+  fullRecord.questionText = historyContent === true ? record.questionText.slice(0, 200) : "";
+  fullRecord.answer = historyContent === true ? record.answer?.slice(0, 4000) : undefined;
+  fullRecord.deepseekReasoning = historyContent === true ? record.deepseekReasoning?.slice(0, 4000) : undefined;
+  fullRecord.reasoningText = historyContent === true ? record.reasoningText?.slice(0, 4000) : undefined;
 
   try {
     const result = await chrome.storage.local.get([STORAGE_KEY]);
@@ -181,6 +197,10 @@ export async function trackUsage(
   }
 
   return fullRecord;
+}
+
+export function trackUsage(record: Omit<UsageRecord, "id" | "costUsd">): Promise<UsageRecord> {
+  return serializeWrite(() => trackUsageInternal(record));
 }
 
 // ============================================
@@ -221,6 +241,7 @@ export async function getUsageStats(): Promise<UsageStats> {
 
   let totalLatency = 0;
   let successCount = 0;
+  const answered = new Set<string>();
 
   for (const r of records) {
     stats.totalInputTokens += r.inputTokens;
@@ -229,7 +250,7 @@ export async function getUsageStats(): Promise<UsageStats> {
 
     if (r.success) {
       successCount++;
-      stats.questionsAnswered++;
+      answered.add(r.analysisId ?? r.id);
     }
     totalLatency += r.latencyMs;
 
@@ -271,6 +292,7 @@ export async function getUsageStats(): Promise<UsageStats> {
   }
 
   stats.successRate = records.length > 0 ? (successCount / records.length) * 100 : 0;
+  stats.questionsAnswered = answered.size;
   stats.avgLatencyMs = records.length > 0 ? totalLatency / records.length : 0;
 
   return stats;
@@ -282,16 +304,18 @@ export async function getRecentHistory(limit: number = 20): Promise<UsageRecord[
 }
 
 export async function clearUsageData(): Promise<void> {
+  return serializeWrite(async () => {
   await chrome.storage.local.set({ [STORAGE_KEY]: [] });
-  await chrome.storage.local.remove(["lastAiResponse"]);
+  await chrome.storage.local.remove(["lastAiResponse", "lastApiRequestData", "errorLog"]);
   await updateStorageBadge();
+  });
 }
 
 // ============================================
 // Storage Limit Management
 // ============================================
 
-const STORAGE_LIMIT_BYTES = 5 * 1024 * 1024; // 5 MB
+const STORAGE_LIMIT_BYTES = chrome.storage.local.QUOTA_BYTES || 5 * 1024 * 1024;
 const STORAGE_WARN_THRESHOLD = 0.70;          // 70% → warning badge
 const STORAGE_CRIT_THRESHOLD = 0.90;          // 90% → critical badge
 
@@ -330,6 +354,7 @@ export async function updateStorageBadge(): Promise<void> {
 }
 
 export async function trimHistory(options: { keepLast?: number; keepDays?: number }): Promise<number> {
+  return serializeWrite(async () => {
   const result = await chrome.storage.local.get([STORAGE_KEY]);
   const records: UsageRecord[] = result[STORAGE_KEY] || [];
   const originalLength = records.length;
@@ -349,4 +374,20 @@ export async function trimHistory(options: { keepLast?: number; keepDays?: numbe
   await chrome.storage.local.set({ [STORAGE_KEY]: filtered });
   await updateStorageBadge();
   return originalLength - filtered.length;
+  });
+}
+
+/** Remove retained page content, while preserving aggregate accounting. */
+export function redactHistory(): Promise<void> {
+  return serializeWrite(async () => {
+    const records = await getUsageRecords();
+    for (const record of records) {
+      record.questionText = "";
+      delete record.answer;
+      delete record.deepseekReasoning;
+      delete record.reasoningText;
+    }
+    await chrome.storage.local.set({ [STORAGE_KEY]: records });
+    await chrome.storage.local.remove(["lastAiResponse", "lastApiRequestData", "errorLog"]);
+  });
 }
