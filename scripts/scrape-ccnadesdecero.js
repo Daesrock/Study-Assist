@@ -181,7 +181,7 @@ async function scrapeInteractivePage({
   headful,
 }) {
   const browser = await puppeteer.launch({
-    headless: headful ? false : "new",
+    headless: !headful,
     defaultViewport: { width: 1366, height: 900 },
   });
 

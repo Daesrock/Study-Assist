@@ -49,10 +49,13 @@ function stubQuickPort(
     let listener: ((msg: any) => void) | null = null;
     return {
       onMessage: {
+        removeListener: vi.fn(),
         addListener: (cb: (msg: any) => void) => {
           listener = cb;
         },
       },
+      onDisconnect: { addListener: vi.fn(), removeListener: vi.fn() },
+      disconnect: vi.fn(),
       postMessage: (msg: unknown) => {
         posted.push(msg);
         const next = queue.shift();

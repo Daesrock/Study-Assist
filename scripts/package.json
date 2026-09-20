@@ -13,6 +13,6 @@
     "analyze:overlap": "node analyze-bank-overlap.js"
   },
   "dependencies": {
-    "puppeteer": "^24.7.1"
+    "puppeteer": "^25.11.0"
   }
 }

@@ -10,23 +10,7 @@ import type { ImageData } from "../../src/types/index";
 // isPublicImageUrl Tests
 // ============================================
 
-/**
- * Replicate the isPublicImageUrl logic for testing
- * (Since it's not exported from images.ts, we test the logic directly)
- */
-function isPublicImageUrl(src: string): boolean {
-  if (!src) return false;
-  try {
-    const url = new URL(src);
-    if (url.protocol !== "https:" && url.protocol !== "http:") return false;
-    const host = url.hostname.toLowerCase();
-    if (host === "localhost" || host === "127.0.0.1" || host === "[::1]") return false;
-    if (src.startsWith("chrome-extension://") || src.startsWith("moz-extension://")) return false;
-    return true;
-  } catch {
-    return false;
-  }
-}
+import { isPublicImageUrl } from "../../src/content/modules/images";
 
 describe("isPublicImageUrl", () => {
   describe("Valid public URLs", () => {
@@ -36,16 +20,16 @@ describe("isPublicImageUrl", () => {
       expect(isPublicImageUrl("https://cdn.example.org/images/photo.webp")).toBe(true);
     });
 
-    it("should return true for HTTP URLs", () => {
-      expect(isPublicImageUrl("http://example.com/image.png")).toBe(true);
+    it("should reject unencrypted remote URLs", () => {
+      expect(isPublicImageUrl("http://example.com/image.png")).toBe(false);
     });
 
-    it("should return true for URLs with query parameters", () => {
-      expect(isPublicImageUrl("https://example.com/image.png?size=large&v=2")).toBe(true);
+    it("should not forward potentially signed URL queries", () => {
+      expect(isPublicImageUrl("https://example.com/image.png?size=large&v=2")).toBe(false);
     });
 
-    it("should return true for URLs with hash fragments", () => {
-      expect(isPublicImageUrl("https://example.com/image.png#section")).toBe(true);
+    it("should not forward URL fragments", () => {
+      expect(isPublicImageUrl("https://example.com/image.png#section")).toBe(false);
     });
   });
 
@@ -111,9 +95,9 @@ describe("isPublicImageUrl", () => {
       expect(isPublicImageUrl("https://cdn.static.example.com/images/photo.png")).toBe(true);
     });
 
-    it("should handle IP addresses (non-localhost)", () => {
-      expect(isPublicImageUrl("http://192.168.1.100/image.png")).toBe(true);
-      expect(isPublicImageUrl("https://8.8.8.8/test.jpg")).toBe(true);
+    it("conservatively avoids forwarding literal IP addresses", () => {
+      expect(isPublicImageUrl("http://192.168.1.100/image.png")).toBe(false);
+      expect(isPublicImageUrl("https://8.8.8.8/test.jpg")).toBe(false);
     });
   });
 });

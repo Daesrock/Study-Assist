@@ -4,7 +4,7 @@
  */
 
 import * as esbuild from "esbuild";
-import { existsSync, mkdirSync, copyFileSync } from "fs";
+import { existsSync, mkdirSync, copyFileSync, readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 
@@ -12,13 +12,20 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
 
 const isWatch = process.argv.includes("--watch");
+if (!isWatch) {
+  const manifest = JSON.parse(readFileSync(join(ROOT, "manifest.json"), "utf8"));
+  const logger = readFileSync(join(ROOT, "src/background/modules/logger.ts"), "utf8");
+  if (/DEV_LOGGING\s*=\s*true/.test(logger) || manifest.host_permissions.some(host => host.startsWith("http://"))) {
+    throw new Error("Release blocked: disable DEV_LOGGING and remove HTTP development permissions.");
+  }
+}
 
 // Common build options
 const commonOptions = {
   bundle: true,
   format: "iife", // Immediately Invoked Function Expression - works in content scripts
-  target: ["chrome91"],
-  sourcemap: "inline",
+  target: ["chrome102"],
+  sourcemap: isWatch ? "inline" : false,
   minify: !isWatch,
 };
 

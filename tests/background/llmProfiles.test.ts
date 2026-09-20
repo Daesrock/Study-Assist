@@ -4,6 +4,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mockStorage } from "../setup";
+import { encryptApiKey } from "../../src/background/modules/crypto";
 
 import {
   resolveRole,
@@ -46,7 +47,7 @@ describe("resolveRole", () => {
   beforeEach(clearStorage);
 
   it("resolves a configured provider into preset + model + key", async () => {
-    mockStorage.providerProfiles = { deepseek: { apiKey: "enc", thinking: true } };
+    mockStorage.providerProfiles = { deepseek: { apiKey: await encryptApiKey("enc"), thinking: true } };
 
     const resolved = await resolveRole({ provider: "deepseek", model: "deepseek-v4-flash" });
 
@@ -56,7 +57,7 @@ describe("resolveRole", () => {
   });
 
   it("returns null when the role has no model (no shipped fallback)", async () => {
-    mockStorage.providerProfiles = { anthropic: { apiKey: "enc" } };
+    mockStorage.providerProfiles = { anthropic: { apiKey: await encryptApiKey("enc") } };
 
     expect(await resolveRole({ provider: "anthropic", model: "" })).toBeNull();
   });
@@ -84,10 +85,10 @@ describe("canPresetHandle", () => {
     expect(canPresetHandle(anthropic, true, true)).toBe(true);
   });
 
-  it("allows OpenAI for matching but not images yet", () => {
+  it("allows OpenAI for matching and images", () => {
     const openai = getPreset(OPENAI_PRESET_ID);
     expect(canPresetHandle(openai, false, true)).toBe(true);
-    expect(canPresetHandle(openai, true, false)).toBe(false);
+    expect(canPresetHandle(openai, true, false)).toBe(true);
   });
 });
 
@@ -99,7 +100,7 @@ describe("getProviderKey", () => {
   });
 
   it("returns the stored key value", async () => {
-    mockStorage.providerProfiles = { openai: { apiKey: "enc-openai" } };
+    mockStorage.providerProfiles = { openai: { apiKey: await encryptApiKey("enc-openai") } };
     expect(await getProviderKey("openai")).toBe("enc-openai");
   });
 });
@@ -109,7 +110,7 @@ describe("vision capabilities", () => {
 
   it("resolveRole derives vision from the detected list", async () => {
     mockStorage.providerProfiles = {
-      anthropic: { apiKey: "enc", visionModels: ["claude-haiku-4-5-20251001"] },
+      anthropic: { apiKey: await encryptApiKey("enc"), visionModels: ["claude-haiku-4-5-20251001"] },
     };
     const anthropic = await resolveRole({
       provider: "anthropic",
@@ -117,7 +118,7 @@ describe("vision capabilities", () => {
     });
     expect(anthropic?.vision).toBe(true);
 
-    mockStorage.providerProfiles = { deepseek: { apiKey: "enc", visionModels: [] } };
+    mockStorage.providerProfiles = { deepseek: { apiKey: await encryptApiKey("enc"), visionModels: [] } };
     const deepseek = await resolveRole({
       provider: "deepseek",
       model: "deepseek-v4-flash",
@@ -126,7 +127,7 @@ describe("vision capabilities", () => {
   });
 
   it("setModelVision toggles a model and feeds resolveRole", async () => {
-    mockStorage.providerProfiles = { deepseek: { apiKey: "enc" } };
+    mockStorage.providerProfiles = { deepseek: { apiKey: await encryptApiKey("enc") } };
 
     await setModelVision("deepseek", "deepseek-v4-flash", true);
     const withVision = await resolveRole({ provider: "deepseek", model: "deepseek-v4-flash" });
@@ -171,7 +172,7 @@ describe("clearProviderKey", () => {
   beforeEach(clearStorage);
 
   it("removes the key but keeps other metadata", async () => {
-    mockStorage.providerProfiles = { openai: { apiKey: "enc", models: ["m"], thinking: true } };
+    mockStorage.providerProfiles = { openai: { apiKey: await encryptApiKey("enc"), models: ["m"], thinking: true } };
 
     await clearProviderKey("openai");
 
@@ -193,20 +194,22 @@ describe("providerProfiles shape guard", () => {
       { id: "deepseek", name: "DeepSeek" },
     ];
 
-    await saveProfile("anthropic", { apiKey: "enc" });
+    await saveProfile("anthropic", { apiKey: await encryptApiKey("enc") });
 
     const profiles = mockStorage.providerProfiles as Record<string, { apiKey?: string }>;
     expect(Array.isArray(profiles)).toBe(false);
-    expect(profiles.anthropic.apiKey).toBe("enc");
+    expect(profiles.anthropic.apiKey).toMatch(/^v2:/);
+    expect(await getProviderKey("anthropic")).toBe("enc");
   });
 
   it("treats a non-object value as empty", async () => {
     mockStorage.providerProfiles = "corrupted";
     expect(await getProviderState()).toBeDefined();
 
-    await saveProfile("openai", { apiKey: "enc" });
+    await saveProfile("openai", { apiKey: await encryptApiKey("enc") });
     const profiles = mockStorage.providerProfiles as Record<string, { apiKey?: string }>;
-    expect(profiles.openai.apiKey).toBe("enc");
+    expect(profiles.openai.apiKey).toMatch(/^v2:/);
+    expect(await getProviderKey("openai")).toBe("enc");
   });
 });
 
@@ -217,7 +220,7 @@ describe("model selection", () => {
   });
 
   it("auto-selects the most recent models plus the cheapest", async () => {
-    mockStorage.providerProfiles = { openai: { apiKey: "enc" } };
+    mockStorage.providerProfiles = { openai: { apiKey: await encryptApiKey("enc") } };
     const candidates = [
       { id: "new1", created: 5000, info: { inputPer1M: 2, outputPer1M: 2, vision: true, reasoning: true, mode: "chat" } },
       { id: "new2", created: 4000, info: { inputPer1M: 3, outputPer1M: 3, vision: false, reasoning: false, mode: "chat" } },
@@ -238,7 +241,7 @@ describe("model selection", () => {
 
   it("preserves a manual selection on re-detection", async () => {
     mockStorage.providerProfiles = {
-      openai: { apiKey: "enc", selectionMode: "manual", models: ["a"], selectedModels: ["a"] },
+      openai: { apiKey: await encryptApiKey("enc"), selectionMode: "manual", models: ["a"], selectedModels: ["a"] },
     };
 
     await applyDetectedModels("openai", [
@@ -251,7 +254,7 @@ describe("model selection", () => {
   });
 
   it("keeps a model assigned to a role", async () => {
-    mockStorage.providerProfiles = { openai: { apiKey: "enc" } };
+    mockStorage.providerProfiles = { openai: { apiKey: await encryptApiKey("enc") } };
     mockStorage.roles = {
       primary: { provider: "openai", model: "assigned-x" },
       validator: null,
@@ -268,7 +271,7 @@ describe("model selection", () => {
 
   it("setModelSelected switches the provider to manual mode", async () => {
     mockStorage.providerProfiles = {
-      openai: { apiKey: "enc", selectedModels: ["a", "b"] },
+      openai: { apiKey: await encryptApiKey("enc"), selectedModels: ["a", "b"] },
     };
 
     await setModelSelected("openai", "b", false);
@@ -280,7 +283,7 @@ describe("model selection", () => {
 
   it("defaults selectedModels to all models for legacy profiles", async () => {
     mockStorage.providerProfiles = {
-      openai: { apiKey: "enc", models: ["a"], customModels: ["z"] },
+      openai: { apiKey: await encryptApiKey("enc"), models: ["a"], customModels: ["z"] },
     };
 
     const state = await getProviderState();
@@ -294,7 +297,7 @@ describe("addCustomModel", () => {
   beforeEach(clearStorage);
 
   it("adds a model once and exposes it in getProviderState", async () => {
-    mockStorage.providerProfiles = { openai: { apiKey: "enc" } };
+    mockStorage.providerProfiles = { openai: { apiKey: await encryptApiKey("enc") } };
 
     await addCustomModel("openai", "my-custom-model");
     await addCustomModel("openai", "my-custom-model");
@@ -327,7 +330,7 @@ describe("resolveQaModel", () => {
     });
     mockStorage.providerProfiles = {
       anthropic: {
-        apiKey: "enc",
+        apiKey: await encryptApiKey("enc"),
         models: ["claude-haiku-4-5-20251001", "claude-opus-4-6"],
         // The cheaper model is detected but NOT selected → must be ignored.
         selectedModels: ["claude-opus-4-6"],
@@ -351,7 +354,7 @@ describe("resolveQaModel", () => {
     });
     mockStorage.providerProfiles = {
       anthropic: {
-        apiKey: "enc",
+        apiKey: await encryptApiKey("enc"),
         models: ["claude-haiku-4-5-20251001", "claude-opus-4-6"],
       },
     };
@@ -401,7 +404,7 @@ describe("custom providers", () => {
       primary: { provider: "custom-x", model: "m" },
       validator: null,
     };
-    mockStorage.providerProfiles = { "custom-x": { apiKey: "enc" } };
+    mockStorage.providerProfiles = { "custom-x": { apiKey: await encryptApiKey("enc") } };
 
     await deleteCustomProvider("custom-x");
 
@@ -434,7 +437,7 @@ describe("reasoning capability gating", () => {
         baseUrl: "https://api.x.test/v1",
       },
     };
-    mockStorage.providerProfiles = { "custom-x": { apiKey: "enc" } };
+    mockStorage.providerProfiles = { "custom-x": { apiKey: await encryptApiKey("enc") } };
 
     const resolved = await resolveRole({ provider: "custom-x", model: "brand-new-model" });
     expect(resolved?.reasoning).toBe(true);
@@ -450,7 +453,7 @@ describe("reasoning capability gating", () => {
         provider: "anthropic",
       },
     });
-    mockStorage.providerProfiles = { anthropic: { apiKey: "enc" } };
+    mockStorage.providerProfiles = { anthropic: { apiKey: await encryptApiKey("enc") } };
 
     const resolved = await resolveRole({
       provider: "anthropic",
@@ -459,4 +462,3 @@ describe("reasoning capability gating", () => {
     expect(resolved?.reasoning).toBe(false);
   });
 });
-

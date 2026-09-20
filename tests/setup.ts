@@ -3,6 +3,9 @@
  */
 
 import { vi } from "vitest";
+import { webcrypto } from "node:crypto";
+Object.defineProperty(globalThis, "crypto", { value: webcrypto, configurable: true });
+const clone = <T>(value: T): T => value === undefined ? value : JSON.parse(JSON.stringify(value));
 
 // ============================================
 // Mock Chrome Extension APIs
@@ -13,17 +16,20 @@ const mockStorage: Record<string, unknown> = {};
 const chromeStorageLocal = {
   get: vi.fn(async (keys: string | string[]) => {
     if (typeof keys === "string") {
-      return { [keys]: mockStorage[keys] };
+      return { [keys]: clone(mockStorage[keys]) };
     }
     const result: Record<string, unknown> = {};
     for (const key of keys) {
-      if (key in mockStorage) result[key] = mockStorage[key];
+      if (key in mockStorage) result[key] = clone(mockStorage[key]);
     }
     return result;
   }),
   set: vi.fn(async (items: Record<string, unknown>) => {
-    Object.assign(mockStorage, items);
+    Object.assign(mockStorage, clone(items));
   }),
+  remove: vi.fn(async (keys: string | string[]) => { for (const key of typeof keys === "string" ? [keys] : keys) delete mockStorage[key]; }),
+  getBytesInUse: vi.fn(async () => JSON.stringify(mockStorage).length),
+  setAccessLevel: vi.fn(async () => {}),
 };
 
 const chromeAction = {
@@ -34,10 +40,12 @@ const chromeAction = {
 };
 
 const chromeRuntime = {
+  id: "mock-id",
   getURL: vi.fn((path: string) => `chrome-extension://mock-id/${path}`),
   onMessage: {
     addListener: vi.fn(),
   },
+  onConnect: { addListener: vi.fn() },
   onInstalled: {
     addListener: vi.fn(),
   },
