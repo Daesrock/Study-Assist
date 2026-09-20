@@ -3,17 +3,44 @@
  * Routes messages and manages lifecycle events
  */
 
-import { log, logProviders, setDebugMode, activeProviderController, setActiveProviderController } from "./modules/constants.js";
+import { log, logProviders, setDebugMode } from "./modules/constants.js";
 import { devLog, DEV_LOGGING } from "./modules/logger.js";
 import type { ExtensionMessage, MessageResponse } from "./modules/constants.js";
 import type { AnalysisResponse } from "../types/index.js";
 import { analyzeQuestion, analyzeQuestionStreaming, testProviderKey, testProviderConnection } from "./modules/api.js";
 import { handleDisguiseMode, restoreDisguiseMode } from "./modules/extensionState.js";
-import { getUsageStats, getRecentHistory, clearUsageData, getStorageInfo, trimHistory, updateStorageBadge } from "./modules/usageTracker.js";
+import { getUsageStats, getRecentHistory, clearUsageData, getStorageInfo, trimHistory, updateStorageBadge, redactHistory } from "./modules/usageTracker.js";
 import { getProviderState, saveProviderKey, clearProviderKey, setModelVision, setModelSelected, setModelEndpoint, setSelectionMode, addCustomModel, saveRoles, saveProfile, getProviderKey, applyDetectedModels, saveQaModel, saveCustomProvider, deleteCustomProvider } from "./modules/llm/profiles.js";
 import { fetchModels } from "./modules/llm/catalog.js";
 import { getPreset, ensureRegistry, resetRegistry } from "./modules/llm/registry.js";
 import { getPriceIndex, lookupModelInfo, refreshPrices } from "./modules/llm/pricing.js";
+import { CONTENT_SETTINGS, isExtensionPage, senderKey, validateAnalysis, qaTabs } from "./modules/security.js";
+import { AnalysisSession } from "./modules/analysisSession.js";
+
+const storageReady = chrome.storage.local.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" }).then(async () => {
+  const { securitySchema, providerProfiles } = await chrome.storage.local.get(["securitySchema", "providerProfiles"]);
+  if (securitySchema !== 2) {
+    await redactHistory();
+    await chrome.storage.local.set({ debugMode: false });
+    for (const id of Object.keys(providerProfiles ?? {})) {
+      try { await getProviderKey(id); } catch { /* Invalid credentials remain for explicit user replacement. */ }
+    }
+    await chrome.storage.local.set({ securitySchema: 2 });
+  }
+});
+const sessions = new Map<string, AnalysisSession>();
+
+function newSession(sender: chrome.runtime.MessageSender): AnalysisSession {
+  const key = senderKey(sender);
+  sessions.get(key)?.cancel();
+  const session = new AnalysisSession();
+  sessions.set(key, session);
+  return session;
+}
+
+function releaseSession(sender: chrome.runtime.MessageSender, session: AnalysisSession): void {
+  if (sessions.get(senderKey(sender)) === session) sessions.delete(senderKey(sender));
+}
 
 // ============================================
 // Message Handler
@@ -62,10 +89,27 @@ async function detectProviderModels(
 
 async function handleMessage(
   message: ExtensionMessage,
-  _sender: chrome.runtime.MessageSender
+  sender: chrome.runtime.MessageSender
 ): Promise<MessageResponse | AnalysisResponse> {
+  await storageReady;
+  if (!message || typeof message.type !== "string" || sender.id !== chrome.runtime.id) throw new Error("Invalid message sender");
+  if (message.type !== "ANALYZE_QUESTION" && JSON.stringify(message).length > 65536) throw new Error("Oversized message");
+  if (!isExtensionPage(sender) && !["ANALYZE_QUESTION", "CANCEL_ANALYSIS", "GET_CONTENT_SETTINGS", "SET_CONTENT_PREFERENCE"].includes(message.type)) {
+    throw new Error("This operation requires an extension page");
+  }
   await ensureRegistry();
   switch (message.type) {
+    case "REGISTER_QA_TAB": {
+      const tab = await chrome.tabs.get(message.tabId!);
+      if (new URL(tab.url ?? "").origin !== "https://example.com") throw new Error("Invalid QA tab");
+      qaTabs.add(tab.id!);
+      return { success: true };
+    }
+    case "GET_CONTENT_SETTINGS":
+      return { success: true, settings: await chrome.storage.local.get(CONTENT_SETTINGS) } as MessageResponse;
+    case "SET_CONTENT_PREFERENCE":
+      await chrome.storage.local.set({ saButtonHidden: message.enabled === true });
+      return { success: true };
     case "TEST_PROVIDER_KEY":
       return testProviderKey(message.provider ?? "anthropic", message.apiKey ?? "");
 
@@ -88,14 +132,17 @@ async function handleMessage(
         return { success: false, error: (error as Error).message };
       }
 
-    case "ANALYZE_QUESTION":
-      return analyzeQuestion(message.context!);
+    case "ANALYZE_QUESTION": {
+      await validateAnalysis(message.context!, sender);
+      const session = newSession(sender);
+      try { return await analyzeQuestion(message.context!, undefined, session); }
+      finally { releaseSession(sender, session); }
+    }
 
     case "CANCEL_ANALYSIS":
-      if (activeProviderController) {
-        log("[Study Assist] Cancelling analysis...");
-        activeProviderController.abort();
-        setActiveProviderController(null);
+      if (sessions.has(senderKey(sender))) {
+        const session = sessions.get(senderKey(sender))!;
+        if (message.skipPrimary) session.skip(); else session.cancel();
         return { success: true, cancelled: true };
       }
       return { success: true, cancelled: false };
@@ -126,6 +173,10 @@ async function handleMessage(
       } catch (error) {
         return { success: false, error: (error as Error).message };
       }
+
+    case "REDACT_HISTORY":
+      await redactHistory();
+      return { success: true };
 
     case "GET_STORAGE_INFO":
       try {
@@ -355,12 +406,27 @@ chrome.runtime.onMessage.addListener(
 // ============================================
 
 chrome.runtime.onConnect.addListener((port) => {
+  if (!port.sender || port.sender.id !== chrome.runtime.id) { port.disconnect(); return; }
+  let active: AnalysisSession | undefined;
+  let used = false;
+  let disconnected = false;
+  port.onDisconnect.addListener(() => {
+    disconnected = true;
+    active?.cancel();
+    if (active) releaseSession(port.sender!, active);
+  });
   if (port.name === "quick-analysis") {
     port.onMessage.addListener(async (msg: { context: import("../types/index.js").AnalysisContext }) => {
+      if (used) return;
+      used = true;
       try {
+        await storageReady;
+        await validateAnalysis(msg.context, port.sender!);
+        if (disconnected) return;
+        active = newSession(port.sender!);
         const result = await analyzeQuestion(msg.context, (status: string) => {
           try { port.postMessage({ type: "STATUS", status }); } catch { /* port disconnected */ }
-        });
+        }, active);
         try { port.postMessage({ type: "RESULT", result }); } catch { /* port disconnected */ }
       } catch (error) {
         try {
@@ -369,7 +435,7 @@ chrome.runtime.onConnect.addListener((port) => {
         } catch {
           // Port may have been disconnected
         }
-      }
+      } finally { if (active) releaseSession(port.sender!, active); }
     });
     return;
   }
@@ -377,15 +443,21 @@ chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== "stream-analysis") return;
 
   port.onMessage.addListener(async (msg: { context: import("../types/index.js").AnalysisContext }) => {
+    if (used) return;
+    used = true;
     try {
-      await analyzeQuestionStreaming(msg.context, port);
+      await storageReady;
+      await validateAnalysis(msg.context, port.sender!);
+      if (disconnected) return;
+      active = newSession(port.sender!);
+      await analyzeQuestionStreaming(msg.context, port, active);
     } catch (error) {
       try {
         port.postMessage({ type: "STREAM_ERROR", error: (error as Error).message });
       } catch {
         // Port may have been disconnected
       }
-    }
+    } finally { if (active) releaseSession(port.sender!, active); }
   });
 });
 
@@ -426,6 +498,7 @@ chrome.runtime.onStartup.addListener(async () => {
 
 chrome.tabs.onUpdated.addListener(
   async (tabId: number, changeInfo: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) => {
+    if (changeInfo.status === "loading" || changeInfo.url) qaTabs.delete(tabId);
     if (changeInfo.status === "complete") {
       chrome.tabs.sendMessage(tabId, { type: "PAGE_LOADED", url: tab.url }).catch(() => {});
     }
@@ -438,6 +511,7 @@ chrome.tabs.onUpdated.addListener(
 
 async function loadDebugMode(): Promise<void> {
   try {
+    await storageReady;
     const { debugMode } = (await chrome.storage.local.get("debugMode")) as {
       debugMode?: boolean;
     };
@@ -463,6 +537,12 @@ if (chrome.storage.onChanged) {
     if ("customProviders" in changes) {
       resetRegistry();
       ensureRegistry().catch(() => {});
+    }
+    if ("allowedDomains" in changes) {
+      for (const session of sessions.values()) session.cancel();
+      chrome.tabs.query({}).then(tabs => {
+        for (const tab of tabs) if (tab.id !== undefined) chrome.tabs.sendMessage(tab.id, { type: "DOMAIN_SETTINGS_CHANGED" }).catch(() => {});
+      }).catch(() => {});
     }
   });
 }

@@ -7,6 +7,7 @@
  */
 
 import { fetchWithRetry } from "../fetchUtils.js";
+import { assertSafeProviderUrl } from "../security.js";
 import type { FetchOptionsWithSignal } from "../constants.js";
 
 export type LlmFetch = typeof fetch;
@@ -28,9 +29,10 @@ export interface LlmRequestOptions {
 }
 
 export function llmRequest(opts: LlmRequestOptions): Promise<Response> {
+  assertSafeProviderUrl(opts.url);
   return fetchWithRetry(
     opts.url,
-    opts.init,
+    { ...opts.init, redirect: "error", credentials: "omit" },
     opts.retries ?? 2,
     opts.timeout ?? 30000,
     injectedFetch,

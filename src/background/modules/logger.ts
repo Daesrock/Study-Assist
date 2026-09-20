@@ -10,7 +10,7 @@
  */
 
 /** Flip to `false` for release builds. */
-export const DEV_LOGGING = true;
+export const DEV_LOGGING = false;
 
 const ENDPOINT = "http://127.0.0.1:8788/log";
 const MAX_DATA_CHARS = 2000;

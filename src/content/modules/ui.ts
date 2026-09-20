@@ -189,7 +189,7 @@ export function toggleSAButtonVisibility(): void {
     state.saButtonHidden = !isHidden;
     // Persist so the choice survives question changes and page reloads.
     try {
-      chrome.storage.local.set({ saButtonHidden: state.saButtonHidden }).catch(() => {});
+      chrome.runtime.sendMessage({ type: "SET_CONTENT_PREFERENCE", enabled: state.saButtonHidden }).catch(() => {});
     } catch (_e) {
       // storage may be unavailable (tests)
     }
@@ -259,7 +259,9 @@ export function createQuickButton(callbacks: QuickButtonCallbacks): void {
   }
 
   if (handleQuickClick) {
-    quickBtn.addEventListener("click", handleQuickClick);
+    quickBtn.addEventListener("click", (event) => {
+      if (event.isTrusted && state.isActive && state.isDomainAllowed) handleQuickClick(event);
+    });
   }
 
   // Setup Ctrl toggle for Webex button
@@ -431,6 +433,7 @@ export function highlightDetectedQuestions(
     badge.textContent = String(index + 1);
     badge.title = `Pregunta ${index + 1} - Clic para analizar`;
     badge.addEventListener("click", (e: MouseEvent): void => {
+      if (!e.isTrusted || !state.isActive || !state.isDomainAllowed) return;
       e.stopPropagation();
       if (analyzeQuestionCallback) {
         analyzeQuestionCallback(question);
@@ -549,7 +552,8 @@ export function displaySingleQuestion(
   // Add click handler for analyze button
   const analyzeBtn = results.querySelector(".study-assist-analyze-btn-large") as HTMLButtonElement | null;
   if (analyzeBtn) {
-    analyzeBtn.addEventListener("click", (): void => {
+    analyzeBtn.addEventListener("click", (event): void => {
+      if (!event.isTrusted || !state.isActive || !state.isDomainAllowed) return;
       if (analyzeQuestionCallback) {
         analyzeQuestionCallback(question);
       }

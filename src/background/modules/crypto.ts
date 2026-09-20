@@ -7,9 +7,9 @@ const SALT = new TextEncoder().encode("study-assist-v1-salt");
 const ITERATIONS = 100000;
 
 /**
- * Derive an AES-GCM key from the extension ID (unique per install)
+ * Legacy public-ID derivation, used only to migrate existing ciphertext.
  */
-async function getEncryptionKey(): Promise<CryptoKey> {
+async function getLegacyEncryptionKey(): Promise<CryptoKey> {
   const extensionId = chrome.runtime.id;
   const keyMaterial = await crypto.subtle.importKey(
     "raw",
@@ -27,6 +27,27 @@ async function getEncryptionKey(): Promise<CryptoKey> {
   );
 }
 
+// Persistent, random wrapping key. This prevents decryption from the public
+// extension ID, but does NOT protect against theft of the entire Chrome profile.
+const WRAPPING_KEY = "credentialWrappingKeyV2";
+let keyWriteChain: Promise<unknown> = Promise.resolve();
+function getEncryptionKey(): Promise<CryptoKey> {
+  const run = keyWriteChain.then(async () => {
+    const stored = await chrome.storage.local.get(WRAPPING_KEY);
+    let encoded = stored[WRAPPING_KEY];
+    if (encoded === undefined) {
+      encoded = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))));
+      await chrome.storage.local.set({ [WRAPPING_KEY]: encoded });
+    }
+    if (typeof encoded !== "string") throw new Error("Invalid credential wrapping key");
+    const bytes = Uint8Array.from(atob(encoded), c => c.charCodeAt(0));
+    if (bytes.length !== 32) throw new Error("Invalid credential wrapping key");
+    return crypto.subtle.importKey("raw", bytes, "AES-GCM", false, ["encrypt", "decrypt"]);
+  });
+  keyWriteChain = run.catch(() => {});
+  return run;
+}
+
 /**
  * Encrypt an API key string → base64-encoded ciphertext
  */
@@ -39,7 +60,7 @@ export async function encryptApiKey(plainKey: string): Promise<string> {
   const combined = new Uint8Array(iv.length + encrypted.byteLength);
   combined.set(iv);
   combined.set(new Uint8Array(encrypted), iv.length);
-  return btoa(String.fromCharCode(...combined));
+  return "v2:" + btoa(String.fromCharCode(...combined));
 }
 
 /**
@@ -47,14 +68,15 @@ export async function encryptApiKey(plainKey: string): Promise<string> {
  */
 export async function decryptApiKey(encryptedKey: string): Promise<string> {
   try {
-    const key = await getEncryptionKey();
-    const combined = Uint8Array.from(atob(encryptedKey), (c) => c.charCodeAt(0));
+    const modern = encryptedKey.startsWith("v2:");
+    const key = await (modern ? getEncryptionKey() : getLegacyEncryptionKey());
+    const combined = Uint8Array.from(atob(modern ? encryptedKey.slice(3) : encryptedKey), (c) => c.charCodeAt(0));
+    if (combined.length < 29) throw new Error("Invalid ciphertext");
     const iv = combined.slice(0, 12);
     const ciphertext = combined.slice(12);
     const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
     return new TextDecoder().decode(decrypted);
   } catch {
-    // If decryption fails, the key might still be stored in plain text.
-    return encryptedKey;
+    throw new Error("Cannot decrypt saved credential. Re-enter it in provider settings.");
   }
 }

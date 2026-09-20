@@ -43,7 +43,7 @@ import type { DetectedQuestion, Settings } from "../types/index.js";
 // ============================================
 async function checkDomainAllowed(): Promise<boolean> {
   try {
-    const result = await chrome.storage.local.get(["allowedDomains"]);
+    const { settings: result } = await chrome.runtime.sendMessage({ type: "GET_CONTENT_SETTINGS" });
     const allowedDomains: string[] = result.allowedDomains ?? DEFAULT_ALLOWED_DOMAINS;
 
     const currentHostname = window.location.hostname.toLowerCase();
@@ -74,7 +74,7 @@ function setupContentObserver(): void {
     if (debounceTimer) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
       if (
-        state.settings.quickMode &&
+        state.isActive && state.isDomainAllowed && state.settings.quickMode &&
         !document.getElementById("study-assist-quick-container")
       ) {
         if (frameHasQuizContent()) {
@@ -161,6 +161,7 @@ function initKeyboardHandlers(): void {
 // Detection with Callbacks
 // ============================================
 async function runDetection(): Promise<void> {
+  if (!state.isActive || !state.isDomainAllowed) return;
   const result = await detectQuestionsOnPage();
   
   if (result && result.found) {
@@ -184,15 +185,7 @@ async function initialize(): Promise<void> {
     // Load persisted settings regardless of the domain gate so the state always
     // mirrors the user's real preferences (e.g. the QA sandbox runs on a
     // non-allowlisted page but must behave like a real quiz).
-    const result = await chrome.storage.local.get([
-      "responseMode",
-      "autoDetect",
-      "highlightQuestions",
-      "quickMode",
-      "sendImages",
-      "buttonPosition",
-      "saButtonHidden",
-    ]);
+    const { settings: result } = await chrome.runtime.sendMessage({ type: "GET_CONTENT_SETTINGS" });
 
     state.settings.responseMode = result.responseMode ?? "direct";
     state.settings.autoDetect = result.autoDetect ?? true;
@@ -1009,6 +1002,24 @@ chrome.runtime.onMessage.addListener(
     sendResponse: (response: { success: boolean; error?: string }) => void
   ): boolean => {
     switch (message.type) {
+      case "DOMAIN_SETTINGS_CHANGED":
+        (async () => {
+          if (await checkDomainAllowed()) {
+            if (!state.isActive) await initialize();
+          } else {
+            state.isActive = false;
+            cancelCurrentRequest();
+            state.contentObserver?.disconnect();
+            state.contentObserver = null;
+            if (state.questionChangeInterval) clearInterval(state.questionChangeInterval);
+            state.questionChangeInterval = null;
+            clearAllHighlights();
+            hideOverlay();
+            document.getElementById("study-assist-quick-container")?.remove();
+          }
+          sendResponse({ success: true });
+        })();
+        return true;
       case "SETTINGS_CHANGED":
         if (!state.isDomainAllowed) {
           sendResponse({ success: false, error: "Domain not allowed" });

@@ -18,6 +18,8 @@ import type { ProviderPreset, ProviderEndpoint, CustomProviderConfig } from "./c
 import { findPreset, listPresets, listTemplates, ensureRegistry, resetRegistry, resolvePresetForModel, resolveEndpointId } from "./registry.js";
 import { getPriceIndex, lookupModelInfo, resolveModelInfo } from "./pricing.js";
 import { computeAutoSelection } from "./selection.js";
+import { assertSafeProviderUrl } from "../security.js";
+import { sealHeaders } from "./headerSecrets.js";
 import type { SelectionCandidate } from "./selection.js";
 
 const PROFILES_KEY = "providerProfiles";
@@ -65,6 +67,7 @@ export async function saveProfile(
   presetId: string,
   patch: Partial<ProviderProfile>,
 ): Promise<void> {
+  if (!/^[a-z0-9][a-z0-9_-]{0,100}$/i.test(presetId) || ["__proto__", "constructor", "prototype"].includes(presetId)) throw new Error("Invalid provider id");
   const run = profileWriteChain.then(async () => {
     const profiles = await getProviderProfiles();
     profiles[presetId] = { ...(profiles[presetId] ?? {}), ...patch };
@@ -81,7 +84,9 @@ export async function getProviderKey(presetId: string): Promise<string | null> {
   const profile = await getProfile(presetId);
   const stored = profile?.apiKey;
   if (!stored) return null;
-  return decryptApiKey(stored);
+  const key = await decryptApiKey(stored);
+  if (!stored.startsWith("v2:")) await saveProviderKey(presetId, key);
+  return key;
 }
 
 export async function saveProviderKey(presetId: string, plainKey: string): Promise<void> {
@@ -243,12 +248,12 @@ export async function getProviderState(): Promise<ProviderState> {
       selectionMode: profile?.selectionMode ?? "auto",
       lastSync: profile?.lastSync ?? null,
       modelInfo,
-      endpoints: preset.endpoints ?? [],
+      endpoints: (preset.endpoints ?? []).map(({ headers: _headers, ...endpoint }) => endpoint),
       modelEndpoints,
     };
   });
   return {
-    presets,
+    presets: presets.map(({ headers: _headers, ...preset }) => ({ ...preset, endpoints: preset.endpoints?.map(({ headers: _headers, ...endpoint }) => endpoint) })),
     templates: listTemplates(),
     profiles,
     roles: await getRoles(),
@@ -257,10 +262,14 @@ export async function getProviderState(): Promise<ProviderState> {
 
 /** Remove a provider's API key (keeps models/vision metadata). */
 export async function clearProviderKey(presetId: string): Promise<void> {
+  const run = profileWriteChain.then(async () => {
   const profiles = await getProviderProfiles();
   if (!profiles[presetId]) return;
   delete profiles[presetId].apiKey;
   await chrome.storage.local.set({ [PROFILES_KEY]: profiles });
+  });
+  profileWriteChain = run.catch(() => {});
+  return run;
 }
 
 /** Toggle whether a model accepts image input (records a manual override). */
@@ -465,6 +474,10 @@ async function getCustomProviders(): Promise<Record<string, CustomProviderConfig
 
 /** Add or update a user-defined provider and refresh the registry cache. */
 export async function saveCustomProvider(config: CustomProviderConfig): Promise<void> {
+  if (!/^[a-z0-9][a-z0-9_-]{0,100}$/i.test(config.id) || ["__proto__", "constructor", "prototype", "anthropic", "openai", "deepseek"].includes(config.id)) throw new Error("Invalid provider id");
+  assertSafeProviderUrl(config.baseUrl);
+  for (const endpoint of config.endpoints ?? []) assertSafeProviderUrl(endpoint.baseUrl);
+  config = { ...config, headers: await sealHeaders(config.headers), endpoints: await Promise.all((config.endpoints ?? []).map(async endpoint => ({ ...endpoint, headers: await sealHeaders(endpoint.headers) }))) };
   const providers = await getCustomProviders();
   providers[config.id] = config;
   await chrome.storage.local.set({ [CUSTOM_PROVIDERS_KEY]: providers });
@@ -522,4 +535,3 @@ export async function setModelEndpoint(
   await ensureRegistry();
   logProviders("model endpoint set", { provider: presetId, model, endpoint });
 }
-

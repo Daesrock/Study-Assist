@@ -734,7 +734,9 @@ async function saveCustomProviderFromForm() {
   let origin;
   try {
     const url = new URL(baseUrl);
-    if (url.protocol !== "https:" && url.protocol !== "http:") throw new Error("scheme");
+    const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+    if (url.username || url.password || url.search || url.hash ||
+        (url.protocol !== "https:" && !(url.protocol === "http:" && loopback))) throw new Error("scheme");
     origin = url.origin;
   } catch {
     setStatus(t("providerInvalidUrl"), "err");

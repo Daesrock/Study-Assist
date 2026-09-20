@@ -487,6 +487,12 @@ async function analyzePage() {
 // ============================================
 // Domain Management
 // ============================================
+function escapeHtml(value) {
+  const span = document.createElement("span");
+  span.textContent = String(value ?? "");
+  return span.innerHTML;
+}
+
 function renderDomainsList(domains) {
   elements.domainsList.innerHTML = "";
 
@@ -494,7 +500,7 @@ function renderDomainsList(domains) {
     const domainItem = document.createElement("div");
     domainItem.className = "domain-item";
     domainItem.innerHTML = `
-      <span class="domain-text">${domain}</span>
+      <span class="domain-text">${escapeHtml(domain)}</span>
       <button class="domain-remove-btn" data-index="${index}" title="Eliminar dominio">✕</button>
     `;
     elements.domainsList.appendChild(domainItem);
@@ -517,7 +523,7 @@ async function addDomain() {
   domain = domain.replace(/^(https?:\/\/)?(www\.)?/, "").replace(/\/.*$/, "");
 
   // Basic validation
-  if (!domain.includes(".")) {
+  if (domain.length > 253 || !/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(domain)) {
     alert("Por favor ingresa un dominio válido (ej. example.com)");
     return;
   }
@@ -624,7 +630,7 @@ async function loadRecentHistory() {
         return `<div class="history-item">
           <span class="history-icon">${statusIcon}</span>
           <div class="history-details">
-            <span class="history-model">${model}</span>
+            <span class="history-model">${escapeHtml(model)}</span>
             <span class="history-meta">${tokens} tokens · ${time}</span>
           </div>
         </div>`;

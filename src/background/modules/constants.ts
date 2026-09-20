@@ -69,13 +69,6 @@ export function getClaudeThinkingConfig(
 // Mutable Shared State
 // ============================================
 
-/** Active provider AbortController for cancellation */
-export let activeProviderController: AbortController | null = null;
-
-export function setActiveProviderController(ctrl: AbortController | null): void {
-  activeProviderController = ctrl;
-}
-
 // ============================================
 // Type Definitions
 // ============================================
@@ -272,11 +265,15 @@ export type ExtensionMessageType =
   | "TEST_PROVIDER_CONNECTION"
   | "ANALYZE_QUESTION"
   | "CANCEL_ANALYSIS"
+  | "GET_CONTENT_SETTINGS"
+  | "REGISTER_QA_TAB"
+  | "SET_CONTENT_PREFERENCE"
   | "TOGGLE_DISGUISE_MODE"
   | "PAGE_LOADED"
   | "GET_USAGE_STATS"
   | "GET_USAGE_HISTORY"
   | "CLEAR_USAGE_DATA"
+  | "REDACT_HISTORY"
   | "GET_STORAGE_INFO"
   | "TRIM_HISTORY"
   | "GET_PROVIDER_STATE"
@@ -297,6 +294,8 @@ export type ExtensionMessageType =
   | "DEV_LOG";
 
 export interface ExtensionMessage {
+  tabId?: number;
+  skipPrimary?: boolean;
   type: ExtensionMessageType;
   apiKey?: string;
   enabled?: boolean;

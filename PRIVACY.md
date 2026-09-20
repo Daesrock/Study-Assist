@@ -1,7 +1,7 @@
 # Privacy Policy — Study Assist
 
 **Effective Date:** February 7, 2026
-**Last Updated:** February 7, 2026
+**Last Updated:** September 19, 2026
 
 ---
 
@@ -16,10 +16,10 @@ Study Assist is a browser extension that provides AI-powered study explanations.
 When you explicitly activate the extension on an allowed domain, it reads visible text content (questions, answer options) from the current page. This content is:
 
 - Sent to AI API endpoints for analysis (see Section 3)
-- Never stored locally or remotely
+- Not retained in the local usage history by default. If you enable "Guardar contenido del historial", up to 200 characters of each question and 4,000 characters each of answers and reasoning may be stored locally, within the 500-record limit.
 - Never transmitted to any party other than the AI APIs you configure
 
-The extension does **not** read page content automatically. It only activates when you press a keyboard shortcut or click the extension button.
+On allowlisted sites, automatic detection may read question text locally to highlight questions. Sending a question to an AI provider requires an analysis action. If image sending is enabled, relevant images are also sent; potentially signed/private image URLs are converted to image data when the browser permits it.
 
 ### 2.2 API Keys (Local Storage Only, Encrypted)
 
@@ -27,14 +27,16 @@ The extension does **not** read page content automatically. It only activates wh
 - DeepSeek API key — optional, provided by you
 - OpenAI API key — optional, provided by you
 
-Keys are stored locally in your browser using the Chrome Storage API and are encrypted at rest with AES-GCM 256-bit (the encryption key is derived from your browser installation). They are never transmitted to any server other than the respective API endpoint during authenticated requests.
+Keys remain saved until you replace or delete them. They are encrypted with AES-GCM using a random 256-bit wrapping key, not the public extension ID. Existing valid encrypted keys are migrated automatically. Custom header values are encrypted too. Chrome local storage is restricted to trusted extension contexts; content scripts receive only selected preferences through messages.
+
+The wrapping key is stored in the same browser profile so you do not need a password at startup. **This is not protection against theft of the complete browser profile, malware running as your user, or compromise of a trusted extension page.** It is not an OS-backed secret vault. API keys are sent to the configured provider for authentication. Remote providers require HTTPS; HTTP is allowed only for explicitly configured loopback services. Redirects and browser cookies are disabled for provider requests.
 
 ### 2.3 Usage Statistics (Local Storage Only)
 
 - Request count, token usage, estimated cost, latency
 - Stored locally in your browser
 - Never transmitted externally
-- Viewable and deletable from the extension dashboard
+- Viewable and deletable from the extension dashboard. Content retention is opt-in; disabling it removes retained question/answer/reasoning text without removing accounting metrics.
 
 ### 2.4 User Settings (Local Storage Only)
 
@@ -44,7 +46,7 @@ Keys are stored locally in your browser using the Chrome Storage API and are enc
 
 ## 3. Third-Party Services
 
-The extension communicates with the following third-party APIs only when you activate analysis:
+Analysis communicates with the configured providers. Model detection, connection tests and price refreshes can also make network requests. Custom providers and gateways receive the same request content and authentication configured by the user; choose endpoints you trust. Providers may retain data under their own policies, which this extension cannot guarantee or override.
 
 | Service                | Endpoint                    | Data Sent                                                | When                                                               |
 | ---------------------- | --------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------ |
@@ -66,7 +68,7 @@ The LiteLLM catalog is fetched from a public GitHub repository to display model 
 - Does **not** collect personal information (name, email, identity)
 - Does **not** track browsing history or behavior
 - Does **not** use cookies, fingerprinting, or any tracking technology
-- Does **not** run background processes or make network requests when inactive
+- Does **not** send quiz content to providers without an analysis request. Metadata/catalog refreshes are separate from analysis.
 - Does **not** harvest credentials, passwords, or form data
 - Does **not** inject advertisements
 - Does **not** sync data to any cloud service or remote server
@@ -76,25 +78,29 @@ The LiteLLM catalog is fetched from a public GitHub repository to display model 
 
 All data is stored locally on your device using the Chrome Storage API:
 
-- No remote servers
+- No Study Assist backend; requests go directly to configured providers
 - No external databases
 - No cloud synchronization
 - No analytics or telemetry services
 
 ## 6. Data Retention and Deletion
 
-Usage statistics and settings persist until you delete them. To remove all extension data:
+Usage history is bounded to 500 records. Settings and keys persist until deleted. Diagnostics are off by default; persisted diagnostics contain only bounded status metadata, not raw request/response bodies, URLs or credentials. The development log server is disabled in release builds. Browser-console debugging, if explicitly enabled, may display provider responses: do not share console output without reviewing it.
+
+The security upgrade removes previously retained page content and raw diagnostics, preserving accounting metrics and settings. This removal cannot be undone by the extension. Existing files written by a separately run development log server are outside browser storage and must be deleted manually if no longer needed.
+
+To remove extension data:
 
 1. Open the extension popup
 2. Navigate to the Dashboard
-3. Use "Clear All Usage Data" to remove statistics
+3. Use "Clear All Usage Data" to remove statistics, retained content and diagnostics. Delete each provider key in Providers if you also want to remove credentials.
 4. Uninstall the extension to remove all stored settings and API keys
 
 Alternatively, clearing your browser's extension data will remove all Study Assist data.
 
 ## 7. Domain Allowlist
 
-The extension includes a user-defined domain allowlist. It will only operate on domains you explicitly add to this list. No domains are pre-configured. The content script performs a domain check on every page load and exits immediately if the domain is not in your allowlist.
+The extension includes a user-defined domain allowlist, empty by default. It checks the sending frame's actual URL in the background before analysis and reacts to allowlist changes in already-open tabs. Revocation cancels running requests but cannot retract data already sent. The dashboard's explicitly launched QA sandbox is a limited exception on example.com; a page cannot enable it merely by supplying a QA flag.
 
 ## 8. Permissions Explained
 
