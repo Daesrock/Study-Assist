@@ -18,6 +18,7 @@ import type {
   ProviderResult,
 } from "./contract.js";
 import { llmRequest } from "./transport.js";
+import { toChatContent } from "./multimodal.js";
 import {
   buildOpenAiChatRequest,
   parseOpenAiChatResponse,
@@ -62,14 +63,6 @@ export interface ProviderRunResult {
   url: string;
 }
 
-function blocksToText(content: string | ClaudeContentBlock[]): string {
-  if (typeof content === "string") return content;
-  return content
-    .filter((block): block is Extract<ClaudeContentBlock, { type: "text" }> => block.type === "text")
-    .map((block) => block.text)
-    .join("\n");
-}
-
 function buildRequest(opts: ProviderRunOptions): {
   url: string;
   body: Record<string, unknown>;
@@ -99,7 +92,7 @@ function buildRequest(opts: ProviderRunOptions): {
       baseUrl: preset.baseUrl,
       apiKey: opts.apiKey,
       model: opts.model,
-      input: blocksToText(opts.content),
+      input: opts.content,
       maxTokens: opts.maxTokens,
       headers: preset.headers,
       signal: opts.signal,
@@ -110,7 +103,7 @@ function buildRequest(opts: ProviderRunOptions): {
     baseUrl: preset.baseUrl,
     apiKey: opts.apiKey,
     model: opts.model,
-    messages: [{ role: "user", content: blocksToText(opts.content) }],
+    messages: [{ role: "user", content: toChatContent(opts.content) }],
     maxTokens: opts.maxTokens,
     maxTokensParam: preset.maxTokensParam,
     thinking: reasoning,
@@ -223,9 +216,12 @@ export async function runProvider(opts: ProviderRunOptions): Promise<ProviderRun
 
   let raw: unknown = null;
   try {
-    raw = await response.clone().json();
+    raw = await response.json();
   } catch (error) {
-    raw = { parseError: (error as Error).message };
+    return {
+      result: { success: false, usage: { ...EMPTY_USAGE }, cancelled: opts.signal?.aborted, error: { kind: "network", message: "Incomplete or invalid provider response", retryable: false } },
+      status: response.status, raw: null, requestBody: built.body, url: built.url,
+    };
   }
 
   if (!response.ok) {
@@ -247,9 +243,12 @@ export async function runProvider(opts: ProviderRunOptions): Promise<ProviderRun
   }
 
   const parsed = parseResponse(opts.preset, raw);
+  const responseState = (raw as { status?: string; error?: unknown } | null);
+  const success = !!parsed.text?.trim() && !responseState?.error && !["failed", "incomplete", "cancelled"].includes(responseState?.status ?? "");
   return {
     result: {
-      success: true,
+      success,
+      ...(success ? {} : { error: { kind: "bad_request" as const, message: "Provider returned an empty, failed or incomplete response", retryable: false } }),
       text: parsed.text ?? undefined,
       reasoning: parsed.reasoning,
       usage: parsed.usage,

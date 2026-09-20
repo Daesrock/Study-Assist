@@ -12,6 +12,7 @@ import type {
   ProviderEndpoint,
   ProviderPreset,
 } from "./contract.js";
+import { sealHeaders, openHeaders } from "./headerSecrets.js";
 
 export const ANTHROPIC_PRESET_ID = "anthropic";
 export const DEEPSEEK_PRESET_ID = "deepseek";
@@ -44,9 +45,8 @@ export const LLM_PRESETS: Record<string, ProviderPreset> = {
     reasoningKind: "openai-effort",
     defaultThinking: true,
     maxTokensParam: "max_completion_tokens",
-    // Image support for the OpenAI-compatible adapter is pending (see image_url
-    // content blocks); images currently route to a capable validator instead.
-    capabilities: { images: false, matching: true, reasoning: true },
+    // Images are additionally gated by the selected model's vision metadata.
+    capabilities: { images: true, matching: true, reasoning: true },
   },
 };
 
@@ -204,7 +204,19 @@ export function ensureRegistry(): Promise<void> {
         const map = result.customProviders as
           | Record<string, CustomProviderConfig>
           | undefined;
-        setCustomPresets(map && typeof map === "object" ? Object.values(map) : []);
+        const configs = map && typeof map === "object" ? Object.values(map) : [];
+        // Migrate old plaintext header values before exposing the registry.
+        let changed = false;
+        const opened: CustomProviderConfig[] = [];
+        for (const config of configs) {
+          const before = JSON.stringify(config);
+          config.headers = await sealHeaders(config.headers);
+          for (const endpoint of config.endpoints ?? []) endpoint.headers = await sealHeaders(endpoint.headers);
+          changed ||= before !== JSON.stringify(config);
+          opened.push({ ...config, headers: await openHeaders(config.headers), endpoints: await Promise.all((config.endpoints ?? []).map(async endpoint => ({ ...endpoint, headers: await openHeaders(endpoint.headers) }))) });
+        }
+        if (changed) await chrome.storage.local.set({ customProviders: map });
+        setCustomPresets(opened);
 
         const needsSession = Object.values(customPresets).some(
           (preset) =>

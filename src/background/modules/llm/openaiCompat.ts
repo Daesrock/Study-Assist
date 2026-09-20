@@ -8,10 +8,11 @@
 
 import type { NormalizedUsage, ReasoningKind } from "./contract.js";
 import type { FetchOptionsWithSignal } from "../constants.js";
+import type { ChatContent } from "./multimodal.js";
 
 export interface OpenAiChatMessage {
   role: "system" | "user" | "assistant";
-  content: string;
+  content: ChatContent;
 }
 
 export interface OpenAiChatRequestInput {

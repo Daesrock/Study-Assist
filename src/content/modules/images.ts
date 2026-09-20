@@ -11,22 +11,8 @@ import { querySelectorAllDeep } from "./utils.js";
  * Check if a URL is a publicly accessible HTTP(S) URL the provider can fetch.
  * Excludes data URIs, blob URIs, extension URLs, and localhost.
  */
-export function isPublicImageUrl(src: string): boolean {
-  if (!src) return false;
-  try {
-    const url = new URL(src);
-    if (url.protocol !== "https:" && url.protocol !== "http:") return false;
-    const host = url.hostname.toLowerCase();
-    if (host === "localhost" || host === "127.0.0.1" || host === "[::1]") return false;
-    // Exclude extension-internal URLs
-    if (src.startsWith("chrome-extension://") || src.startsWith("moz-extension://")) return false;
-    // Moodle's pluginfile.php requires session authentication
-    if (url.pathname.includes("/pluginfile.php/")) return false;
-    return true;
-  } catch {
-    return false;
-  }
-}
+export { isPublicImageUrl } from "../../shared/imageUrls.js";
+import { isPublicImageUrl } from "../../shared/imageUrls.js";
 
 /**
  * Extract all relevant images from a root element and convert them to base64

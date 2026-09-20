@@ -13,6 +13,7 @@ import type { ClaudeContentBlock, ClaudeMessage } from "../constants.js";
 import { getClaudeThinkingConfig, log } from "../constants.js";
 import type { ProviderPreset } from "./contract.js";
 import { llmRequest } from "./transport.js";
+import { toChatContent } from "./multimodal.js";
 import { buildAnthropicMessagesRequest } from "./anthropic.js";
 import { buildOpenAiChatRequest, describeOpenAiError } from "./openaiCompat.js";
 import { buildOpenAiResponsesRequest } from "./openaiResponses.js";
@@ -49,14 +50,6 @@ export interface StreamResult {
   truncated: boolean;
 }
 
-function blocksToText(content: string | ClaudeContentBlock[]): string {
-  if (typeof content === "string") return content;
-  return content
-    .filter((block): block is Extract<ClaudeContentBlock, { type: "text" }> => block.type === "text")
-    .map((block) => block.text)
-    .join("\n");
-}
-
 /** Read an SSE response body and forward each `data:` payload. */
 async function consumeSse(
   response: Response,
@@ -65,35 +58,47 @@ async function consumeSse(
 ): Promise<void> {
   const body = response.body;
   if (!body) {
-    callbacks.onError("Empty response body");
-    return;
+    throw new Error("Empty response body");
   }
 
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  let dataLines: string[] = [];
 
   const handleLine = (line: string) => {
     const trimmed = line.trim();
+    if (!trimmed) {
+      if (dataLines.length) onData(dataLines.join("\n"));
+      dataLines = [];
+      return;
+    }
     if (!trimmed.startsWith("data:")) return;
     const data = trimmed.slice(5).trim();
-    if (data) onData(data);
+    if (data) dataLines.push(data);
   };
 
   try {
     while (true) {
-      const { done, value } = await reader.read();
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const idle = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Stream idle timeout")), 60000); });
+      const { done, value } = await Promise.race([reader.read(), idle]).finally(() => clearTimeout(timer));
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
+      if (buffer.length > 1024 * 1024) throw new Error("SSE event exceeds limit");
       const lines = buffer.split("\n");
       buffer = lines.pop() || "";
       for (const line of lines) handleLine(line);
     }
     if (buffer) handleLine(buffer);
+    handleLine("");
   } catch (error) {
     if ((error as Error).name === "AbortError") throw error;
     callbacks.onError((error as Error).message);
     throw error;
+  } finally {
+    await reader.cancel().catch(() => {});
+    reader.releaseLock();
   }
 }
 
@@ -153,6 +158,7 @@ async function streamAnthropic(
   let cacheHitTokens: number | undefined;
   let cacheWriteTokens: number | undefined;
   let truncated = false;
+  let completed = false;
 
   await consumeSse(response, callbacks, (data) => {
     let event: Record<string, unknown>;
@@ -193,16 +199,17 @@ async function streamAnthropic(
         break;
       }
       case "message_stop":
-        callbacks.onComplete(outputTokens);
+        completed = true;
         break;
       case "error": {
         const error = event.error as { message?: string } | undefined;
-        callbacks.onError(error?.message || "Stream error");
-        break;
+        throw new Error(error?.message || "Stream error");
       }
     }
   });
 
+  if (!completed) throw new Error("Incomplete Anthropic stream");
+  callbacks.onComplete(outputTokens);
   return {
     fullText,
     inputTokens,
@@ -223,7 +230,7 @@ async function streamOpenAi(
     baseUrl: opts.preset.baseUrl,
     apiKey: opts.apiKey,
     model: opts.model,
-    messages: [{ role: "user", content: blocksToText(opts.content) }],
+    messages: [{ role: "user", content: toChatContent(opts.content) }],
     maxTokens: opts.maxTokens,
     maxTokensParam: opts.preset.maxTokensParam,
     thinking: reasoning,
@@ -265,9 +272,10 @@ async function streamOpenAi(
   let cacheHitTokens: number | undefined;
   let truncated = false;
   let inputReported = false;
+  let completed = false;
 
   await consumeSse(response, callbacks, (data) => {
-    if (data === "[DONE]") return;
+    if (data === "[DONE]") { completed = true; return; }
 
     let event: Record<string, unknown>;
     try {
@@ -276,6 +284,7 @@ async function streamOpenAi(
       return;
     }
 
+    if (event.error) throw new Error((event.error as { message?: string }).message || "Stream error");
     const usage = event.usage as
       | {
           prompt_tokens?: number;
@@ -323,6 +332,7 @@ async function streamOpenAi(
     if (choice.finish_reason === "length") truncated = true;
   });
 
+  if (!completed) throw new Error("Incomplete OpenAI stream");
   callbacks.onComplete(outputTokens);
 
   return {
@@ -343,7 +353,8 @@ async function streamOpenAiResponses(
     baseUrl: opts.preset.baseUrl,
     apiKey: opts.apiKey,
     model: opts.model,
-    input: blocksToText(opts.content),
+    input: opts.content,
+    stream: true,
     maxTokens: opts.maxTokens,
     headers: opts.preset.headers,
     signal: opts.signal,
@@ -412,26 +423,24 @@ async function streamOpenAiResponses(
           }
         }
         completed = true;
-        callbacks.onComplete(outputTokens);
         break;
       }
       case "response.incomplete": {
-        truncated = true;
-        break;
+        throw new Error("Responses stream incomplete (output limit or filtering)");
       }
       case "response.failed":
       case "error": {
         const responseError = (event.response as { error?: { message?: string } } | undefined)?.error;
         const directError = event.error as { message?: string } | undefined;
-        callbacks.onError(
+        throw new Error(
           responseError?.message || directError?.message || "Responses stream error",
         );
-        break;
       }
     }
   });
 
-  if (!completed) callbacks.onComplete(outputTokens);
+  if (!completed) throw new Error("Incomplete Responses stream");
+  callbacks.onComplete(outputTokens);
 
   return {
     fullText,
@@ -443,13 +452,14 @@ async function streamOpenAiResponses(
 }
 
 /** Stream a request through the provider's dialect. */
-export function streamProvider(
+export async function streamProvider(
   opts: StreamProviderOptions,
   callbacks: StreamCallbacks,
 ): Promise<StreamResult> {
-  if (opts.preset.dialect === "anthropic") return streamAnthropic(opts, callbacks);
-  if (opts.preset.dialect === "openai-responses") {
-    return streamOpenAiResponses(opts, callbacks);
-  }
-  return streamOpenAi(opts, callbacks);
+  const count = (value: unknown): number => typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+  const safeCallbacks = { ...callbacks, onInputTokens: (value: number) => callbacks.onInputTokens(count(value)), onComplete: (value: number) => callbacks.onComplete(count(value)) };
+  const result = await (opts.preset.dialect === "anthropic" ? streamAnthropic(opts, safeCallbacks)
+    : opts.preset.dialect === "openai-responses" ? streamOpenAiResponses(opts, safeCallbacks)
+    : streamOpenAi(opts, safeCallbacks));
+  return { ...result, inputTokens: count(result.inputTokens), outputTokens: count(result.outputTokens), cacheHitTokens: result.cacheHitTokens === undefined ? undefined : count(result.cacheHitTokens), cacheWriteTokens: result.cacheWriteTokens === undefined ? undefined : count(result.cacheWriteTokens) };
 }

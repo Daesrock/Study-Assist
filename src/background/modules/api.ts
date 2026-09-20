@@ -7,7 +7,6 @@ import type { AnalysisContext, AnalysisResponse } from "../../types/index.js";
 import {
   log,
   DEBUG_MODE,
-  setActiveProviderController,
 } from "./constants.js";
 import type {
   MessageResponse,
@@ -15,6 +14,8 @@ import type {
   PrimaryAnalysisPayload,
 } from "./constants.js";
 import { logError } from "./fetchUtils.js";
+import { diagnosticMetadata } from "./security.js";
+import { AnalysisSession } from "./analysisSession.js";
 import { findMatchingQuestion, normalizeForSearch, calculateSimilarity, calculateContainment } from "./questionBank.js";
 import {
   buildPrimaryPrompt,
@@ -28,8 +29,10 @@ import {
   extractQuickAnswer,
 } from "./parsing.js";
 import { trackUsage, estimateCost } from "./usageTracker.js";
+import type { UsageRecord } from "./usageTracker.js";
 import { checkRateLimit, recordRequest } from "./rateLimiter.js";
 import { runProvider } from "./llm/execute.js";
+import type { ProviderRunOptions, ProviderRunResult } from "./llm/execute.js";
 import { streamProvider } from "./llm/stream.js";
 import type { StreamResult } from "./llm/stream.js";
 import { resolveModelInfo } from "./llm/pricing.js";
@@ -42,6 +45,22 @@ import type { ProviderPreset } from "./llm/contract.js";
 // ============================================
 // Platform Detection
 // ============================================
+
+async function runTrackedProvider(context: AnalysisContext, role: ResolvedRole, roleName: "primary" | "validator", opts: ProviderRunOptions, metadata: Partial<UsageRecord> = {}): Promise<ProviderRunResult> {
+  const started = Date.now();
+  const run = await runProvider(opts);
+  await trackUsage({
+    timestamp: Date.now(), analysisId: context.analysisId,
+    questionText: context.questionText, questionType: context.questionType,
+    answer: run.result.text, source: sourceTagForPreset(role.preset),
+    provider: role.preset.id, role: roleName, model: role.model,
+    ...run.result.usage, responseMode: context.responseMode,
+    success: run.result.success, usageComplete: run.result.success, latencyMs: Date.now() - started,
+    platform: detectPlatform(context.pageUrl), reasoningText: run.result.reasoning ?? undefined,
+    ...metadata,
+  });
+  return run;
+}
 
 function detectPlatform(pageUrl?: string): string {
   if (!pageUrl) return "other";
@@ -368,7 +387,8 @@ export const __testOnlyApiMatching = {
 // Question Analysis (Main Orchestrator)
 // ============================================
 
-export async function analyzeQuestion(context: AnalysisContext, onStatus?: (status: string) => void): Promise<AnalysisResponse> {
+export async function analyzeQuestion(context: AnalysisContext, onStatus?: (status: string) => void, session = new AnalysisSession()): Promise<AnalysisResponse> {
+  context = { ...context, analysisId: crypto.randomUUID() };
   const startTime = Date.now();
 
   try {
@@ -482,11 +502,12 @@ export async function analyzeQuestion(context: AnalysisContext, onStatus?: (stat
     }
 
     if (effectivePrimary) {
-      let primaryResult = await analyzeWithPrimary(context, effectivePrimary);
+      session.check();
+      let primaryResult = await analyzeWithPrimary(context, effectivePrimary, session);
 
       if (primaryResult.cancelled) {
         log("[Study Assist] Primary cancelled");
-        if (!effectiveValidator) {
+        if (!session.skipPrimary || !effectiveValidator) {
           return { success: false, error: "Analysis cancelled." };
         }
       } else if (!primaryResult.success) {
@@ -496,7 +517,8 @@ export async function analyzeQuestion(context: AnalysisContext, onStatus?: (stat
           log("[Study Assist] Primary failed, retrying...");
           onStatus?.("PRIMARY_RETRY");
           await new Promise((r) => setTimeout(r, 1000));
-          primaryResult = await analyzeWithPrimary(context, effectivePrimary);
+          session.check();
+          primaryResult = await analyzeWithPrimary(context, effectivePrimary, session);
         }
 
         if (!primaryResult.success && !primaryResult.cancelled) {
@@ -509,53 +531,16 @@ export async function analyzeQuestion(context: AnalysisContext, onStatus?: (stat
         }
       }
 
+      session.check();
       if (primaryResult.success && primaryResult.confidence === "HIGH") {
         log("[Study Assist] Primary HIGH → Answer:", primaryResult.result);
-        await trackUsage({
-          timestamp: Date.now(),
-          questionText: context.questionText.substring(0, 200),
-          questionType: context.questionType,
-          answer: primaryResult.result,
-          source: sourceTagForPreset(effectivePrimary.preset),
-          provider: effectivePrimary.preset.id,
-          role: "primary",
-          model: effectivePrimary.model,
-          inputTokens: primaryResult.inputTokens || 0,
-          outputTokens: primaryResult.outputTokens || 0,
-          cacheHitTokens: primaryResult.cacheHitTokens,
-          cacheWriteTokens: primaryResult.cacheWriteTokens,
-          responseMode: context.responseMode,
-          success: true,
-          latencyMs: Date.now() - startTime,
-          platform: detectPlatform(context.pageUrl),
-          confidence: "HIGH",
-          deepseekReasoning: primaryResult.primaryReasoning ?? undefined,
-        });
+
         return primaryResult;
       } else if (primaryResult.success) {
         if (!effectiveValidator) {
           log(`[Study Assist] Primary ${primaryResult.confidence} → Returning (no validator)`);
           primaryResult.explanation = `⚠️ **Low confidence (${primaryResult.confidence})** - No validator configured.\n\n${primaryResult.explanation || ""}`;
-          await trackUsage({
-            timestamp: Date.now(),
-            questionText: context.questionText.substring(0, 200),
-            questionType: context.questionType,
-            answer: primaryResult.result,
-            source: sourceTagForPreset(effectivePrimary.preset),
-            provider: effectivePrimary.preset.id,
-            role: "primary",
-            model: effectivePrimary.model,
-            inputTokens: primaryResult.inputTokens || 0,
-            outputTokens: primaryResult.outputTokens || 0,
-            cacheHitTokens: primaryResult.cacheHitTokens,
-          cacheWriteTokens: primaryResult.cacheWriteTokens,
-            responseMode: context.responseMode,
-            success: true,
-            latencyMs: Date.now() - startTime,
-            platform: detectPlatform(context.pageUrl),
-            confidence: primaryResult.confidence,
-            deepseekReasoning: primaryResult.primaryReasoning ?? undefined,
-          });
+
           return primaryResult;
         }
 
@@ -585,6 +570,7 @@ export async function analyzeQuestion(context: AnalysisContext, onStatus?: (stat
       primaryAnalysisForValidator,
       validatorStartTime,
       fallbackReason,
+      session,
     );
 
     return validatorResponse;
@@ -606,6 +592,7 @@ export async function analyzeQuestion(context: AnalysisContext, onStatus?: (stat
 export async function analyzeWithPrimary(
   context: AnalysisContext,
   role: ResolvedRole,
+  session = new AnalysisSession(),
 ): Promise<PrimaryAnalysisResult> {
   try {
     const matchedQuestion = await findMatchingQuestion(
@@ -619,7 +606,9 @@ export async function analyzeWithPrimary(
     log(`[Study Assist] Calling ${role.preset.label} (primary)...`);
 
     const controller = new AbortController();
-    setActiveProviderController(controller);
+    session.check();
+    session.primaryController = controller;
+    if (session.skipPrimary) controller.abort();
 
     let maxTokens = 2048;
     if (role.preset.id === "openai" && role.reasoning) {
@@ -627,11 +616,11 @@ export async function analyzeWithPrimary(
       maxTokens = 8192;
     }
 
-    const run = await runProvider({
+    const run = await runTrackedProvider(context, role, "primary", {
       preset: role.preset,
       apiKey: role.apiKey,
       model: role.model,
-      content: prompt,
+      content: buildMessageContent(prompt, context.images),
       maxTokens,
       thinking: role.thinking,
       supportsReasoning: role.reasoning,
@@ -642,7 +631,7 @@ export async function analyzeWithPrimary(
       signal: controller.signal,
     });
 
-    setActiveProviderController(null);
+    session.primaryController = undefined;
 
     await logError({
       type: "analyzeWithPrimary",
@@ -654,7 +643,7 @@ export async function analyzeWithPrimary(
     // Save full API request/response for developer mode in dashboard
     try {
       await chrome.storage.local.set({
-        lastApiRequestData: {
+        lastApiRequestData: diagnosticMetadata({
           timestamp: Date.now(),
           type: "analyzeWithPrimary",
           url: run.url,
@@ -662,7 +651,7 @@ export async function analyzeWithPrimary(
           hasImages: false,
           requestBody: run.requestBody,
           responseBody: run.raw,
-        },
+        }),
       });
     } catch (_e) { /* silent */ }
 
@@ -709,7 +698,7 @@ export async function analyzeWithPrimary(
     parsed.cacheWriteTokens = result.usage.cacheWriteTokens;
     return parsed;
   } catch (error) {
-    setActiveProviderController(null);
+    session.primaryController = undefined;
     if ((error as Error).name === "AbortError") {
       log("[Study Assist] Primary request cancelled");
       return { success: false, error: "Primary cancelled", cancelled: true };
@@ -812,6 +801,7 @@ export async function analyzeWithValidator(
   primaryAnalysis: PrimaryAnalysisPayload | null = null,
   startTime: number = Date.now(),
   fallbackReasonOverride?: string,
+  session = new AnalysisSession(),
 ): Promise<AnalysisResponse> {
   let matchedQuestion = null;
   if (!primaryAnalysis) {
@@ -847,7 +837,8 @@ export async function analyzeWithValidator(
 
   log("[Study Assist] Validator config:", { model: role.model, maxTokens, hasImages, hasPrimaryAnalysis: !!primaryAnalysis, thinking: shouldUseThinking });
 
-  const run = await runProvider({
+  session.check();
+  const run = await runTrackedProvider(context, role, "validator", {
     preset: role.preset,
     apiKey: role.apiKey,
     model: role.model,
@@ -858,7 +849,8 @@ export async function analyzeWithValidator(
     supportsAdaptiveThinking: role.adaptiveThinking,
     retries: 2,
     timeout: 45000,
-  });
+    signal: session.controller.signal,
+  }, { validated: !!primaryAnalysis, fallbackReason: fallbackReasonOverride, confidence: primaryAnalysis?.confidence });
 
   await logError({
     type: "analyzeWithValidator",
@@ -871,7 +863,7 @@ export async function analyzeWithValidator(
   // Save full API request/response for developer mode in dashboard
   try {
     await chrome.storage.local.set({
-      lastApiRequestData: {
+      lastApiRequestData: diagnosticMetadata({
         timestamp: Date.now(),
         type: "analyzeWithValidator",
         url: run.url,
@@ -879,7 +871,7 @@ export async function analyzeWithValidator(
         hasImages: hasImages || false,
         requestBody: run.requestBody,
         responseBody: run.raw,
-      },
+      }),
     });
   } catch (_e) { /* silent */ }
 
@@ -916,7 +908,8 @@ YOUR PREVIOUS RESPONSE WAS REJECTED because: ${validation.reason}
 PLEASE RESPOND AGAIN with the CORRECT matches. Only output the match pairs — no extra text.`;
       const strictMessageContent = buildMessageContent(strictPrompt, context.images);
 
-      const retryRun = await runProvider({
+      session.check();
+      const retryRun = await runTrackedProvider(context, role, "validator", {
         preset: role.preset,
         apiKey: role.apiKey,
         model: role.model,
@@ -927,6 +920,7 @@ PLEASE RESPOND AGAIN with the CORRECT matches. Only output the match pairs — n
         supportsAdaptiveThinking: role.adaptiveThinking,
         retries: 2,
         timeout: 45000,
+        signal: session.controller.signal,
       });
 
       if (retryRun.result.success && retryRun.result.text) {
@@ -948,36 +942,6 @@ PLEASE RESPOND AGAIN with the CORRECT matches. Only output the match pairs — n
     }
   }
 
-  // Use real token counts from the provider, fall back to estimates
-  const usage = runResult.usage;
-  const realInputTokens = usage.inputTokens || Math.ceil((prompt?.length || 0) / 4);
-  const realOutputTokens = usage.outputTokens || Math.ceil((result?.length || 0) / 4);
-  const isValidation = !!primaryAnalysis;
-  const fallbackReason = fallbackReasonOverride || ((!primaryAnalysis && hasImages) ? "images" : undefined);
-  await trackUsage({
-    timestamp: Date.now(),
-    questionText: context.questionText.substring(0, 200),
-    questionType: context.questionType,
-    answer: result,
-    source: sourceTagForPreset(role.preset),
-    provider: role.preset.id,
-    role: "validator",
-    model: role.model,
-    inputTokens: realInputTokens,
-    outputTokens: realOutputTokens,
-    cacheHitTokens: usage.cacheHitTokens,
-    cacheWriteTokens: usage.cacheWriteTokens,
-    responseMode: context.responseMode,
-    success: true,
-    latencyMs: Date.now() - startTime,
-    platform: detectPlatform(context.pageUrl),
-    validated: isValidation,
-    fallbackReason,
-    confidence: primaryAnalysis?.confidence,
-    deepseekReasoning: primaryAnalysis?.reasoning ?? undefined,
-    reasoningText,
-  });
-
   // For quick mode, extract the final answer
   if (isQuickMode && !isMatching) {
     result = extractQuickAnswer(result, context.questionType);
@@ -993,8 +957,13 @@ PLEASE RESPOND AGAIN with the CORRECT matches. Only output the match pairs — n
 export async function analyzeQuestionStreaming(
   context: AnalysisContext,
   port: chrome.runtime.Port,
+  session = new AnalysisSession(),
 ): Promise<void> {
+  context = { ...context, analysisId: crypto.randomUUID() };
   const startTime = Date.now();
+  let attemptedRole: ResolvedRole | undefined;
+  let attemptTracked = false;
+  let partialInputTokens = 0;
 
   try {
     // ============================================
@@ -1098,13 +1067,14 @@ export async function analyzeQuestionStreaming(
     if (modelMax > 0 && modelMax < maxTokens) maxTokens = modelMax;
     if (maxTokens < 2048) maxTokens = 2048;
 
-    const controller = new AbortController();
-    setActiveProviderController(controller);
+    session.check();
+    const controller = session.controller;
 
     port.postMessage({ type: "STREAM_STATUS", status: "started" });
 
     let thinkingText = "";
     let result: StreamResult;
+    attemptedRole = role;
     try {
       result = await streamProvider(
         {
@@ -1124,21 +1094,20 @@ export async function analyzeQuestionStreaming(
             try { port.postMessage({ type: "STREAM_CHUNK", chunk: text }); } catch { /* port disconnected */ }
           },
           onInputTokens(count: number) {
+            partialInputTokens = count;
             try { port.postMessage({ type: "STREAM_STATUS", status: "input_tokens", inputTokens: count }); } catch { /* port disconnected */ }
           },
           onComplete(outputTokens: number) {
             try { port.postMessage({ type: "STREAM_STATUS", status: "complete", outputTokens }); } catch { /* port disconnected */ }
           },
-          onError(error: string) {
-            try { port.postMessage({ type: "STREAM_ERROR", error }); } catch { /* port disconnected */ }
-          },
+          onError() { /* The terminal catch below sends exactly one error. */ },
           onThinking(thinking: string) {
             thinkingText += thinking;
           },
         },
       );
     } finally {
-      setActiveProviderController(null);
+      session.check();
     }
 
     if (result.truncated) {
@@ -1149,6 +1118,7 @@ export async function analyzeQuestionStreaming(
 
     const tracked = await trackUsage({
       timestamp: Date.now(),
+      analysisId: context.analysisId,
       questionText: context.questionText.substring(0, 200),
       questionType: context.questionType,
       answer: result.fullText.substring(0, 200),
@@ -1161,12 +1131,17 @@ export async function analyzeQuestionStreaming(
       cacheHitTokens: result.cacheHitTokens,
       cacheWriteTokens: result.cacheWriteTokens,
       responseMode: context.responseMode,
-      success: true,
+      success: !result.truncated,
       latencyMs: Date.now() - startTime,
       platform: detectPlatform(context.pageUrl),
       reasoningText: thinkingText || result.thinkingText || undefined,
     });
+    attemptTracked = true;
 
+    if (result.truncated) {
+      port.postMessage({ type: "STREAM_ERROR", error: "Respuesta incompleta: el proveedor alcanzó el límite de salida." });
+      return;
+    }
     port.postMessage({
       type: "STREAM_COMPLETE",
       fullText: result.fullText,
@@ -1175,6 +1150,16 @@ export async function analyzeQuestionStreaming(
       cost: tracked.costUsd ?? 0,
     });
   } catch (error) {
+    if (attemptedRole && !attemptTracked) {
+      await trackUsage({
+        timestamp: Date.now(), analysisId: context.analysisId,
+        questionText: context.questionText, questionType: context.questionType,
+        source: sourceTagForPreset(attemptedRole.preset), provider: attemptedRole.preset.id,
+        model: attemptedRole.model, inputTokens: partialInputTokens, outputTokens: 0,
+        responseMode: context.responseMode, success: false, usageComplete: false,
+        latencyMs: Date.now() - startTime, platform: detectPlatform(context.pageUrl),
+      });
+    }
     if ((error as Error).name !== "AbortError") {
       try {
         port.postMessage({ type: "STREAM_ERROR", error: (error as Error).message });

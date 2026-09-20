@@ -9,13 +9,16 @@
 
 import type { NormalizedUsage } from "./contract.js";
 import type { FetchOptionsWithSignal } from "../constants.js";
+import type { ClaudeContentBlock } from "../constants.js";
+import { toResponsesContent } from "./multimodal.js";
 
 export interface OpenAiResponsesRequestInput {
   baseUrl: string;
   apiKey: string;
   model: string;
   /** Plain text prompt. */
-  input: string;
+  input: string | ClaudeContentBlock[];
+  stream?: boolean;
   maxTokens: number;
   headers?: Record<string, string>;
   signal?: AbortSignal;
@@ -36,10 +39,12 @@ export function buildOpenAiResponsesRequest(
     input: [
       {
         role: "user",
-        content: [{ type: "input_text", text: input.input }],
+        content: toResponsesContent(input.input),
       },
     ],
     max_output_tokens: input.maxTokens,
+    store: false,
+    ...(input.stream ? { stream: true } : {}),
   };
 
   return {

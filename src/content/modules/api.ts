@@ -19,6 +19,7 @@ import type {
   ImageData,
 } from "../../types/index.js";
 import { log, state, DEBUG_MODE } from "./state.js";
+import { escapeHtml } from "./utils.js";
 import {
   detectVisibleQuestion,
   detectVisibleQuestions,
@@ -70,6 +71,9 @@ function mapTrueFalseAnswer(result: string, options: { letter: string; text: str
 // ============================================
 // Request Cancellation
 // ============================================
+let requestGeneration = 0;
+const activePorts = new Set<chrome.runtime.Port>();
+const cancelPorts = new Map<chrome.runtime.Port, () => void>();
 
 /**
  * Cancel current API request
@@ -78,8 +82,11 @@ function mapTrueFalseAnswer(result: string, options: { letter: string; text: str
 export function cancelCurrentRequest(): void {
   log("[Study Assist] ALT+X pressed - cancelling current request");
 
+  requestGeneration++;
+  for (const cancel of cancelPorts.values()) cancel();
+  cancelPorts.clear();
+  activePorts.clear();
   const quickBtn = document.getElementById("study-assist-quick");
-  if (!quickBtn) return;
 
   // Set cancelled flag
   state.requestCancelled = true;
@@ -91,11 +98,15 @@ export function cancelCurrentRequest(): void {
   }
 
   // Cancel any pending analysis request
-  chrome.runtime.sendMessage({ type: "CANCEL_ANALYSIS" }).catch(() => {});
+  // Disconnect only this request's ports. A late global cancel message could
+  // otherwise abort a newer request from the same frame.
 
   // Reset UI
-  quickBtn.innerHTML = `<span>SA</span>`;
-  quickBtn.classList.remove("loading", "slow-connection");
+  if (quickBtn) {
+    quickBtn.innerHTML = `<span>SA</span>`;
+    quickBtn.classList.remove("loading", "slow-connection");
+  }
+  hideLoading();
   state.isRequestInProgress = false;
 
   log("[Study Assist] Request cancelled by user");
@@ -450,16 +461,36 @@ export function buildQuickContext(
 export function sendQuickAnalysis(
   context: AnalysisContext,
 ): Promise<AnalysisResponse> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const port = chrome.runtime.connect({ name: "quick-analysis" });
-    port.onMessage.addListener((msg: { type: string; status?: string; result?: AnalysisResponse }) => {
+    activePorts.add(port);
+    let settled = false;
+    const finish = (result?: AnalysisResponse, error?: Error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      activePorts.delete(port);
+      cancelPorts.delete(port);
+      port.onMessage.removeListener(onMessage);
+      port.onDisconnect.removeListener(onDisconnect);
+      port.disconnect();
+      if (error) reject(error); else resolve(result!);
+    };
+    const timer = setTimeout(() => finish(undefined, new Error("Analysis timeout")), 360000);
+    cancelPorts.set(port, () => finish(undefined, new Error("Analysis cancelled")));
+    const onDisconnect = () => finish(undefined, new Error("Analysis connection lost or cancelled"));
+    const onMessage = (msg: { type: string; status?: string; result?: AnalysisResponse }) => {
+      if (settled) return;
       if (msg.type === "STATUS" && msg.status) {
         showQuickEmoji(msg.status);
       } else if (msg.type === "RESULT" && msg.result) {
-        resolve(msg.result);
+        finish(msg.result);
       }
-    });
-    port.postMessage({ type: "ANALYZE_QUESTION", context });
+    };
+    port.onMessage.addListener(onMessage);
+    port.onDisconnect.addListener(onDisconnect);
+    try { port.postMessage({ type: "ANALYZE_QUESTION", context }); }
+    catch (error) { finish(undefined, error as Error); }
   });
 }
 
@@ -526,6 +557,7 @@ export async function handleQuickMulti(
     startQuestionChangeObserver,
   },
 ): Promise<void> {
+  const generation = requestGeneration;
   const quickBtn = document.getElementById("study-assist-quick");
   if (!quickBtn) return;
   const container = document.getElementById("study-assist-quick-container");
@@ -539,7 +571,7 @@ export async function handleQuickMulti(
 
   for (let i = 0; i < questions.length; i++) {
     const q = questions[i];
-    if (state.requestCancelled) {
+    if (state.requestCancelled || generation !== requestGeneration) {
       log("[Study Assist] Multi request cancelled, stopping batch");
       break;
     }
@@ -553,10 +585,11 @@ export async function handleQuickMulti(
 
     try {
       const images = await extractImagesForQuestion(q);
+      if (generation !== requestGeneration) return;
       const context = buildQuickContext(q, images, forceValidator);
       const response = await sendQuickAnalysis(context);
 
-      if (state.requestCancelled) {
+      if (state.requestCancelled || generation !== requestGeneration) {
         log("[Study Assist] Multi request cancelled, ignoring response");
         break;
       }
@@ -582,7 +615,7 @@ export async function handleQuickMulti(
   }
 
   // Check if request was cancelled while waiting
-  if (state.requestCancelled) {
+  if (state.requestCancelled || generation !== requestGeneration) {
     log("[Study Assist] Multi request was cancelled, ignoring response");
     return;
   }
@@ -599,7 +632,7 @@ export async function handleQuickMulti(
   }
 
   // Render vertically with the matching-answer style (white-space: pre-line)
-  quickBtn.innerHTML = `<span class="study-assist-quick-answer study-assist-matching-answer">${pairs.join("\n")}</span>`;
+  quickBtn.innerHTML = `<span class="study-assist-quick-answer study-assist-matching-answer">${escapeHtml(pairs.join("\n"))}</span>`;
   quickBtn.classList.add("has-answer", "matching-answer");
   if (container) container.classList.add("matching-mode");
 
@@ -657,6 +690,7 @@ export async function handleQuickClick(
 
   // Set global lock
   state.isRequestInProgress = true;
+  const generation = ++requestGeneration;
   state.requestCancelled = false; // Reset cancel flag
 
   // Reset any previous answer state before processing new request
@@ -698,9 +732,11 @@ export async function handleQuickClick(
     }
   }, 20000);
 
-  // Detect current question (now async for image extraction)
+  try {
+  // Detection can fail too: it must release the same lock as network failures.
   const detectFn = callbacks.detectVisibleQuestion ?? detectVisibleQuestion;
   const question = await detectFn();
+  if (generation !== requestGeneration) return;
 
   if (!question) {
     quickBtn.innerHTML = `<span>?</span>`;
@@ -717,6 +753,7 @@ export async function handleQuickClick(
   // them sequentially. Single-question pages keep the flow below unchanged.
   const detectAllFn = callbacks.detectVisibleQuestions ?? detectVisibleQuestions;
   const visibleQuestions = await detectAllFn();
+  if (generation !== requestGeneration) return;
   if (visibleQuestions.length > 1) {
     log("[Study Assist] Multi-question page detected:", visibleQuestions.length);
     await handleQuickMulti(visibleQuestions, callbacks);
@@ -724,8 +761,8 @@ export async function handleQuickClick(
   }
 
   // Get quick answer from API
-  try {
     const images = await extractImagesForQuestion(question);
+    if (generation !== requestGeneration) return;
 
     // Build context based on question type (shared with multi-question mode)
     const context = buildQuickContext(question, images, state.skipPrimary);
@@ -757,7 +794,7 @@ export async function handleQuickClick(
     }
 
     // Check if request was cancelled while waiting
-    if (state.requestCancelled) {
+    if (state.requestCancelled || generation !== requestGeneration) {
       log("[Study Assist] Request was cancelled, ignoring response");
       return;
     }
@@ -786,7 +823,7 @@ export async function handleQuickClick(
         const cleanResult = result.toUpperCase().trim().replace(/,\s*/g, "\n");
 
         // Show matching results vertically
-        quickBtn.innerHTML = `<span class="study-assist-quick-answer study-assist-matching-answer">${cleanResult}</span>`;
+        quickBtn.innerHTML = `<span class="study-assist-quick-answer study-assist-matching-answer">${escapeHtml(cleanResult)}</span>`;
         quickBtn.classList.add("has-answer", "matching-answer");
         if (container) container.classList.add("matching-mode");
 
@@ -796,14 +833,14 @@ export async function handleQuickClick(
         // Gap-fill answer: [[1]]=HTTP, [[2]]=80, ...
         // Show on button vertically: one gap per line
         const cleanResult = result.trim().replace(/,\s*/g, "\n");
-        quickBtn.innerHTML = `<span class="study-assist-quick-answer study-assist-matching-answer">${cleanResult}</span>`;
+        quickBtn.innerHTML = `<span class="study-assist-quick-answer study-assist-matching-answer">${escapeHtml(cleanResult)}</span>`;
         quickBtn.classList.add("has-answer", "matching-answer");
         if (container) container.classList.add("matching-mode");
         state.hasValidAnswer = true;
       } else if (question.type === "short-answer" || question.type === "numerical") {
         // Free-text answer — display as-is on the button
         const displayAnswer = result.trim() || "?";
-        quickBtn.innerHTML = `<span class="study-assist-quick-answer study-assist-matching-answer">${displayAnswer}</span>`;
+        quickBtn.innerHTML = `<span class="study-assist-quick-answer study-assist-matching-answer">${escapeHtml(displayAnswer)}</span>`;
         quickBtn.classList.add("has-answer", "matching-answer");
         if (container) container.classList.add("matching-mode");
         if (displayAnswer !== "?") {
@@ -906,6 +943,7 @@ export async function handleQuickClick(
       }, 2000);
     }
   } catch (error) {
+    if (generation !== requestGeneration) return;
     console.error("[Study Assist] Quick analysis error:", error);
 
     // Clear slow connection timer
@@ -918,8 +956,14 @@ export async function handleQuickClick(
     quickBtn.innerHTML = `<span>!</span>`;
     state.isRequestInProgress = false; // Release lock
     setTimeout(() => {
+      if (generation !== requestGeneration) return;
       quickBtn.innerHTML = `<span>SA</span>`;
     }, 2000);
+  } finally {
+    if (generation === requestGeneration && !state.isRequestInProgress && state.slowConnectionTimer) {
+      clearTimeout(state.slowConnectionTimer);
+      state.slowConnectionTimer = null;
+    }
   }
 }
 
@@ -957,9 +1001,11 @@ export async function analyzeQuestion(
     startQuestionChangeObserver,
   }
 ): Promise<void> {
-  if (!state.isActive) return;
-
+  if (!state.isActive || !state.isDomainAllowed || state.isRequestInProgress) return;
+  state.isRequestInProgress = true;
+  const generation = ++requestGeneration;
   showLoading();
+  try {
 
   // Extract images based on platform
   let images: ImageData[] = [];
@@ -1047,10 +1093,11 @@ export async function analyzeQuestion(
     };
   }
 
-  try {
     // Send to background script for API processing
     // Use streaming via port for full (non-quick) mode
-    const port = (chrome.runtime as unknown as { connect: (info: { name: string }) => { postMessage: (msg: unknown) => void; onMessage: { addListener: (cb: (msg: Record<string, unknown>) => void) => void }; onDisconnect: { addListener: (cb: () => void) => void }; disconnect: () => void } }).connect({ name: "stream-analysis" });
+    if (generation !== requestGeneration) return;
+    const port = chrome.runtime.connect({ name: "stream-analysis" });
+    activePorts.add(port);
 
     displayAnalysisResultStreaming("", question, callbacks.showQuestionsSummary, true);
 
@@ -1061,8 +1108,22 @@ export async function analyzeQuestion(
 
     await new Promise<void>((resolve, reject) => {
       let settled = false;
+      const finish = (error?: Error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        activePorts.delete(port);
+        cancelPorts.delete(port);
+        port.onMessage.removeListener(onMessage);
+        port.onDisconnect.removeListener(onDisconnect);
+        port.disconnect();
+        if (error) reject(error); else resolve();
+      };
+      const timer = setTimeout(() => finish(new Error("Stream timeout")), 360000);
+      cancelPorts.set(port, () => finish(new Error("Analysis cancelled")));
 
-      port.onMessage.addListener((msg: Record<string, unknown>) => {
+      const onMessage = (msg: Record<string, unknown>) => {
+        if (settled || generation !== requestGeneration) return;
         switch (msg.type) {
           case "STREAM_CHUNK":
             fullText += msg.chunk as string;
@@ -1077,7 +1138,6 @@ export async function analyzeQuestion(
             }
             break;
           case "STREAM_COMPLETE":
-            settled = true;
             streamInputTokens = msg.inputTokens as number || streamInputTokens;
             streamOutputTokens = msg.outputTokens as number || streamOutputTokens;
             streamCost = msg.cost as number || 0;
@@ -1095,36 +1155,33 @@ export async function analyzeQuestion(
               outputTokens: streamOutputTokens,
               cost: streamCost,
             });
-            resolve();
+            finish();
             break;
           case "STREAM_ERROR":
-            settled = true;
             hideLoading();
             forwardDevLog("stream error", { error: msg.error, questionType: question.type }, "error");
             displayError(msg.error as string || "Error de transmisión", callbacks.showQuestionsSummary);
-            reject(new Error(msg.error as string));
+            finish(new Error(msg.error as string));
             break;
         }
-      });
+      };
 
-      port.onDisconnect.addListener(() => {
+      const onDisconnect = () => {
         if (settled) return;
-        if (!fullText) {
-          hideLoading();
-          forwardDevLog("port disconnected before any output", { questionType: question.type }, "error");
-          displayError("Conexión perdida", callbacks.showQuestionsSummary);
-          reject(new Error("Puerto desconectado"));
-        } else {
-          resolve();
-        }
-      });
+        finish(new Error("Conexión perdida: respuesta incompleta"));
+      };
+      port.onMessage.addListener(onMessage);
+      port.onDisconnect.addListener(onDisconnect);
 
-      port.postMessage({ context });
+      try { port.postMessage({ context }); } catch (error) { finish(error as Error); }
     });
   } catch (error) {
+    if (generation !== requestGeneration) return;
     hideLoading();
     forwardDevLog("full analysis failed", { error: (error as Error).message }, "error");
     displayError((error as Error).message, callbacks.showQuestionsSummary);
+  } finally {
+    if (generation === requestGeneration) state.isRequestInProgress = false;
   }
 }
 

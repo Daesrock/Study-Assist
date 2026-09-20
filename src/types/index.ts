@@ -118,6 +118,8 @@ export interface State {
 // ============================================
 
 export interface AnalysisContext {
+  /** Worker-generated id for grouping billable attempts. */
+  analysisId?: string;
   questionText: string;
   questionType: string;
   options?: QuestionOption[];

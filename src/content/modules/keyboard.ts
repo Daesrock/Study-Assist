@@ -152,6 +152,7 @@ export function injectWebexToggleWithCtrl(callbacks: KeyboardCallbacks): void {
   // ALL FRAMES: Listen for Ctrl key and send message to parent
   // IMPORTANT: CTRL does not work when SA button is hidden (Alt+Q pressed)
   document.addEventListener("keydown", (e: KeyboardEvent): void => {
+    if (!e.isTrusted || !state.isActive || !state.isDomainAllowed) return;
     if (e.key === "Control") {
       // If SA button is hidden (Alt+Q pressed), do not hide Webex
       if (state.saButtonHidden) {
@@ -236,7 +237,7 @@ export function injectWebexToggleWithCtrl(callbacks: KeyboardCallbacks): void {
             "[Study Assist] CTRL+SHIFT pressed while loading - cancelling current request",
           );
           chrome.runtime
-            .sendMessage({ type: "CANCEL_ANALYSIS" })
+            .sendMessage({ type: "CANCEL_ANALYSIS", skipPrimary: true })
             .then((result: { cancelled?: boolean } | undefined) => {
               if (result && result.cancelled) {
                 log("[Study Assist] Request cancelled, validator will take over");

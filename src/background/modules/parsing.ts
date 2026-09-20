@@ -14,6 +14,15 @@ import type {
 // Primary Response Parsing
 // ============================================
 
+function numericalAnswer(text: string): string | null {
+  const number = "[+-]?(?:\\d+(?:[.,]\\d+)*|[.,]\\d+)(?:[eE][+-]?\\d+)?";
+  const labelled = text.match(new RegExp("ANSWER:\\s*(" + number + ")", "i"));
+  if (labelled) return labelled[1];
+  // Only accept a bare numeric answer at the beginning, never a number found
+  // later in reasoning (question numbers and intermediate calculations).
+  return text.trim().match(new RegExp("^(" + number + ")(?![\\d.,eE])(?:\\s|$)"))?.[1] ?? null;
+}
+
 export function parsePrimaryResponse(
   response: string,
   context: AnalysisContext,
@@ -74,22 +83,7 @@ export function parsePrimaryResponse(
       answer = gapMatch[1].trim();
     }
   } else if (isNumerical) {
-    // Extract numerical answer: accept digits (with optional units), strip unit words and trailing text
-    const numMatch = response.match(/ANSWER:\s*([\d.,]+)/i);
-    if (numMatch) {
-      // Keep only the numeric part — strip any trailing non-numeric junk
-      const rawNum = numMatch[1].trim();
-      const cleanMatch = rawNum.match(/^([\d.,]+)/);
-      answer = cleanMatch ? cleanMatch[1] : rawNum;
-    } else {
-      // Fallback: try to find any numeric value in the response (bare number case)
-      const bareNumMatch = response.match(/^[^\d]*([\d.,]+)/m);
-      if (bareNumMatch) {
-        const rawNum = bareNumMatch[1].trim();
-        const cleanMatch = rawNum.match(/^([\d.,]+)/);
-        answer = cleanMatch ? cleanMatch[1] : rawNum;
-      }
-    }
+    answer = numericalAnswer(response);
   } else if (isShortAnswer) {
     // Extract free-text answer: everything after "ANSWER:" up to newline
     const freeMatch = response.match(/ANSWER:\s*([^\n]+)/i);
@@ -140,23 +134,7 @@ export function extractQuickAnswer(result: string, questionType?: string): strin
 
   // Numerical answer: strip unit words, keep only the number
   if (questionType === "numerical") {
-    const numMatch = result.match(/ANSWER:\s*([\d.,]+)/i);
-    if (numMatch) {
-      const rawNum = numMatch[1].trim();
-      const cleanMatch = rawNum.match(/^([\d.,]+)/);
-      if (cleanMatch) return cleanMatch[1];
-    }
-    // Fallback: bare numeric response without ANSWER: prefix
-    const bareNumMatch = result.match(/^[^\d]*([\d.,]+)/m);
-    if (bareNumMatch) {
-      const rawNum = bareNumMatch[1].trim();
-      const cleanMatch = rawNum.match(/^([\d.,]+)/);
-      if (cleanMatch) return cleanMatch[1];
-    }
-    // Last resort: strip all non-numeric tokens
-    const lastResort = result.trim().replace(/[^\d.,]/g, "").trim();
-    if (lastResort && /^[\d.,]+$/.test(lastResort)) return lastResort;
-    return result.trim();
+    return numericalAnswer(result) ?? result.trim();
   }
 
   // Short-answer: plain text after ANSWER:
