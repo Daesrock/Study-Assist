@@ -8,6 +8,10 @@ study-assist-v*.zip
 AGENTS.md
 .github
 
+# Local-only documentation
+/PROMPT_CACHING.md
+/STORE_LISTING.md
+
 # IDE
 .vscode/
 .idea/
