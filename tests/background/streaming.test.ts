@@ -200,6 +200,7 @@ describe("streamProvider — OpenAI-compatible", () => {
 
     expect(result.truncated).toBe(true);
     expect(result.fullText).toBe("partial");
+    expect(result.usageReported).toBe(false);
   });
 
   it("uses max_completion_tokens and include_usage, gating reasoning", async () => {
@@ -227,5 +228,44 @@ describe("streamProvider — OpenAI-compatible", () => {
     expect(body).toHaveProperty("max_completion_tokens", 4096);
     expect(body).not.toHaveProperty("max_tokens");
     expect(body).not.toHaveProperty("reasoning_effort");
+  });
+});
+
+describe("streamProvider — Responses incomplete", () => {
+  it.each([
+    ["max_output_tokens", "output_limit"],
+    ["content_filter", "content_filter"],
+    [null, "incomplete"],
+  ] as const)("preserves terminal reason %s and reported tokens", async (reason, expectedKind) => {
+    setLlmFetch((async () => sseResponse([
+      JSON.stringify({ type: "response.output_text.delta", delta: "partial" }),
+      JSON.stringify({ type: "response.reasoning_text.delta", delta: "thinking" }),
+      JSON.stringify({ type: "response.incomplete", response: {
+        incomplete_details: { reason }, usage: { input_tokens: 80, output_tokens: 40 },
+      } }),
+    ])) as unknown as typeof fetch);
+    const { callbacks, state } = collect();
+    const result = await streamProvider({
+      preset: { ...getPreset("openai"), dialect: "openai-responses" },
+      apiKey: "sk", model: "test", content: "hi", maxTokens: 128,
+    }, callbacks);
+    expect(result).toMatchObject({
+      fullText: "partial", thinkingText: "thinking", errorKind: expectedKind,
+      inputTokens: 80, outputTokens: 40, usageReported: true,
+      truncated: expectedKind === "output_limit",
+    });
+    expect(state).not.toHaveProperty("outputTokens");
+  });
+
+  it("does not infer a zero-token cost when terminal usage is omitted", async () => {
+    setLlmFetch((async () => sseResponse([
+      JSON.stringify({ type: "response.incomplete", response: { incomplete_details: { reason: "max_output_tokens" } } }),
+    ])) as unknown as typeof fetch);
+    const { callbacks } = collect();
+    const result = await streamProvider({
+      preset: { ...getPreset("openai"), dialect: "openai-responses" },
+      apiKey: "sk", model: "test", content: "hi", maxTokens: 128,
+    }, callbacks);
+    expect(result).toMatchObject({ errorKind: "output_limit", usageReported: false, inputTokens: 0, outputTokens: 0 });
   });
 });

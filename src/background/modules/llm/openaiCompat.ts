@@ -6,6 +6,7 @@
  * using this dialect reuses the adapter by declaring a preset.
  */
 
+import { hasReportedTokenCounts } from "./contract.js";
 import type { NormalizedUsage, ReasoningKind } from "./contract.js";
 import type { FetchOptionsWithSignal } from "../constants.js";
 import type { ChatContent } from "./multimodal.js";
@@ -87,6 +88,7 @@ export interface ParsedOpenAiResponse {
   text: string | null;
   reasoning: string | null;
   usage: NormalizedUsage;
+  usageReported: boolean;
   /** Provider termination reason (e.g. `stop` or `length`). */
   finishReason?: string | null;
 }
@@ -117,6 +119,7 @@ export function parseOpenAiChatResponse(json: unknown): ParsedOpenAiResponse {
     text: message?.content ?? null,
     reasoning: message?.reasoning_content ?? message?.reasoning ?? null,
     finishReason: body?.choices?.[0]?.finish_reason ?? null,
+    usageReported: hasReportedTokenCounts(body?.usage?.prompt_tokens, body?.usage?.completion_tokens),
     usage: {
       inputTokens: body?.usage?.prompt_tokens ?? 0,
       outputTokens: body?.usage?.completion_tokens ?? 0,

@@ -301,6 +301,7 @@ export async function runProvider(opts: ProviderRunOptions): Promise<ProviderRun
       text: parsed.text ?? undefined,
       reasoning: parsed.reasoning,
       usage: parsed.usage,
+      usageReported: parsed.usageReported,
     },
     status: response.status,
     raw,

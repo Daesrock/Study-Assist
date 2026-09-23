@@ -177,4 +177,14 @@ describe("trackUsage", () => {
 
     expect(record.costUsd).toBeCloseTo((1000 * 0.44 + 500 * 1.32) / 1e6, 10);
   });
+
+  it("does not invent a zero cost when an output-limit response omitted usage", async () => {
+    const record = await trackUsage({
+      timestamp: Date.now(), questionText: "q", questionType: "multiple-choice",
+      source: "deepseek", provider: "deepseek", role: "primary", model: "deepseek-v4-flash",
+      inputTokens: 0, outputTokens: 0, responseMode: "quick", success: false,
+      usageComplete: false, errorKind: "output_limit", errorStatus: 200, latencyMs: 10,
+    });
+    expect(record.costUsd).toBeUndefined();
+  });
 });

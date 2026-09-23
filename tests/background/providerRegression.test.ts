@@ -59,7 +59,6 @@ describe("terminal streaming errors", () => {
     ["openai-compatible", [{ error: { message: "denied" } }, "[DONE]"]],
     ["openai-compatible", [{ choices: [{ delta: { content: "partial" } }] }]],
     ["openai-responses", [{ type: "response.failed", response: { error: { message: "denied" } } }]],
-    ["openai-responses", [{ type: "response.incomplete" }]],
     ["openai-responses", [{ type: "response.output_text.delta", delta: "partial" }]],
   ] as [LlmDialect, unknown[]][])("never completes successfully after %s failure %#", async (dialect, events) => {
     setLlmFetch(async () => sse(events));

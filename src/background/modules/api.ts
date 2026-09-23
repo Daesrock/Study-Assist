@@ -15,6 +15,7 @@ import type {
 } from "./constants.js";
 import { logError } from "./fetchUtils.js";
 import { diagnosticMetadata } from "./security.js";
+import { netAcadHost } from "./platform.js";
 import { AnalysisSession } from "./analysisSession.js";
 import { findMatchingQuestion, normalizeForSearch, calculateSimilarity, calculateContainment } from "./questionBank.js";
 import {
@@ -51,9 +52,9 @@ async function runTrackedProvider(context: AnalysisContext, role: ResolvedRole, 
   const run = await runProvider(opts);
   const confidenceMatch = run.result.text?.match(/\bCONFIDENCE\s*:\s*(HIGH|MEDIUM|LOW)\b/i);
   const extractedConfidence = confidenceMatch?.[1]?.toUpperCase();
-  // Output-limit responses still contain authoritative token counts. Keep them
-  // eligible for cost accounting even though the analysis itself is a failure.
-  const usageComplete = run.result.success || run.result.error?.kind === "output_limit";
+  // A failed or successful response is costed only when both token counters
+  // were actually reported; normalized zero defaults are not usage data.
+  const usageComplete = run.result.usageReported === true;
   await trackUsage({
     timestamp: Date.now(), analysisId: context.analysisId,
     questionText: context.questionText, questionType: context.questionType,
@@ -80,8 +81,8 @@ function detectPlatform(pageUrl?: string): string {
   const url = pageUrl.toLowerCase();
   
   // NetAcad platforms
-  if (url.includes("netacad")) return "netacad";
-  if (url.includes("skillsforall")) return "skillsforall";
+  const netAcadPlatform = netAcadHost(pageUrl);
+  if (netAcadPlatform) return netAcadPlatform;
   
   // Educational institutions
   if (url.includes("educa-t") || url.includes("unach.mx")) return "educa-t";
@@ -1120,7 +1121,8 @@ export async function analyzeQuestionStreaming(
       session.check();
     }
 
-    if (result.truncated) {
+    const errorKind = result.errorKind ?? (result.truncated ? "output_limit" : undefined);
+    if (errorKind === "output_limit") {
       log(
         `[Study Assist] Streaming response truncated (token limit) for ${role.preset.label}/${role.model}`,
       );
@@ -1141,17 +1143,23 @@ export async function analyzeQuestionStreaming(
       cacheHitTokens: result.cacheHitTokens,
       cacheWriteTokens: result.cacheWriteTokens,
       responseMode: context.responseMode,
-      success: !result.truncated,
-      usageComplete: result.truncated ? true : undefined,
-      errorKind: result.truncated ? "output_limit" : undefined,
+      success: !errorKind,
+      usageComplete: result.usageReported,
+      errorKind,
+      errorStatus: errorKind ? 200 : undefined,
       latencyMs: Date.now() - startTime,
       platform: detectPlatform(context.pageUrl),
       reasoningText: thinkingText || result.thinkingText || undefined,
     });
     attemptTracked = true;
 
-    if (result.truncated) {
-      port.postMessage({ type: "STREAM_ERROR", error: "Respuesta incompleta: el proveedor alcanzó el límite de salida." });
+    if (errorKind) {
+      const message = errorKind === "output_limit"
+        ? "Respuesta incompleta: el proveedor alcanzó el límite de salida."
+        : errorKind === "content_filter"
+          ? "Respuesta incompleta: el filtro de contenido del proveedor detuvo la salida."
+          : "Respuesta incompleta: el proveedor no terminó la respuesta.";
+      port.postMessage({ type: "STREAM_ERROR", error: message });
       return;
     }
     port.postMessage({

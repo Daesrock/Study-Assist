@@ -11,7 +11,8 @@
 
 import type { ClaudeContentBlock, ClaudeMessage } from "../constants.js";
 import { getClaudeThinkingConfig, log } from "../constants.js";
-import type { ProviderPreset } from "./contract.js";
+import { hasReportedTokenCounts } from "./contract.js";
+import type { ProviderErrorKind, ProviderPreset } from "./contract.js";
 import { llmRequest } from "./transport.js";
 import { toChatContent } from "./multimodal.js";
 import { buildAnthropicMessagesRequest } from "./anthropic.js";
@@ -48,6 +49,10 @@ export interface StreamResult {
   thinkingText?: string;
   /** True when the provider stopped because of the token limit. */
   truncated: boolean;
+  /** Both token counts were reported, so cost can be computed. */
+  usageReported: boolean;
+  /** Terminal failure reported by the provider despite HTTP 200. */
+  errorKind?: ProviderErrorKind;
 }
 
 /** Read an SSE response body and forward each `data:` payload. */
@@ -159,6 +164,8 @@ async function streamAnthropic(
   let cacheWriteTokens: number | undefined;
   let truncated = false;
   let completed = false;
+  let inputUsageReported = false;
+  let outputUsageReported = false;
 
   await consumeSse(response, callbacks, (data) => {
     let event: Record<string, unknown>;
@@ -173,6 +180,7 @@ async function streamAnthropic(
         const message = event.message as { usage?: Record<string, number> } | undefined;
         const usage = message?.usage;
         if (usage) {
+          inputUsageReported = hasReportedTokenCounts(usage.input_tokens, 0);
           inputTokens = usage.input_tokens ?? 0;
           cacheHitTokens = usage.cache_read_input_tokens;
           cacheWriteTokens = usage.cache_creation_input_tokens;
@@ -193,7 +201,10 @@ async function streamAnthropic(
       }
       case "message_delta": {
         const usage = event.usage as Record<string, number> | undefined;
-        if (usage?.output_tokens) outputTokens = usage.output_tokens;
+        if (usage && hasReportedTokenCounts(0, usage.output_tokens)) {
+          outputUsageReported = true;
+          outputTokens = usage.output_tokens;
+        }
         const delta = event.delta as { stop_reason?: string } | undefined;
         if (delta?.stop_reason === "max_tokens") truncated = true;
         break;
@@ -218,6 +229,7 @@ async function streamAnthropic(
     cacheWriteTokens,
     thinkingText: thinkingText || undefined,
     truncated,
+    usageReported: inputUsageReported && outputUsageReported,
   };
 }
 
@@ -273,6 +285,7 @@ async function streamOpenAi(
   let truncated = false;
   let inputReported = false;
   let completed = false;
+  let usageReported = false;
 
   await consumeSse(response, callbacks, (data) => {
     if (data === "[DONE]") { completed = true; return; }
@@ -294,6 +307,7 @@ async function streamOpenAi(
         }
       | undefined;
     if (usage) {
+      usageReported = hasReportedTokenCounts(usage.prompt_tokens, usage.completion_tokens);
       inputTokens = usage.prompt_tokens ?? inputTokens;
       outputTokens = usage.completion_tokens ?? outputTokens;
       cacheHitTokens =
@@ -342,6 +356,7 @@ async function streamOpenAi(
     cacheHitTokens,
     thinkingText: thinkingText || undefined,
     truncated,
+    usageReported,
   };
 }
 
@@ -381,6 +396,8 @@ async function streamOpenAiResponses(
   let truncated = false;
   let inputReported = false;
   let completed = false;
+  let usageReported = false;
+  let errorKind: ProviderErrorKind | undefined;
 
   await consumeSse(response, callbacks, (data) => {
     if (data === "[DONE]") return;
@@ -407,14 +424,17 @@ async function streamOpenAiResponses(
           callbacks.onThinking?.(event.delta);
         }
         break;
-      case "response.completed": {
+      case "response.completed":
+      case "response.incomplete": {
         const payload = event.response as
           | {
               usage?: { input_tokens?: number; output_tokens?: number };
+              incomplete_details?: { reason?: string | null };
             }
           | undefined;
         const usage = payload?.usage ?? (event.usage as { input_tokens?: number; output_tokens?: number } | undefined);
         if (usage) {
+          usageReported = hasReportedTokenCounts(usage.input_tokens, usage.output_tokens);
           inputTokens = usage.input_tokens ?? inputTokens;
           outputTokens = usage.output_tokens ?? outputTokens;
           if (inputTokens && !inputReported) {
@@ -422,11 +442,14 @@ async function streamOpenAiResponses(
             callbacks.onInputTokens(inputTokens);
           }
         }
+        if (type === "response.incomplete") {
+          const reason = payload?.incomplete_details?.reason;
+          errorKind = reason === "max_output_tokens" ? "output_limit"
+            : reason === "content_filter" ? "content_filter" : "incomplete";
+          truncated = errorKind === "output_limit";
+        }
         completed = true;
         break;
-      }
-      case "response.incomplete": {
-        throw new Error("Responses stream incomplete (output limit or filtering)");
       }
       case "response.failed":
       case "error": {
@@ -440,7 +463,7 @@ async function streamOpenAiResponses(
   });
 
   if (!completed) throw new Error("Incomplete Responses stream");
-  callbacks.onComplete(outputTokens);
+  if (!errorKind) callbacks.onComplete(outputTokens);
 
   return {
     fullText,
@@ -448,6 +471,8 @@ async function streamOpenAiResponses(
     outputTokens,
     thinkingText: thinkingText || undefined,
     truncated,
+    usageReported,
+    errorKind,
   };
 }
 

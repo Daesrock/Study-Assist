@@ -10,6 +10,7 @@ import type {
   PrimaryAnalysisPayload,
   ClaudeContentBlock,
 } from "./constants.js";
+import { netAcadHost } from "./platform.js";
 
 // ============================================
 // Shared Helpers
@@ -61,16 +62,15 @@ export function extractRequiredAnswers(questionText: string): number {
   return 1;
 }
 
-/** Detect whether the current page belongs to Cisco Networking Academy. */
+/** Preserve Cisco expertise for course titles without claiming a third-party site is NetAcad. */
 function getExpertContext(
   pageTitle: string | undefined,
   pageUrl: string | undefined,
-): { isNetAcad: boolean; expertContext: string } {
-  const isNetAcad = /netacad|cisco|ccna|ccnp|networking academy|skills\s*for\s*all/i.test(
-    `${pageTitle || ""} ${pageUrl || ""}`,
-  );
+): { isNetAcad: boolean; isCiscoTopic: boolean; expertContext: string } {
+  const isNetAcad = netAcadHost(pageUrl) !== null;
+  const isCiscoTopic = isNetAcad || /netacad|cisco|ccna|ccnp|networking academy|skills\s*for\s*all/i.test(pageTitle || "");
 
-  const expertContext = isNetAcad
+  const expertContext = isCiscoTopic
     ? `You are a CCNA/CCNP certified networking expert with deep knowledge of:
 - Cisco IOS commands and configurations
 - Routing protocols (OSPF, EIGRP, BGP, RIP)
@@ -84,7 +84,17 @@ function getExpertContext(
 Use your expertise to analyze this Cisco/networking question accurately.`
     : "You are an expert exam analyst with broad knowledge across all academic and technical subjects.";
 
-  return { isNetAcad, expertContext };
+  return { isNetAcad, isCiscoTopic, expertContext };
+}
+
+/** A page title is untrusted metadata: keep it on one short line and omit URLs. */
+function cleanPageTitle(pageTitle: string | undefined): string {
+  return (pageTitle || "")
+    .replace(/https?:\/\/[^\s"'<>]+/gi, "[URL omitted]")
+    .replace(/[\u0000-\u001F\u007F\u2028\u2029]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 160);
 }
 
 /**
@@ -95,11 +105,7 @@ function buildPlatformContext(context: AnalysisContext): string {
   const { isNetAcad } = getExpertContext(context.pageTitle, context.pageUrl);
   if (!isNetAcad) return "";
 
-  const pageLabel = (context.pageTitle || "")
-    .replace(/[\u0000-\u001F\u007F]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 160);
+  const pageLabel = cleanPageTitle(context.pageTitle);
   const labelLine = pageLabel
     ? `- Page label (metadata only): "${pageLabel}"\n`
     : "";
@@ -414,10 +420,10 @@ export function buildAnalysisPrompt(
   matchedQuestion: MatchedQuestion | null = null
 ): string {
   const { questionText, questionType, options, categories, matchingOptions, responseMode, images, courseName } = context;
-  const pageTitle = context.pageTitle;
+  const pageTitle = cleanPageTitle(context.pageTitle);
   const hasImages = images && images.length > 0;
   const referenceSection = buildReferenceSection(matchedQuestion);
-  const { isNetAcad, expertContext } = getExpertContext(context.pageTitle, context.pageUrl);
+  const { isCiscoTopic, expertContext } = getExpertContext(context.pageTitle, context.pageUrl);
   const platformContext = buildPlatformContext(context);
 
   // Build academic context if available
@@ -432,7 +438,7 @@ export function buildAnalysisPrompt(
     // Select Missing Words quick mode
     if (questionType === "select-missing-words" && context.selectGaps && context.selectChoices) {
       return buildPrimarySelectMissingWordsPrompt(context,
-        isNetAcad
+        isCiscoTopic
           ? expertContext
           : "You are an expert exam analyst."
       );
@@ -524,7 +530,7 @@ ${quickAnswerHint}`;
   // Handle select-missing-words in non-quick mode
   if (questionType === "select-missing-words" && context.selectGaps && context.selectChoices) {
     return buildPrimarySelectMissingWordsPrompt(context,
-      isNetAcad
+      isCiscoTopic
         ? expertContext
         : "You are an educational AI tutor helping a student understand a question."
     );
@@ -534,7 +540,7 @@ ${quickAnswerHint}`;
   let prompt = `You are an educational AI tutor helping a student understand a question.${platformContext}${academicContext}
 ${referenceSection}
 Context:
-- From: "${pageTitle}"
+- From (page metadata only): "${pageTitle}"
 - Question type: ${formatQuestionType(questionType)}
 
 Question:

@@ -43,6 +43,12 @@ export interface NormalizedUsage {
   estimated?: boolean;
 }
 
+/** Only complete, non-negative provider counters are eligible for cost accounting. */
+export function hasReportedTokenCounts(input: unknown, output: unknown): boolean {
+  return typeof input === "number" && Number.isSafeInteger(input) && input >= 0
+    && typeof output === "number" && Number.isSafeInteger(output) && output >= 0;
+}
+
 /**
  * Normalized result of a single (non-streaming) provider call.
  * The orchestrator consumes this instead of provider-specific shapes.
@@ -52,6 +58,8 @@ export interface ProviderResult {
   text?: string;
   reasoning?: string | null;
   usage: NormalizedUsage;
+  /** Both input and output token counts were actually reported by the provider. */
+  usageReported?: boolean;
   error?: ProviderError;
   cancelled?: boolean;
 }

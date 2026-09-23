@@ -157,6 +157,33 @@ describe("DeepSeek Prompt Building", () => {
       expect(prompt).not.toContain(pageUrl);
     });
 
+    it("does not treat NetAcad text in another site's path or query as its platform", () => {
+      for (const pageUrl of [
+        "https://example.com/netacad/quiz",
+        "https://example.com/quiz?next=https://www.netacad.com/quiz",
+        "https://netacad.com.evil.test/quiz",
+        "not-a-url-netacad.com",
+      ]) {
+        const prompt = buildPrimaryPrompt(createMCQContext({ pageTitle: "Biology Quiz", pageUrl }));
+        expect(prompt).not.toContain("PLATFORM CONTEXT:");
+        expect(prompt).not.toContain("CCNA/CCNP certified");
+        expect(prompt).not.toContain(pageUrl);
+      }
+    });
+
+    it("recognizes a Skills for All subdomain as NetAcad", () => {
+      const prompt = buildPrimaryPrompt(createMCQContext({
+        pageTitle: "Quiz", pageUrl: "https://courses.skillsforall.com/course/quiz",
+      }));
+      expect(prompt).toContain("Cisco Networking Academy (NetAcad)");
+    });
+
+    it("uses Cisco expertise without claiming a third-party CCNA page is NetAcad", () => {
+      const prompt = buildPrimaryPrompt(createMCQContext({ pageTitle: "CCNA practice quiz", pageUrl: "https://example.com/quiz" }));
+      expect(prompt).toContain("CCNA/CCNP certified");
+      expect(prompt).not.toContain("PLATFORM CONTEXT:");
+    });
+
     it("should bound and clean the NetAcad page label", () => {
       const prompt = buildPrimaryPrompt(createMCQContext({
         pageTitle: `  CCNA\nModule\t${"x".repeat(300)}  `,
@@ -343,6 +370,29 @@ describe("Claude Analysis Prompt", () => {
   });
 
   describe("Educational Modes", () => {
+    it("bounds and cleans the page title in the educational prompt", () => {
+      const pageUrl = "https://example.com/quiz?secret=abc";
+      const prompt = buildAnalysisPrompt(createMCQContext({
+        responseMode: "guided",
+        pageUrl,
+        pageTitle: `Course\nTitle\t${"x".repeat(300)} https://example.com/private?token=secret`,
+      }));
+      const fromLine = prompt.split("\n").find(line => line.startsWith("- From (page metadata only):"));
+      expect(fromLine).toBeTruthy();
+      expect(fromLine!.length).toBeLessThan(200);
+      expect(fromLine).not.toContain("\t");
+      expect(prompt).not.toContain(pageUrl);
+      expect(prompt).not.toContain("token=secret");
+    });
+
+    it("omits URL-shaped text from a page title before truncation", () => {
+      const prompt = buildAnalysisPrompt(createMCQContext({
+        responseMode: "direct",
+        pageTitle: "Quiz https://example.com/private?token=secret — Module 2",
+      }));
+      expect(prompt).toContain("[URL omitted]");
+      expect(prompt).not.toContain("token=secret");
+    });
     it("should build guided mode prompt", () => {
       const ctx = createMCQContext({ responseMode: "guided" });
       const prompt = buildAnalysisPrompt(ctx);

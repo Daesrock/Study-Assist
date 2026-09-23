@@ -7,6 +7,7 @@
  * `output` items instead of `choices`.
  */
 
+import { hasReportedTokenCounts } from "./contract.js";
 import type { NormalizedUsage } from "./contract.js";
 import type { FetchOptionsWithSignal } from "../constants.js";
 import type { ClaudeContentBlock } from "../constants.js";
@@ -67,6 +68,7 @@ export interface ParsedOpenAiResponses {
   text: string | null;
   reasoning: string | null;
   usage: NormalizedUsage;
+  usageReported: boolean;
   /** Responses API lifecycle status (e.g. `completed` or `incomplete`). */
   status?: string | null;
   /** Explicit reason supplied when the Responses API marks output incomplete. */
@@ -113,6 +115,7 @@ export function parseOpenAiResponsesResponse(json: unknown): ParsedOpenAiRespons
     reasoning: reasoning || null,
     status: body?.status ?? null,
     incompleteReason: body?.incomplete_details?.reason ?? null,
+    usageReported: hasReportedTokenCounts(body?.usage?.input_tokens, body?.usage?.output_tokens),
     usage: {
       inputTokens: body?.usage?.input_tokens ?? 0,
       outputTokens: body?.usage?.output_tokens ?? 0,

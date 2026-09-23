@@ -8,6 +8,7 @@
 import type { ClaudeMessage } from "../constants.js";
 import { ANTHROPIC_VERSION } from "../constants.js";
 import type { FetchOptionsWithSignal } from "../constants.js";
+import { hasReportedTokenCounts } from "./contract.js";
 import type { NormalizedUsage } from "./contract.js";
 
 export interface AnthropicMessagesRequestInput {
@@ -68,6 +69,7 @@ export interface ParsedAnthropicResponse {
   text: string | null;
   reasoning: string | null;
   usage: NormalizedUsage;
+  usageReported: boolean;
   /** Provider termination reason (e.g. `end_turn` or `max_tokens`). */
   stopReason?: string | null;
 }
@@ -92,6 +94,7 @@ export function parseAnthropicMessagesResponse(json: unknown): ParsedAnthropicRe
     text: textBlock?.text ?? null,
     reasoning: thinkingBlock?.thinking ?? null,
     stopReason: body?.stop_reason ?? null,
+    usageReported: hasReportedTokenCounts(body?.usage?.input_tokens, body?.usage?.output_tokens),
     usage: {
       inputTokens: body?.usage?.input_tokens ?? 0,
       outputTokens: body?.usage?.output_tokens ?? 0,

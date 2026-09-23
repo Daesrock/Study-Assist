@@ -49,6 +49,7 @@ describe("runProvider — Anthropic dialect", () => {
     expect(run.result.text).toBe("ANSWER: A");
     expect(run.result.reasoning).toBe("reasoning here");
     expect(run.result.usage).toMatchObject({ inputTokens: 100, outputTokens: 20 });
+    expect(run.result.usageReported).toBe(true);
 
     const [url, init] = fetchFn.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("https://api.anthropic.com/v1/messages");
@@ -77,6 +78,7 @@ describe("runProvider — Anthropic dialect", () => {
     expect(run.result.success).toBe(false);
     expect(run.result.error?.kind).toBe("output_limit");
     expect(run.result.reasoning).toBe("partial reasoning");
+    expect(run.result.usageReported).toBe(true);
   });
 
   it("omits thinking for models that do not support it", async () => {
@@ -171,6 +173,23 @@ describe("runProvider — Anthropic dialect", () => {
   });
 });
 
+describe("runProvider — HTTP error classification regression", () => {
+  it.each([
+    [400, "bad_request"],
+    [401, "auth"],
+    [429, "rate_limit"],
+  ] as const)("keeps HTTP %i classified as %s", async (status, kind) => {
+    setLlmFetch((async () => jsonResponse({ error: { message: "provider error" } }, false, status)) as unknown as typeof fetch);
+    const run = await runProvider({
+      preset: getPreset("openai"), apiKey: "sk-test", model: "test",
+      content: "prompt", maxTokens: 128, retries: 0,
+    });
+    expect(run.status).toBe(status);
+    expect(run.result).toMatchObject({ success: false, error: { kind, status } });
+    expect(run.result.usageReported).toBeUndefined();
+  });
+});
+
 describe("runProvider — OpenAI-compatible dialect", () => {
   it("builds a DeepSeek request with thinking + reasoning_effort", async () => {
     const fetchFn = vi.fn(async () =>
@@ -252,6 +271,7 @@ describe("runProvider — OpenAI-compatible dialect", () => {
     expect(run.result.success).toBe(false);
     expect(run.result.error?.kind).toBe("output_limit");
     expect(run.result.reasoning).toBe("partial reasoning");
+    expect(run.result.usageReported).toBe(false);
   });
 
   it("keeps a generic HTTP 200 incomplete Responses result distinct from output limits", async () => {
