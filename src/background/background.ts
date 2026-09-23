@@ -59,17 +59,42 @@ interface DetectedModel {
 }
 
 /**
+ * Warning shown when a metadata refresh failed but the operation can proceed
+ * with previously cached prices/capabilities.
+ */
+function metadataWarning(result: { success: boolean; error?: string }): string | undefined {
+  if (result.success) return undefined;
+  const detail = result.error ? ` (${result.error})` : "";
+  const localized = chrome.i18n?.getMessage?.("providerMetadataWarning", [detail]);
+  return (
+    localized ||
+    `Could not refresh prices and capabilities${detail}. Using cached data.`
+  );
+}
+
+/**
  * Single `/models` call that validates a key, stores the catalog and returns
  * the detected models enriched with LiteLLM price/capability metadata.
  */
 async function detectProviderModels(
   provider: string,
   apiKey: string,
-): Promise<{ success: boolean; models: DetectedModel[]; error?: string }> {
+): Promise<{
+  success: boolean;
+  models: DetectedModel[];
+  error?: string;
+  warning?: string;
+}> {
   const preset = getPreset(provider);
+  // Refresh first: a just-detected model id must resolve prices, vision and
+  // reasoning from current metadata. A failed refresh is a warning, never a
+  // detection failure.
+  const refresh = await refreshPrices();
+  const warning = metadataWarning(refresh);
+
   const result = await fetchModels(preset, apiKey);
   if (!result.success) {
-    return { success: false, models: [], error: result.error };
+    return { success: false, models: [], error: result.error, warning };
   }
 
   const index = await getPriceIndex();
@@ -84,7 +109,7 @@ async function detectProviderModels(
     const price = lookupModelInfo(index, provider, model.id);
     return price ? { id: model.id, price } : { id: model.id };
   });
-  return { success: true, models };
+  return { success: true, models, warning };
 }
 
 async function handleMessage(
@@ -130,10 +155,22 @@ async function handleMessage(
 
     case "TEST_PROVIDER_CONNECTION":
       try {
-        return (await testProviderConnection(
-          message.provider ?? "",
-          message.model,
-        )) as MessageResponse;
+        const provider = message.provider ?? "";
+        // Refresh before the model is chosen and usage is priced, so the test
+        // exercises current capabilities. A failed refresh only warns.
+        const refresh = await refreshPrices();
+        let outcome: Awaited<ReturnType<typeof testProviderConnection>>;
+        try {
+          outcome = await testProviderConnection(provider, message.model);
+        } catch (error) {
+          outcome = { success: false, error: (error as Error).message };
+        }
+        // The refreshed state travels back even when the model call failed.
+        return {
+          ...outcome,
+          warning: outcome.warning ?? metadataWarning(refresh),
+          state: await getProviderState(),
+        } as MessageResponse & { state: unknown };
       } catch (error) {
         return { success: false, error: (error as Error).message };
       }
@@ -225,12 +262,13 @@ async function handleMessage(
           const outcome = await detectProviderModels(provider, rawKey);
           if (outcome.success) {
             models = outcome.models;
+            warning = outcome.warning;
           } else {
             const error = outcome.error || `API Error (${provider})`;
             if (error.includes("429")) {
               warning = "API key is valid but rate limited. It will work when the limit resets.";
             } else {
-              return { success: false, error };
+              return await withState({ success: false, error });
             }
           }
         }

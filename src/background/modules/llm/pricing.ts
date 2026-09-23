@@ -23,6 +23,12 @@ const SOURCE_URL =
 /** Providers we care about. Entries from other back-ends are ignored. */
 const WANTED_PROVIDERS = new Set(["anthropic", "openai", "deepseek"]);
 
+/**
+ * Live-refresh budget. Metadata drives pricing, vision and reasoning gates, so
+ * callers wait at most this long before falling back to cached metadata.
+ */
+export const PRICE_REFRESH_TIMEOUT_MS = 15_000;
+
 let cached: PriceIndex | null = null;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -206,38 +212,95 @@ export async function getPriceFreshness(): Promise<number | null> {
   return typeof value === "number" ? value : null;
 }
 
-/** Fetch the live LiteLLM index, trim it and cache it in storage. */
-export async function refreshPrices(): Promise<{
+export interface RefreshPricesResult {
   success: boolean;
   count: number;
   error?: string;
   fetchedAt?: number;
-}> {
+  /** True when a failed refresh still leaves usable (older) metadata in place. */
+  stale?: boolean;
+}
+
+/**
+ * True when a previous index is available, so a failed refresh can keep
+ * serving it instead of leaving every model unpriced.
+ */
+async function hasUsableMetadata(): Promise<boolean> {
+  if (cached && Object.keys(cached).length > 0) return true;
+  try {
+    const stored = await chrome.storage.local.get([STORAGE_KEY]);
+    const value = stored[STORAGE_KEY];
+    return isRecord(value) && Object.keys(value).length > 0;
+  } catch {
+    return false;
+  }
+}
+
+function refreshFailure(error: string, stale: boolean): RefreshPricesResult {
+  logProviders("price refresh failed", { error, stale });
+  return { success: false, count: 0, error, stale };
+}
+
+async function runPriceRefresh(): Promise<RefreshPricesResult> {
+  // Snapshot the "is there anything to fall back to?" answer before touching
+  // storage: a failed write must not count as usable metadata.
+  const stale = await hasUsableMetadata();
+
   try {
     const response = await llmRequest({
       url: SOURCE_URL,
       init: { method: "GET" },
-      retries: 1,
-      timeout: 60000,
+      // A single attempt: metadata is a nice-to-have and retries would keep
+      // the caller (setup/detection/test) waiting.
+      retries: 0,
+      timeout: PRICE_REFRESH_TIMEOUT_MS,
     });
     if (!response.ok) {
-      return { success: false, count: 0, error: `HTTP ${response.status}` };
+      return refreshFailure(`HTTP ${response.status}`, stale);
     }
 
-    const index = buildPriceIndex(await response.json());
+    let raw: unknown;
+    try {
+      raw = await response.json();
+    } catch (error) {
+      return refreshFailure(`Invalid JSON (${(error as Error).message})`, stale);
+    }
+
+    const index = buildPriceIndex(raw);
     const count = Object.keys(index).length;
     if (count === 0) {
-      return { success: false, count: 0, error: "Empty price index" };
+      return refreshFailure("Empty price index", stale);
     }
 
     const fetchedAt = Date.now();
-    cached = index;
+    // Persist index + timestamp together first, then publish to memory: a
+    // failed write must never leave the in-memory cache ahead of storage.
     await chrome.storage.local.set({ [STORAGE_KEY]: index, [FETCHED_KEY]: fetchedAt });
-    logProviders("prices refreshed", { count });
+    cached = index;
+    logProviders("prices refreshed", { count, fetchedAt });
     return { success: true, count, fetchedAt };
   } catch (error) {
-    return { success: false, count: 0, error: (error as Error).message };
+    return refreshFailure((error as Error).message, stale);
   }
+}
+
+/** In-flight refresh shared by concurrent callers (one request at a time). */
+let inFlight: Promise<RefreshPricesResult> | null = null;
+
+/**
+ * Fetch the live LiteLLM index, trim it and cache it in storage.
+ *
+ * Concurrent callers coalesce into a single request. Every failure path keeps
+ * the previously stored metadata and releases the lock so a later caller can
+ * retry; the caller decides how to surface `error`/`stale`.
+ */
+export function refreshPrices(): Promise<RefreshPricesResult> {
+  if (!inFlight) {
+    inFlight = runPriceRefresh().finally(() => {
+      inFlight = null;
+    });
+  }
+  return inFlight;
 }
 
 /** Test seam: inject a price index and skip storage/snapshot. */

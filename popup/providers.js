@@ -112,14 +112,20 @@ function persistView() {
   }
 }
 
+/**
+ * Swap in a fresh state (prices/capabilities included) and re-render in place,
+ * so every provider response can update the page without a reload.
+ */
+function useState(state) {
+  if (!state) return false;
+  STATE = state;
+  render();
+  return true;
+}
+
 /** Apply a fresh state from any provider response, falling back to a GET. */
 async function applyState(res) {
-  if (res && res.success && res.state) {
-    STATE = res.state;
-    render();
-    return true;
-  }
-  return false;
+  return useState(res && res.state);
 }
 
 async function loadState() {
@@ -406,7 +412,10 @@ async function runDetection(provider) {
   if (!res || !res.success) {
     await applyState(res);
     debug("detection failed", provider, res && res.error);
-    return { error: (res && res.error) || t("providerDetectError") };
+    return {
+      error: (res && res.error) || t("providerDetectError"),
+      warning: res && res.warning,
+    };
   }
 
   const after = (res.models || []).map((m) => m.id);
@@ -420,6 +429,7 @@ async function runDetection(provider) {
 
   return {
     text: `${t("providerNewLabel")}: ${added.length} · ${t("providerObsoleteLabel")}: ${removed.length} · ${t("providerTotalLabel")}: ${after.length}`,
+    warning: res.warning,
   };
 }
 
@@ -464,14 +474,15 @@ function bindCard(card, preset, profile) {
 
     if (!res || !res.success) {
       debug("save failed", provider, res && res.error);
-      setMsg(card, (res && res.error) || t("providerError"), "err");
+      useState(res && res.state);
+      const failed = findCard(provider) || card;
+      setMsg(failed, (res && res.error) || t("providerError"), "err");
       return;
     }
 
     keyInput.value = "";
-    const successMsg = res.warning || t("providerSaved");
     if (before.length === 0) viewOf(provider).mode = "all";
-    await applyState(res);
+    useState(res.state);
     if (!res.state) await loadState();
 
     const current = findCard(provider);
@@ -483,7 +494,12 @@ function bindCard(card, preset, profile) {
         const removed = before.filter((m) => !after.includes(m));
         summary.textContent = `${t("providerNewLabel")}: ${added.length} · ${t("providerObsoleteLabel")}: ${removed.length} · ${t("providerTotalLabel")}: ${after.length}`;
       }
-      setMsg(current, successMsg, "ok");
+      // Keep the saved/validated result visible even when metadata is stale.
+      setMsg(
+        current,
+        res.warning ? `${t("providerSaved")} ${res.warning}` : t("providerSaved"),
+        res.warning ? "" : "ok",
+      );
     }
   });
 
@@ -505,6 +521,8 @@ function bindCard(card, preset, profile) {
       const current = findCard(provider);
       const newSummary = current && current.querySelector(".provider-summary");
       if (newSummary) newSummary.textContent = detection.error || detection.text || "";
+      // A metadata warning must not hide the detection result above it.
+      if (current) setMsg(current, detection.warning || "", "");
     });
   }
 
@@ -515,7 +533,10 @@ function bindCard(card, preset, profile) {
       testBtn.disabled = true;
       const res = await send({ type: "TEST_PROVIDER_CONNECTION", provider });
       testBtn.disabled = false;
+      // The handler returns refreshed metadata alongside the test result.
+      useState(res && res.state);
       const current = findCard(provider) || card;
+      setMsg(current, "", "");
       if (res && res.success) {
         const tokens = (res.inputTokens || 0) + (res.outputTokens || 0);
         const costText =
@@ -532,6 +553,7 @@ function bindCard(card, preset, profile) {
         const detail = (res && res.error) || t("providerError");
         setSummary(current, `${t("providerTestError")}: ${detail}`, "err");
       }
+      if (res && res.warning) setMsg(current, res.warning, "");
     });
   }
 
@@ -803,13 +825,12 @@ async function refreshPrices() {
   if (!res || !res.success) {
     const detail = res && res.error ? `: ${res.error}` : "";
     debug("price refresh failed", res && res.error);
+    if (res && res.state) useState(res.state);
     setStatus(`${t("providerPricesError")}${detail}`, "err");
     return;
   }
-  if (res.state) {
-    STATE = res.state;
-    render();
-  }
+  // Fresh metadata updates prices *and* the effective vision/reasoning flags.
+  useState(res.state);
   setStatus(`${t("providerPricesUpdated")} (${res.count})`, "ok");
 }
 

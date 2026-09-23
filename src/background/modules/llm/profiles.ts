@@ -145,6 +145,25 @@ export function canRoleHandle(
 }
 
 /**
+ * Single source of truth for "does this model accept images?".
+ *
+ * Precedence: an explicit user override always wins, then the freshly
+ * refreshed LiteLLM capability, then the legacy `visionModels` list (kept for
+ * profiles written before overrides existed). Sharing this between detection,
+ * public provider state and role resolution keeps every surface in agreement.
+ */
+export function resolveModelVision(
+  profile: ProviderProfile | null | undefined,
+  model: string,
+  info: ModelPriceInfo | null | undefined,
+): boolean {
+  const override = profile?.visionOverrides?.[model];
+  if (typeof override === "boolean") return override;
+  if (info && typeof info.vision === "boolean") return info.vision;
+  return (profile?.visionModels ?? []).includes(model);
+}
+
+/**
  * Resolve a role assignment into a usable provider (preset + model + key).
  * Returns null when the role is unset, the preset is unknown, or the
  * provider has no API key configured.
@@ -168,12 +187,12 @@ export async function resolveRole(
 
   const profile = await getProfile(role.provider);
   const thinking = profile?.thinking ?? preset.defaultThinking;
-  const visionModels = profile?.visionModels ?? [];
-  const vision = visionModels.includes(model);
   const info = await resolveModelInfo(role.provider, model);
-  // If LiteLLM doesn't know the model (custom providers), trust the user's
-  // thinking toggle; only block when LiteLLM explicitly says it can't reason.
-  const reasoning = info ? info.reasoning === true : true;
+  const vision = resolveModelVision(profile, model, info);
+  // Reasoning is only blocked when LiteLLM explicitly says the model cannot
+  // reason. Unknown models (custom providers, brand-new ids) keep trusting the
+  // user's thinking preference instead.
+  const reasoning = info?.reasoning === false ? false : true;
   const adaptiveThinking = info?.adaptive === true;
 
   if (thinking) {
@@ -224,15 +243,32 @@ export async function getProviderState(): Promise<ProviderState> {
   const presets = listPresets();
   const stored = await getProviderProfiles();
   const index = await getPriceIndex();
+  const roles = await getRoles();
+
   const profiles: PublicProviderProfile[] = presets.map((preset) => {
     const profile = stored[preset.id];
     const models = profile?.models ?? [];
     const customModels = profile?.customModels ?? [];
-    const visible = [...new Set([...models, ...customModels])];
+    const selectedModels =
+      profile?.selectedModels ?? [...new Set([...models, ...customModels])];
+    const roleModels = [roles.primary, roles.validator]
+      .filter(
+        (role): role is RoleAssignment =>
+          !!role && role.provider === preset.id && !!role.model,
+      )
+      .map((role) => role.model);
+    // Every id the UI can render (detected, custom, selected, role-only) must
+    // carry metadata, otherwise it renders as unpriced and vision-less.
+    const visible = [
+      ...new Set([...models, ...customModels, ...selectedModels, ...roleModels]),
+    ];
     const modelInfo: Record<string, ModelPriceInfo | null> = {};
     const modelEndpoints: Record<string, string> = {};
+    const visionModels: string[] = [];
     for (const id of visible) {
-      modelInfo[id] = lookupModelInfo(index, preset.id, id);
+      const info = lookupModelInfo(index, preset.id, id);
+      modelInfo[id] = info;
+      if (resolveModelVision(profile, id, info)) visionModels.push(id);
       const endpoint = resolveEndpointId(preset.id, id);
       if (endpoint) modelEndpoints[id] = endpoint;
     }
@@ -242,9 +278,8 @@ export async function getProviderState(): Promise<ProviderState> {
       thinking: profile?.thinking ?? preset.defaultThinking,
       models,
       customModels,
-      visionModels: profile?.visionModels ?? [],
-      selectedModels:
-        profile?.selectedModels ?? [...new Set([...models, ...customModels])],
+      visionModels,
+      selectedModels,
       selectionMode: profile?.selectionMode ?? "auto",
       lastSync: profile?.lastSync ?? null,
       modelInfo,
@@ -256,7 +291,7 @@ export async function getProviderState(): Promise<ProviderState> {
     presets: presets.map(({ headers: _headers, ...preset }) => ({ ...preset, endpoints: preset.endpoints?.map(({ headers: _headers, ...endpoint }) => endpoint) })),
     templates: listTemplates(),
     profiles,
-    roles: await getRoles(),
+    roles,
   };
 }
 
@@ -301,15 +336,12 @@ export async function applyDetectedModels(
   candidates: SelectionCandidate[],
 ): Promise<void> {
   const profile = await getProfile(presetId);
-  const overrides = profile?.visionOverrides ?? {};
   const modelIds = candidates.map((c) => c.id);
 
+  // Same resolver as the role/state paths: overrides win, then fresh metadata,
+  // then the legacy list. The result is stored back for compatibility.
   const visionModels = candidates
-    .filter((c) => {
-      const override = overrides[c.id];
-      if (override !== undefined) return override;
-      return c.info?.vision === true;
-    })
+    .filter((c) => resolveModelVision(profile, c.id, c.info))
     .map((c) => c.id);
 
   const mode = profile?.selectionMode ?? "auto";
