@@ -139,7 +139,7 @@ async function streamAnthropic(
     url: built.url,
     init: built.init,
     retries: 0,
-    timeout: opts.thinking ? 300000 : 120000,
+    timeout: opts.thinking ? 600000 : 300000,
   });
 
   if (!response.ok) {
@@ -255,7 +255,7 @@ async function streamOpenAi(
     url: built.url,
     init: built.init,
     retries: 0,
-    timeout: opts.thinking ? 300000 : 120000,
+    timeout: opts.thinking ? 600000 : 300000,
   });
 
   if (!response.ok) {
@@ -364,7 +364,7 @@ async function streamOpenAiResponses(
     url: built.url,
     init: built.init,
     retries: 0,
-    timeout: opts.thinking ? 300000 : 120000,
+    timeout: opts.thinking ? 600000 : 300000,
   });
 
   if (!response.ok) {

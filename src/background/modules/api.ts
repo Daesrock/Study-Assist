@@ -628,7 +628,7 @@ export async function analyzeWithPrimary(
     const maxTokens = await resolveOutputBudget(
       role.preset.id,
       role.model,
-      role.thinking === true && role.reasoning === true,
+      role.reasoning,
     );
 
     const run = await runTrackedProvider(context, role, "primary", {
@@ -642,7 +642,7 @@ export async function analyzeWithPrimary(
       supportsAdaptiveThinking: role.adaptiveThinking,
       reasoningEffort: "high",
       retries: 0,
-      timeout: role.thinking ? 120000 : 60000,
+      timeout: role.thinking ? 300000 : 120000,
       signal: controller.signal,
     });
 
@@ -843,7 +843,7 @@ export async function analyzeWithValidator(
   const maxTokens = await resolveOutputBudget(
     role.preset.id,
     role.model,
-    shouldUseThinking && role.reasoning === true,
+    role.reasoning,
   );
 
   log("[Study Assist] Validator config:", { model: role.model, maxTokens, hasImages, hasPrimaryAnalysis: !!primaryAnalysis, thinking: shouldUseThinking });
@@ -859,7 +859,7 @@ export async function analyzeWithValidator(
     supportsReasoning: role.reasoning,
     supportsAdaptiveThinking: role.adaptiveThinking,
     retries: 2,
-    timeout: 45000,
+    timeout: shouldUseThinking ? 300000 : 120000,
     signal: session.controller.signal,
   }, { validated: !!primaryAnalysis, fallbackReason: fallbackReasonOverride, confidence: primaryAnalysis?.confidence });
 
@@ -931,7 +931,7 @@ PLEASE RESPOND AGAIN with the CORRECT matches. Only output the match pairs — n
         supportsReasoning: role.reasoning,
         supportsAdaptiveThinking: role.adaptiveThinking,
         retries: 2,
-        timeout: 45000,
+        timeout: shouldUseThinking ? 300000 : 120000,
         signal: session.controller.signal,
       });
 
@@ -1074,7 +1074,7 @@ export async function analyzeQuestionStreaming(
     const maxTokens = await resolveOutputBudget(
       role.preset.id,
       role.model,
-      role.thinking === true && role.reasoning === true,
+      role.reasoning,
     );
 
     session.check();
