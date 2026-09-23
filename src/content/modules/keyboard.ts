@@ -151,7 +151,7 @@ export function injectWebexToggleWithCtrl(callbacks: KeyboardCallbacks): void {
 
   // ALL FRAMES: Listen for Ctrl key and send message to parent
   // IMPORTANT: CTRL does not work when SA button is hidden (Alt+Q pressed)
-  document.addEventListener("keydown", (e: KeyboardEvent): void => {
+  document.addEventListener("keydown", async (e: KeyboardEvent): Promise<void> => {
     if (!e.isTrusted || !state.isActive || !state.isDomainAllowed) return;
     if (e.key === "Control") {
       // If SA button is hidden (Alt+Q pressed), do not hide Webex
@@ -222,6 +222,18 @@ export function injectWebexToggleWithCtrl(callbacks: KeyboardCallbacks): void {
     // 2. Not typing in an input field (user may be typing uppercase)
     // 3. This frame has the SA button (avoid duplicate triggers from iframes)
     if (e.key === "Shift" && !e.repeat) {
+      if (e.ctrlKey) {
+        // Read the current selection so popup changes take effect without reloading.
+        // Content scripts cannot read the trusted storage directly.
+        try {
+          const result = await chrome.runtime.sendMessage({ type: "GET_CONTENT_SETTINGS" });
+          if (result?.settings?.hasValidator !== true) return;
+        } catch (err) {
+          log("[Study Assist] Could not check validator selection:", err);
+          return;
+        }
+        if (!state.isActive || !state.isDomainAllowed) return;
+      }
       const activeEl = document.activeElement as HTMLElement | null;
       const isTyping = isUserTypingInElement(activeEl);
 

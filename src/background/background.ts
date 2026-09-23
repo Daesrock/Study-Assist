@@ -10,7 +10,7 @@ import type { AnalysisResponse } from "../types/index.js";
 import { analyzeQuestion, analyzeQuestionStreaming, testProviderKey, testProviderConnection } from "./modules/api.js";
 import { handleDisguiseMode, restoreDisguiseMode } from "./modules/extensionState.js";
 import { getUsageStats, getRecentHistory, clearUsageData, getStorageInfo, trimHistory, updateStorageBadge, redactHistory } from "./modules/usageTracker.js";
-import { getProviderState, saveProviderKey, clearProviderKey, setModelVision, setModelSelected, setModelEndpoint, setSelectionMode, addCustomModel, saveRoles, saveProfile, getProviderKey, applyDetectedModels, saveQaModel, saveCustomProvider, deleteCustomProvider } from "./modules/llm/profiles.js";
+import { getProviderState, getRoles, saveProviderKey, clearProviderKey, setModelVision, setModelSelected, setModelEndpoint, setSelectionMode, addCustomModel, saveRoles, saveProfile, getProviderKey, applyDetectedModels, saveQaModel, saveCustomProvider, deleteCustomProvider } from "./modules/llm/profiles.js";
 import { fetchModels } from "./modules/llm/catalog.js";
 import { getPreset, ensureRegistry, resetRegistry } from "./modules/llm/registry.js";
 import { getPriceIndex, lookupModelInfo, refreshPrices } from "./modules/llm/pricing.js";
@@ -106,7 +106,13 @@ async function handleMessage(
       return { success: true };
     }
     case "GET_CONTENT_SETTINGS":
-      return { success: true, settings: await chrome.storage.local.get(CONTENT_SETTINGS) } as MessageResponse;
+      return {
+        success: true,
+        settings: {
+          ...await chrome.storage.local.get(CONTENT_SETTINGS),
+          hasValidator: !!(await getRoles()).validator,
+        },
+      } as MessageResponse;
     case "SET_CONTENT_PREFERENCE":
       await chrome.storage.local.set({ saButtonHidden: message.enabled === true });
       return { success: true };

@@ -24,6 +24,15 @@ it("returns only selected preferences to content scripts", async () => {
   expect(response.settings.allowedDomains).toEqual(["example.test"]);
   expect(JSON.stringify(response)).not.toContain("do-not-expose");
 });
+it("reports the current validator selection without exposing provider settings", async () => {
+  mockStorage.roles = { primary: null, validator: null };
+  expect((await send({ type: "GET_CONTENT_SETTINGS" })).settings.hasValidator).toBe(false);
+  mockStorage.roles.validator = { provider: "openai", model: "test-model" };
+  const response = await send({ type: "GET_CONTENT_SETTINGS" });
+  expect(response.settings.hasValidator).toBe(true);
+  expect(response.settings.roles).toBeUndefined();
+  delete mockStorage.roles;
+});
 it.each(["SAVE_PROVIDER_KEY", "GET_PROVIDER_STATE", "CLEAR_USAGE_DATA", "GET_USAGE_HISTORY", "REGISTER_QA_TAB", "DEV_LOG"])("rejects %s from content scripts", async type => {
   const response = await send({ type, provider: "openai", rawKey: "fake" });
   expect(response.success).toBe(false);
