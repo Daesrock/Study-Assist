@@ -316,6 +316,45 @@ describe("provider setup and detection refresh metadata first", () => {
     expect(profile.modelInfo["claude-opus-5-5"]).toBeNull();
     expect(profile.visionModels).toEqual([]);
   });
+
+  it("surfaces the metadata warning when detection proceeds on cached data", async () => {
+    mockStorage.providerProfiles = {
+      anthropic: { apiKey: await encryptApiKey("fake-key") },
+    };
+    installFetch([
+      litellmRoute({ status: 500, json: { error: "boom" } }),
+      { match: ANTHROPIC_MODELS_URL, json: ANTHROPIC_CATALOG },
+    ]);
+
+    const res = await send({ type: "FETCH_PROVIDER_MODELS", provider: "anthropic" });
+
+    expect(res.success).toBe(true);
+    expect(res.warning).toContain("cached");
+    expect(res.models.map((m: any) => m.id)).toContain("claude-opus-5-5");
+  });
+
+  it("surfaces the metadata warning when auto selection re-detects", async () => {
+    mockStorage.providerProfiles = {
+      anthropic: {
+        apiKey: await encryptApiKey("fake-key"),
+        selectionMode: "manual",
+      },
+    };
+    installFetch([
+      litellmRoute({ status: 500, json: { error: "boom" } }),
+      { match: ANTHROPIC_MODELS_URL, json: ANTHROPIC_CATALOG },
+    ]);
+
+    const res = await send({
+      type: "SET_SELECTION_MODE",
+      provider: "anthropic",
+      selectionMode: "auto",
+    });
+
+    expect(res.success).toBe(true);
+    expect(res.warning).toContain("cached");
+    expect(res.models.map((m: any) => m.id)).toContain("claude-opus-5-5");
+  });
 });
 
 describe("connection test", () => {

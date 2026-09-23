@@ -335,6 +335,7 @@ async function handleMessage(
             return {
               success: true,
               models: outcome.models,
+              warning: outcome.warning,
               state: await getProviderState(),
             } as MessageResponse & { models: unknown; state: unknown };
           }
@@ -407,6 +408,7 @@ async function handleMessage(
           success: outcome.success,
           models: outcome.models,
           error: outcome.error,
+          warning: outcome.warning,
           state: await getProviderState(),
         } as MessageResponse & { models: unknown; state: unknown };
       } catch (error) {
