@@ -23,7 +23,7 @@ afterEach(() => setLlmFetch(undefined));
 
 describe("pipeline cancellation and accounting", () => {
   it.each(["moodle-mcq", "moodle-quiz", "moodle-match", "netacad-mcq", "netacad-quiz"])("records %s as QA in Quick and Full", async scenario => {
-    const qaContext = { ...context, qaMode: true, pageUrl: `${chrome.runtime.getURL("qa.html")}?scenario=${scenario}&fullMode=false` };
+    const qaContext = { ...context, qaMode: true, pageUrl: `${chrome.runtime.getURL("qa/qa.html")}?scenario=${scenario}&fullMode=false` };
     mocks.run.mockResolvedValue(result("ANSWER: A\nCONFIDENCE: HIGH"));
     expect((await analyzeQuestion(qaContext)).success).toBe(true);
     expect(mocks.track.mock.calls[0][0].platform).toBe("qa-manual");

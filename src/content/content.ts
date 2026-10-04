@@ -268,7 +268,7 @@ type QAScenarioType =
   | "netacad-quiz";
 
 function getQAPageScenario(): { scenario: QAScenarioType; fullMode: boolean } | null {
-  const baseUrl = new URL(chrome.runtime.getURL("qa.html"));
+  const baseUrl = new URL(chrome.runtime.getURL("qa/qa.html"));
   const current = new URL(window.location.href);
   if (current.origin !== baseUrl.origin || current.pathname !== baseUrl.pathname || current.hash) return null;
   const scenario = current.searchParams.get("scenario") as QAScenarioType | null;

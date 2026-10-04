@@ -7,7 +7,7 @@ export const qaTabs = new Map<number, string>();
 export function isQAPageUrl(value: string): boolean {
   try {
     const url = new URL(value);
-    const qaUrl = new URL(chrome.runtime.getURL("qa.html"));
+    const qaUrl = new URL(chrome.runtime.getURL("qa/qa.html"));
     if (url.origin !== qaUrl.origin || url.pathname !== qaUrl.pathname || url.hash) return false;
     const scenario = url.searchParams.get("scenario");
     const fullMode = url.searchParams.get("fullMode");

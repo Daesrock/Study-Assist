@@ -80,7 +80,7 @@ describe("sender and domain checks", () => {
     await expect(validateAnalysis({ ...context(), qaMode: true }, { ...sender, url: "https://quiz.test.evil.test" })).rejects.toThrow();
   });
   it("allows QA only from the exact registered extension QA page", async () => {
-    const qaUrl = `${chrome.runtime.getURL("qa.html")}?scenario=moodle-mcq&fullMode=false`;
+    const qaUrl = `${chrome.runtime.getURL("qa/qa.html")}?scenario=moodle-mcq&fullMode=false`;
     qaTabs.set(1, qaUrl);
     const qaSender = { id: "mock-id", url: qaUrl } as chrome.runtime.MessageSender;
     const qaContext = { ...context(), qaMode: true, qaTabId: 1 };
@@ -92,14 +92,20 @@ describe("sender and domain checks", () => {
       ...qaSender,
       url: `${chrome.runtime.getURL("other.html")}?scenario=moodle-mcq&fullMode=false`,
     })).rejects.toThrow();
+
+    const oldQaUrl = `${chrome.runtime.getURL("qa.html")}?scenario=moodle-mcq&fullMode=false`;
+    qaTabs.set(1, oldQaUrl);
+    await expect(validateAnalysis({ ...context(), qaMode: true, qaTabId: 1 }, {
+      ...qaSender, url: oldQaUrl,
+    })).rejects.toThrow();
   });
   it("rejects unregistered or malformed QA page URLs", async () => {
-    const qaUrl = `${chrome.runtime.getURL("qa.html")}?scenario=moodle-mcq&fullMode=false`;
+    const qaUrl = `${chrome.runtime.getURL("qa/qa.html")}?scenario=moodle-mcq&fullMode=false`;
     await expect(validateAnalysis({ ...context(), qaMode: true }, {
       id: "mock-id", url: qaUrl,
     } as chrome.runtime.MessageSender)).rejects.toThrow();
     await expect(validateAnalysis({ ...context(), qaMode: true }, {
-      id: "mock-id", url: `${chrome.runtime.getURL("qa.html")}?scenario=unknown&fullMode=false`,
+      id: "mock-id", url: `${chrome.runtime.getURL("qa/qa.html")}?scenario=unknown&fullMode=false`,
     } as chrome.runtime.MessageSender)).rejects.toThrow();
   });
   it("rejects oversized text and foreign senders", async () => {

@@ -1121,7 +1121,7 @@ function bindDynamicEvents(history, devMode) {
   });
 
   // Manual QA menu
-  const QA_TEST_URL = chrome.runtime.getURL("qa.html");
+  const QA_TEST_URL = chrome.runtime.getURL("qa/qa.html");
 
   const waitForQATabLoad = async (tabId) => {
     const current = await chrome.tabs.get(tabId);
