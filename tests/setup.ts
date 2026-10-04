@@ -4,6 +4,7 @@
 
 import { vi } from "vitest";
 import { webcrypto } from "node:crypto";
+import { __disableDevLoggingForTests } from "../src/background/modules/logger";
 Object.defineProperty(globalThis, "crypto", { value: webcrypto, configurable: true });
 const clone = <T>(value: T): T => value === undefined ? value : JSON.parse(JSON.stringify(value));
 
@@ -41,6 +42,7 @@ const chromeAction = {
 
 const chromeRuntime = {
   id: "mock-id",
+  getPlatformInfo: vi.fn(async () => ({ os: "win", arch: "x86-64", nacl_arch: "x86-64" })),
   getURL: vi.fn((path: string) => `chrome-extension://mock-id/${path}`),
   onMessage: {
     addListener: vi.fn(),
@@ -58,6 +60,10 @@ const chromeRuntime = {
 const chromeTabs = {
   onUpdated: {
     addListener: vi.fn(),
+    removeListener: vi.fn(),
+  },
+  onRemoved: {
+    addListener: vi.fn(),
   },
   sendMessage: vi.fn(),
 };
@@ -72,6 +78,8 @@ const chromeMock = {
 
 // @ts-expect-error - Mocking global chrome
 globalThis.chrome = chromeMock;
+// Unit fixtures must not write simulated events into the browser's developer logs.
+__disableDevLoggingForTests();
 
 // ============================================
 // Polyfill innerText for jsdom

@@ -26,6 +26,8 @@ const createZip = process.argv.includes("--zip");
 // Files/folders to include in distribution
 const INCLUDE_ITEMS = [
   "manifest.json",
+  "qa.html",
+  "qa.css",
   "background",
   "content",
   "popup",

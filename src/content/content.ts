@@ -180,7 +180,8 @@ async function runDetection(): Promise<void> {
 // ============================================
 async function initialize(): Promise<void> {
   try {
-    const domainAllowed = await checkDomainAllowed();
+    const qaScenario = getQAPageScenario();
+    const domainAllowed = qaScenario ? true : await checkDomainAllowed();
 
     // Load persisted settings regardless of the domain gate so the state always
     // mirrors the user's real preferences (e.g. the QA sandbox runs on a
@@ -199,10 +200,25 @@ async function initialize(): Promise<void> {
       return;
     }
 
+    if (qaScenario) {
+      const tab = await chrome.tabs.getCurrent();
+      if (!tab?.id) throw new Error("Could not identify QA tab");
+      document.documentElement.dataset.studyAssistQaTabId = String(tab.id);
+      const registration = await chrome.runtime.sendMessage({ type: "REGISTER_QA_TAB", tabId: tab.id });
+      if (!registration?.success) throw new Error(registration?.error || "QA tab registration failed");
+    }
+
     // The extension no longer has a global on/off switch: it is always active
     // and only gated by the domain allowlist (checked above).
     state.isActive = true;
     state.isInitialized = true;
+
+    if (qaScenario) {
+      state.isDomainAllowed = true;
+      state.settings.quickMode = !qaScenario.fullMode;
+      state.settings.highlightQuestions = true;
+      injectQAScenario(qaScenario.scenario);
+    }
 
     try {
       if (state.settings.quickMode) {
@@ -218,7 +234,9 @@ async function initialize(): Promise<void> {
       console.error("[Study Assist] Overlay init error:", ovErr);
     }
 
-    if (state.isActive && state.settings.autoDetect) {
+    if (qaScenario) {
+      setTimeout(() => { void runQAPageScenario(qaScenario.fullMode); }, 250);
+    } else if (state.isActive && state.settings.autoDetect) {
       setTimeout(() => runDetection(), 1000);
     }
 
@@ -249,9 +267,78 @@ type QAScenarioType =
   | "netacad-matching"
   | "netacad-quiz";
 
+function getQAPageScenario(): { scenario: QAScenarioType; fullMode: boolean } | null {
+  const baseUrl = new URL(chrome.runtime.getURL("qa.html"));
+  const current = new URL(window.location.href);
+  if (current.origin !== baseUrl.origin || current.pathname !== baseUrl.pathname || current.hash) return null;
+  const scenario = current.searchParams.get("scenario") as QAScenarioType | null;
+  const fullMode = current.searchParams.get("fullMode");
+  const scenarios: QAScenarioType[] = [
+    "moodle-mcq", "moodle-truefalse", "moodle-match", "moodle-shortanswer",
+    "moodle-numerical", "moodle-gapselect", "moodle-quiz", "moodle-multi",
+    "netacad-mcq", "netacad-matching", "netacad-quiz",
+  ];
+  if ([...current.searchParams].length !== 2 || !scenario || !scenarios.includes(scenario) ||
+      (fullMode !== "true" && fullMode !== "false")) return null;
+  return { scenario, fullMode: fullMode === "true" };
+}
+
+async function runQAPageScenario(fullMode: boolean): Promise<void> {
+  const detectedCount = await runQAPreview();
+  if (fullMode) await showQuestionsSummaryWithCallbacks();
+  log("[Study Assist] QA preview detected questions:", detectedCount);
+}
+
 function clearQASandbox(): void {
   const sandbox = document.getElementById("study-assist-qa-sandbox");
   if (sandbox) sandbox.remove();
+}
+
+function makeNetAcadMcqSelectable(mcqView: HTMLElement, groupName: string): void {
+  const shadowRoot = mcqView.shadowRoot;
+  const prompt = shadowRoot?.querySelector<HTMLElement>(".mcq__body-inner");
+  if (!shadowRoot || !prompt) return;
+
+  const items = Array.from(shadowRoot.querySelectorAll<HTMLElement>(".mcq__item"));
+  if (items.length === 0) return;
+
+  const promptId = `${groupName}-prompt`;
+  prompt.id = promptId;
+
+  const options = document.createElement("div");
+  options.className = "qa-netacad-mcq-options";
+  options.setAttribute("role", "radiogroup");
+  options.setAttribute("aria-labelledby", promptId);
+  prompt.after(options);
+
+  items.forEach((item, index) => {
+    const optionText = item.querySelector<HTMLElement>(".mcq__item-text-inner");
+    if (!optionText) return;
+
+    const radioId = `${groupName}-option-${index + 1}`;
+    const radio = document.createElement("input");
+    radio.type = "radio";
+    radio.name = groupName;
+    radio.id = radioId;
+    radio.setAttribute("aria-labelledby", `${radioId}-label`);
+
+    const label = document.createElement("label");
+    label.className = optionText.className;
+    label.id = `${radioId}-label`;
+    label.htmlFor = radioId;
+    label.textContent = optionText.textContent;
+    optionText.replaceWith(label);
+
+    item.classList.add("qa-netacad-mcq-option");
+    item.prepend(radio);
+    options.appendChild(item);
+
+    radio.addEventListener("change", () => {
+      for (const option of options.querySelectorAll<HTMLElement>(".qa-netacad-mcq-option")) {
+        option.classList.toggle("is-selected", option.querySelector<HTMLInputElement>("input[type=radio]")?.checked === true);
+      }
+    });
+  });
 }
 
 function injectNetAcadMcq(target: HTMLElement): void {
@@ -271,8 +358,12 @@ function injectNetAcadMcq(target: HTMLElement): void {
   shadowRoot.innerHTML = `
     <style>
       .mcq__body-inner { font-size: 16px; margin-bottom: 12px; color: #1f2937; }
-      .mcq__item { margin: 8px 0; padding: 10px; border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; }
-      .mcq__item-text-inner { font-size: 14px; color: #111827; }
+      .mcq__item { display: flex; align-items: center; gap: 10px; margin: 8px 0; padding: 10px; border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; transition: background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease; }
+      .mcq__item:hover { border-color: #bfdbfe; background: #f8fbff; }
+      .mcq__item:focus-within { outline: 3px solid rgb(59 130 246 / 24%); outline-offset: 1px; }
+      .mcq__item.is-selected { border-color: #60a5fa; background: #eff6ff; box-shadow: inset 0 0 0 1px rgb(59 130 246 / 8%); }
+      .mcq__item-text-inner { flex: 1; font-size: 14px; color: #111827; cursor: pointer; }
+      .qa-netacad-mcq-options input[type="radio"] { flex: 0 0 auto; width: 17px; height: 17px; margin: 0; accent-color: #2563eb; cursor: pointer; }
     </style>
     <div class="mcq__body-inner">¿Cuál capa del modelo OSI se encarga del enrutamiento?</div>
     <div class="mcq__item"><div class="mcq__item-text-inner">Capa Física</div></div>
@@ -280,6 +371,7 @@ function injectNetAcadMcq(target: HTMLElement): void {
     <div class="mcq__item"><div class="mcq__item-text-inner">Capa de Red</div></div>
     <div class="mcq__item"><div class="mcq__item-text-inner">Capa de Aplicación</div></div>
   `;
+  makeNetAcadMcqSelectable(mcqView, "qa-netacad-mcq");
 }
 
 function injectNetAcadMatching(target: HTMLElement): void {
@@ -505,21 +597,17 @@ function injectNetAcadQuiz(target: HTMLElement): void {
         <button class="qa-sandbox-nav-btn" id="qa-nav-next">Siguiente →</button>
       </div>
     </div>
-    <p class="qa-tip">La detección se actualiza automáticamente al navegar.</p>
-
     <div class="qa-slide" data-slide="0">
       <div class="qa-block">
-        <h3>Pregunta 1 — Opción múltiple (MCQ)</h3>
-        <div class="qa-question-title">Pregunta 1</div>
+        <h3>Opción múltiple (MCQ)</h3>
         <mcq-view id="qa-netacad-quiz-mcq"></mcq-view>
       </div>
     </div>
 
     <div class="qa-slide" data-slide="1" style="display:none">
       <div class="qa-block">
-        <h3>Pregunta 2 — Relacionar (Matching)</h3>
+        <h3>Relacionar (Matching)</h3>
         <p class="qa-tip">En quick mode la respuesta se mostrará como pares (ej. <strong>A-2</strong>).</p>
-        <div class="qa-question-title">Pregunta 2</div>
         <object-matching-view id="qa-netacad-quiz-matching"></object-matching-view>
       </div>
     </div>
@@ -532,8 +620,12 @@ function injectNetAcadQuiz(target: HTMLElement): void {
     sr.innerHTML = `
       <style>
         .mcq__body-inner { font-size: 16px; margin-bottom: 12px; color: #1f2937; }
-        .mcq__item { margin: 8px 0; padding: 10px; border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; }
-        .mcq__item-text-inner { font-size: 14px; color: #111827; }
+        .mcq__item { display: flex; align-items: center; gap: 10px; margin: 8px 0; padding: 10px; border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; transition: background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease; }
+        .mcq__item:hover { border-color: #bfdbfe; background: #f8fbff; }
+        .mcq__item:focus-within { outline: 3px solid rgb(59 130 246 / 24%); outline-offset: 1px; }
+        .mcq__item.is-selected { border-color: #60a5fa; background: #eff6ff; box-shadow: inset 0 0 0 1px rgb(59 130 246 / 8%); }
+        .mcq__item-text-inner { flex: 1; font-size: 14px; color: #111827; cursor: pointer; }
+        .qa-netacad-mcq-options input[type="radio"] { flex: 0 0 auto; width: 17px; height: 17px; margin: 0; accent-color: #2563eb; cursor: pointer; }
       </style>
       <div class="mcq__body-inner">¿Cuál capa del modelo OSI se encarga del enrutamiento lógico de paquetes?</div>
       <div class="mcq__item"><div class="mcq__item-text-inner">Capa Física</div></div>
@@ -541,6 +633,7 @@ function injectNetAcadQuiz(target: HTMLElement): void {
       <div class="mcq__item"><div class="mcq__item-text-inner">Capa de Red</div></div>
       <div class="mcq__item"><div class="mcq__item-text-inner">Capa de Transporte</div></div>
     `;
+    makeNetAcadMcqSelectable(mcqView, "qa-netacad-quiz-mcq");
   }
 
   // Matching shadow DOM
@@ -618,6 +711,53 @@ function injectMoodleMulti(target: HTMLElement): void {
       </div>
     </div>
   `;
+}
+
+/** Add native single-choice controls while preserving Moodle selectors and option text. */
+function makeMoodleMcqOptionsSelectable(container: HTMLElement): void {
+  const questions = Array.from(container.querySelectorAll<HTMLElement>(".que.multichoice"));
+
+  questions.forEach((question, questionIndex) => {
+    const prompt = question.querySelector<HTMLElement>(".qtext");
+    const answer = question.querySelector<HTMLElement>(".answer");
+    if (!answer) return;
+
+    const promptId = `qa-moodle-mcq-prompt-${questionIndex + 1}`;
+    if (prompt && !prompt.id) prompt.id = promptId;
+    answer.setAttribute("role", "radiogroup");
+    if (prompt?.id) answer.setAttribute("aria-labelledby", prompt.id);
+
+    const optionRows = Array.from(answer.querySelectorAll<HTMLElement>(":scope > div.r0, :scope > div.r1"));
+    optionRows.forEach((row, optionIndex) => {
+      const optionText = row.querySelector<HTMLElement>(".flex-fill");
+      if (!optionText) return;
+
+      const answerLetter = row.querySelector(".answernumber")?.textContent?.trim().replace(/\.$/, "") ||
+        String.fromCharCode(97 + optionIndex);
+      const inputId = `qa-moodle-mcq-${questionIndex + 1}-${optionIndex + 1}`;
+      const input = document.createElement("input");
+      input.type = "radio";
+      input.name = `qa-moodle-mcq-${questionIndex + 1}`;
+      input.id = inputId;
+      input.value = answerLetter.toUpperCase();
+      input.className = "qa-moodle-mcq-radio";
+      input.setAttribute("aria-label", `${answerLetter}. ${optionText.textContent?.trim() || ""}`);
+
+      const label = document.createElement("label");
+      label.htmlFor = inputId;
+      label.className = optionText.className;
+      while (optionText.firstChild) label.appendChild(optionText.firstChild);
+      optionText.replaceWith(label);
+      row.classList.add("qa-moodle-mcq-option");
+      row.insertBefore(input, label);
+
+      input.addEventListener("change", () => {
+        answer.querySelectorAll<HTMLInputElement>(`input[name="${input.name}"]`).forEach((radio) => {
+          radio.closest<HTMLElement>(".qa-moodle-mcq-option")?.classList.toggle("is-selected", radio.checked);
+        });
+      });
+    });
+  });
 }
 
 function injectMoodleQuiz(target: HTMLElement): void {
@@ -815,20 +955,20 @@ function injectQAScenario(scenario: QAScenarioType): void {
   }
   // Always refresh the styles so changes apply even if the tag already exists.
   style.textContent = `
-      /* example.com style div { opacity: 0.8 }; neutralize it inside the sandbox. */
+      /* Keep test controls opaque if scenario markup adds opacity styles. */
       #study-assist-qa-sandbox,
       #study-assist-qa-sandbox div { opacity: 1; }
       #study-assist-qa-sandbox {
         position: relative;
         z-index: 9997;
-        margin: 20px;
+        margin: 18px 0;
         padding: 16px;
-        border: 2px dashed #3b82f6;
-        border-radius: 12px;
+        border: 1px solid #dbe4f0;
+        border-radius: 16px;
         background: #fff;
+        box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
         font-family: Arial, sans-serif;
       }
-      #study-assist-qa-sandbox h2 { margin: 0 0 8px; color: #1d4ed8; }
       #study-assist-qa-sandbox .qa-meta { margin: 0 0 12px; color: #334155; font-size: 13px; }
       #study-assist-qa-sandbox .qa-block { margin-top: 10px; }
       #study-assist-qa-sandbox .qa-question-title { font-weight: 700; margin: 10px 0; }
@@ -906,12 +1046,10 @@ function injectQAScenario(scenario: QAScenarioType): void {
 
   const wrapper = document.createElement("section");
   wrapper.id = "study-assist-qa-sandbox";
-  wrapper.innerHTML = `
-    <h2>🧪 Study Assist QA Sandbox</h2>
-    <p class="qa-meta">
-      Escenario: <strong>${scenario}</strong> · Usa ALT+W para recargar detección y SHIFT para quick analysis.
-    </p>
-  `;
+  document.querySelector(".qa-loading")?.remove();
+  wrapper.innerHTML = state.settings.quickMode
+    ? `<p class="qa-meta">SHIFT para analizar · ALT+W para re-detectar.</p>`
+    : "";
 
   const content = document.createElement("div");
   wrapper.appendChild(content);
@@ -972,7 +1110,11 @@ function injectQAScenario(scenario: QAScenarioType): void {
     injectNetAcadMatching(content);
   }
 
-  document.body.prepend(wrapper);
+  if (["moodle-mcq", "moodle-quiz", "moodle-multi"].includes(scenario)) {
+    makeMoodleMcqOptionsSelectable(content);
+  }
+
+  (document.getElementById("qa-root") ?? document.body).appendChild(wrapper);
 }
 
 async function runQAPreview(): Promise<number> {
@@ -1098,14 +1240,14 @@ chrome.runtime.onMessage.addListener(
           try {
             const scenario = message.scenario ?? "moodle-truefalse";
             const fullMode = message.fullMode === true;
-            injectQAScenario(scenario);
-
             // Allow QA usage even if current domain is not in allowlist
             state.isDomainAllowed = true;
             state.isActive = true;
             // Full mode uses the overlay (streaming); quick mode uses the button.
             state.settings.quickMode = !fullMode;
             state.settings.highlightQuestions = true;
+
+            injectQAScenario(scenario);
 
             initKeyboardHandlers();
             initOverlayContainer();
@@ -1153,4 +1295,5 @@ initialize();
 
 export const __testOnlyQA = {
   injectMoodleMulti,
+  injectQAScenario,
 };

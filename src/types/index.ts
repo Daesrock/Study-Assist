@@ -133,6 +133,8 @@ export interface AnalysisContext {
   skipPrimary?: boolean;
   courseName?: string; // Academic course name for better context
   qaMode?: boolean;
+  /** Tab id supplied only by the registered extension QA page. */
+  qaTabId?: number;
   // For select-missing-words questions
   selectGaps?: SelectGap[];
   selectChoices?: Record<string, string[]>;

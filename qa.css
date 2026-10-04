@@ -1,0 +1,130 @@
+html,
+body {
+  min-width: 320px;
+  min-height: 100%;
+  margin: 0;
+  background: #f1f5f9;
+  color: #0f172a;
+  font: 15px/1.5 Arial, sans-serif;
+}
+
+#qa-root {
+  box-sizing: border-box;
+  width: min(100%, 1120px);
+  margin: 0 auto;
+  padding: clamp(16px, 4vw, 36px);
+}
+
+.qa-page-header {
+  margin-bottom: 18px;
+}
+
+.qa-page-header h1 {
+  margin: 2px 0 4px;
+  color: #0f172a;
+  font-size: clamp(24px, 4vw, 32px);
+  line-height: 1.2;
+}
+
+.qa-page-header p,
+.qa-loading {
+  margin: 0;
+  color: #475569;
+}
+
+.qa-eyebrow {
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+#study-assist-qa-sandbox,
+#study-assist-qa-sandbox * {
+  box-sizing: border-box;
+}
+
+#study-assist-qa-sandbox {
+  width: 100%;
+  max-width: 100%;
+  margin: 18px 0 0;
+  overflow-wrap: anywhere;
+  box-shadow: 0 10px 30px rgb(15 23 42 / 8%);
+}
+
+#study-assist-qa-sandbox .qa-block > h3 {
+  margin: 0 0 12px;
+  color: #0f172a;
+  font-size: 18px;
+}
+
+#study-assist-qa-sandbox .que.multichoice .answer .qa-moodle-mcq-option {
+  min-height: 44px;
+  margin: 7px 0;
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  background: #fff;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+#study-assist-qa-sandbox .que.multichoice .answer .qa-moodle-mcq-option:hover {
+  border-color: #bfdbfe;
+  background: #f8fbff;
+}
+
+#study-assist-qa-sandbox .que.multichoice .answer .qa-moodle-mcq-option:focus-within {
+  outline: 3px solid rgb(59 130 246 / 24%);
+  outline-offset: 1px;
+}
+
+#study-assist-qa-sandbox .que.multichoice .answer .qa-moodle-mcq-option.is-selected {
+  border-color: #60a5fa;
+  background: #eff6ff;
+  box-shadow: inset 0 0 0 1px rgb(59 130 246 / 8%);
+}
+
+#study-assist-qa-sandbox .qa-moodle-mcq-radio {
+  flex: 0 0 auto;
+  width: 17px;
+  height: 17px;
+  margin: 0 2px 0 0;
+  accent-color: #2563eb;
+  cursor: pointer;
+}
+
+#study-assist-qa-sandbox .qa-moodle-mcq-option .flex-fill {
+  cursor: pointer;
+}
+
+#study-assist-qa-sandbox .qa-block,
+#study-assist-qa-sandbox .que {
+  min-width: 0;
+}
+
+#study-assist-qa-sandbox .qa-quiz-header,
+#study-assist-qa-sandbox .qa-quiz-nav {
+  flex-wrap: wrap;
+}
+
+#study-assist-qa-sandbox table.answer {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+@media (max-width: 560px) {
+  #qa-root {
+    padding: 14px;
+  }
+
+  #study-assist-qa-sandbox {
+    padding: 12px;
+  }
+
+  #study-assist-qa-sandbox .qa-quiz-nav {
+    width: 100%;
+    justify-content: space-between;
+  }
+}

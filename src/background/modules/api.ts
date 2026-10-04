@@ -14,7 +14,7 @@ import type {
   PrimaryAnalysisPayload,
 } from "./constants.js";
 import { logError } from "./fetchUtils.js";
-import { diagnosticMetadata } from "./security.js";
+import { diagnosticMetadata, isQAPageUrl } from "./security.js";
 import { netAcadHost } from "./platform.js";
 import { AnalysisSession } from "./analysisSession.js";
 import { findMatchingQuestion, normalizeForSearch, calculateSimilarity, calculateContainment } from "./questionBank.js";
@@ -78,6 +78,8 @@ async function runTrackedProvider(context: AnalysisContext, role: ResolvedRole, 
 
 function detectPlatform(pageUrl?: string): string {
   if (!pageUrl) return "other";
+  // QA scenario query strings contain platform names; classify the trusted route first.
+  if (isQAPageUrl(pageUrl)) return "qa-manual";
   const url = pageUrl.toLowerCase();
   
   // NetAcad platforms
@@ -95,9 +97,6 @@ function detectPlatform(pageUrl?: string): string {
   // Other platforms
   if (url.includes("contenidosdigitales")) return "contenidosdigitales";
 
-  // QA Manual sandbox
-  if (url.includes("example.com")) return "qa-manual";
-  
   return "other";
 }
 

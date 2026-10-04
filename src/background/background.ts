@@ -14,11 +14,13 @@ import { getProviderState, getRoles, saveProviderKey, clearProviderKey, setModel
 import { fetchModels } from "./modules/llm/catalog.js";
 import { getPreset, ensureRegistry, resetRegistry } from "./modules/llm/registry.js";
 import { getPriceIndex, lookupModelInfo, refreshPrices } from "./modules/llm/pricing.js";
-import { CONTENT_SETTINGS, isExtensionPage, senderKey, validateAnalysis, qaTabs } from "./modules/security.js";
+import { CONTENT_SETTINGS, isExtensionPage, senderKey, validateAnalysis, qaTabs, isQAPageUrl } from "./modules/security.js";
 import { AnalysisSession } from "./modules/analysisSession.js";
 
 const storageReady = chrome.storage.local.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" }).then(async () => {
-  const { securitySchema, providerProfiles } = await chrome.storage.local.get(["securitySchema", "providerProfiles"]);
+  const { securitySchema, providerProfiles, debugMode } = await chrome.storage.local.get(["securitySchema", "providerProfiles", "debugMode"]);
+  // Release startup clears the debug setting left by an earlier development build.
+  if (!DEV_LOGGING && debugMode !== false) await chrome.storage.local.set({ debugMode: false });
   if (securitySchema !== 2) {
     await redactHistory();
     await chrome.storage.local.set({ debugMode: false });
@@ -35,10 +37,12 @@ function newSession(sender: chrome.runtime.MessageSender): AnalysisSession {
   sessions.get(key)?.cancel();
   const session = new AnalysisSession();
   sessions.set(key, session);
+  session.startKeepAlive();
   return session;
 }
 
 function releaseSession(sender: chrome.runtime.MessageSender, session: AnalysisSession): void {
+  session.dispose();
   if (sessions.get(senderKey(sender)) === session) sessions.delete(senderKey(sender));
 }
 
@@ -126,8 +130,8 @@ async function handleMessage(
   switch (message.type) {
     case "REGISTER_QA_TAB": {
       const tab = await chrome.tabs.get(message.tabId!);
-      if (new URL(tab.url ?? "").origin !== "https://example.com") throw new Error("Invalid QA tab");
-      qaTabs.add(tab.id!);
+      if (!tab.id || !tab.url || !sender.url || tab.url !== sender.url || !isQAPageUrl(tab.url)) throw new Error("Invalid QA tab");
+      qaTabs.set(tab.id, tab.url);
       return { success: true };
     }
     case "GET_CONTENT_SETTINGS":
@@ -551,6 +555,10 @@ chrome.tabs.onUpdated.addListener(
   }
 );
 
+chrome.tabs.onRemoved.addListener((tabId) => {
+  qaTabs.delete(tabId);
+});
+
 // ============================================
 // Global debug flag
 // ============================================
@@ -561,7 +569,11 @@ async function loadDebugMode(): Promise<void> {
     const { debugMode } = (await chrome.storage.local.get("debugMode")) as {
       debugMode?: boolean;
     };
-    if (typeof debugMode === "boolean") {
+    if (DEV_LOGGING) {
+      // Development builds explicitly enable diagnostics, including existing installs.
+      setDebugMode(true);
+      if (debugMode !== true) await chrome.storage.local.set({ debugMode: true });
+    } else if (typeof debugMode === "boolean") {
       setDebugMode(debugMode);
     } else {
       setDebugMode(DEV_LOGGING);

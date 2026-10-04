@@ -79,10 +79,28 @@ describe("sender and domain checks", () => {
     mockStorage.allowedDomains = ["quiz.test"];
     await expect(validateAnalysis({ ...context(), qaMode: true }, { ...sender, url: "https://quiz.test.evil.test" })).rejects.toThrow();
   });
-  it("allows QA only in an explicitly registered example.com tab", async () => {
-    qaTabs.add(1);
-    await validateAnalysis({ ...context(), qaMode: true }, { ...sender, url: "https://example.com/" });
-    await expect(validateAnalysis({ ...context(), qaMode: true }, { ...sender, url: "https://evil.test/" })).rejects.toThrow();
+  it("allows QA only from the exact registered extension QA page", async () => {
+    const qaUrl = `${chrome.runtime.getURL("qa.html")}?scenario=moodle-mcq&fullMode=false`;
+    qaTabs.set(1, qaUrl);
+    const qaSender = { id: "mock-id", url: qaUrl } as chrome.runtime.MessageSender;
+    const qaContext = { ...context(), qaMode: true, qaTabId: 1 };
+    await validateAnalysis(qaContext, qaSender);
+    expect(qaContext.pageUrl).toBe(qaUrl);
+    await expect(validateAnalysis({ ...context(), qaMode: true, qaTabId: 2 }, qaSender)).rejects.toThrow();
+
+    await expect(validateAnalysis({ ...context(), qaMode: true }, {
+      ...qaSender,
+      url: `${chrome.runtime.getURL("other.html")}?scenario=moodle-mcq&fullMode=false`,
+    })).rejects.toThrow();
+  });
+  it("rejects unregistered or malformed QA page URLs", async () => {
+    const qaUrl = `${chrome.runtime.getURL("qa.html")}?scenario=moodle-mcq&fullMode=false`;
+    await expect(validateAnalysis({ ...context(), qaMode: true }, {
+      id: "mock-id", url: qaUrl,
+    } as chrome.runtime.MessageSender)).rejects.toThrow();
+    await expect(validateAnalysis({ ...context(), qaMode: true }, {
+      id: "mock-id", url: `${chrome.runtime.getURL("qa.html")}?scenario=unknown&fullMode=false`,
+    } as chrome.runtime.MessageSender)).rejects.toThrow();
   });
   it("rejects oversized text and foreign senders", async () => {
     await expect(validateAnalysis({ ...context(), questionText: "a".repeat(50001) }, sender)).rejects.toThrow("Invalid");

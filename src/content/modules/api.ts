@@ -42,6 +42,31 @@ function isQASandboxActive(): boolean {
   return document.getElementById("study-assist-qa-sandbox") !== null;
 }
 
+function qaContextMetadata(): Pick<AnalysisContext, "qaMode" | "qaTabId"> {
+  const qaMode = isQASandboxActive();
+  const parsedTabId = Number(document.documentElement.dataset.studyAssistQaTabId);
+  return qaMode && Number.isInteger(parsedTabId) && parsedTabId > 0
+    ? { qaMode: true, qaTabId: parsedTabId }
+    : { qaMode };
+}
+
+/** Restore QA's ephemeral registration before opening an analysis port. */
+async function ensureQATabRegistered(context: AnalysisContext): Promise<void> {
+  const tabId = context.qaTabId;
+  if (typeof tabId !== "number" || !Number.isInteger(tabId) || tabId <= 0) {
+    throw new Error("QA tab unavailable. Reopen QA from the dashboard.");
+  }
+  // The background still verifies the exact QA URL and the actual tab URL.
+  const registration = await chrome.runtime.sendMessage<{ success?: boolean; error?: string }>({
+    type: "REGISTER_QA_TAB",
+    tabId,
+  });
+  if (registration?.success !== true) {
+    throw new Error(registration?.error || "QA tab registration failed");
+  }
+  if (DEBUG_MODE) forwardDevLog("QA tab registration refreshed", { tabId });
+}
+
 function mapTrueFalseAnswer(result: string, options: { letter: string; text: string }[] = []): string {
   const normalized = result
     .normalize("NFD")
@@ -409,7 +434,7 @@ export function buildQuickContext(
       responseMode: "quick",
       skipPrimary,
       courseName: question.courseName, // Academic course for context
-      qaMode: isQASandboxActive(),
+      ...qaContextMetadata(),
     };
   } else if (question.type === "select-missing-words") {
     return {
@@ -423,7 +448,7 @@ export function buildQuickContext(
       responseMode: "quick",
       skipPrimary,
       courseName: question.courseName,
-      qaMode: isQASandboxActive(),
+      ...qaContextMetadata(),
     };
   } else if (question.type === "short-answer" || question.type === "numerical") {
     return {
@@ -435,7 +460,7 @@ export function buildQuickContext(
       responseMode: "quick",
       skipPrimary,
       courseName: question.courseName,
-      qaMode: isQASandboxActive(),
+      ...qaContextMetadata(),
     };
   } else {
     // Regular multiple choice context
@@ -449,7 +474,7 @@ export function buildQuickContext(
       responseMode: "quick",
       skipPrimary,
       courseName: question.courseName, // Academic course for context
-      qaMode: isQASandboxActive(),
+      ...qaContextMetadata(),
     };
   }
 }
@@ -458,9 +483,14 @@ export function buildQuickContext(
  * Send one quick-mode analysis request over the quick-analysis port.
  * Shows pipeline status emojis on the button while waiting.
  */
-export function sendQuickAnalysis(
+export async function sendQuickAnalysis(
   context: AnalysisContext,
 ): Promise<AnalysisResponse> {
+  if (context.qaMode === true) {
+    const generation = requestGeneration;
+    await ensureQATabRegistered(context);
+    if (generation !== requestGeneration) throw new Error("Analysis cancelled");
+  }
   return new Promise((resolve, reject) => {
     const port = chrome.runtime.connect({ name: "quick-analysis" });
     activePorts.add(port);
@@ -935,6 +965,11 @@ export async function handleQuickClick(
         // No timeout - answer persists until question changes
       }
     } else {
+      if (DEBUG_MODE) forwardDevLog("quick analysis failed", {
+        error: response.error ?? "Empty analysis result",
+        questionType: question.type,
+        questionNumber: question.questionNumber,
+      }, "error");
       quickBtn.innerHTML = `<span>!</span>`;
       quickBtn.classList.remove("slow-connection");
       state.isRequestInProgress = false; // Release lock
@@ -945,6 +980,9 @@ export async function handleQuickClick(
   } catch (error) {
     if (generation !== requestGeneration) return;
     console.error("[Study Assist] Quick analysis error:", error);
+    if (DEBUG_MODE) forwardDevLog("quick analysis exception", {
+      error: error instanceof Error ? error.message : "Unknown error",
+    }, "error");
 
     // Clear slow connection timer
     if (state.slowConnectionTimer) {
@@ -1052,7 +1090,7 @@ export async function analyzeQuestion(
       pageUrl: window.location.href,
       responseMode: state.settings.responseMode,
       courseName: question.courseName, // Academic course for context
-      qaMode: isQASandboxActive(),
+      ...qaContextMetadata(),
     };
   } else if (question.type === "select-missing-words") {
     context = {
@@ -1065,7 +1103,7 @@ export async function analyzeQuestion(
       pageUrl: window.location.href,
       responseMode: state.settings.responseMode,
       courseName: question.courseName,
-      qaMode: isQASandboxActive(),
+      ...qaContextMetadata(),
     };
   } else if (question.type === "short-answer" || question.type === "numerical") {
     context = {
@@ -1076,7 +1114,7 @@ export async function analyzeQuestion(
       pageUrl: window.location.href,
       responseMode: state.settings.responseMode,
       courseName: question.courseName,
-      qaMode: isQASandboxActive(),
+      ...qaContextMetadata(),
     };
   } else {
     // Regular multiple choice context
@@ -1089,12 +1127,13 @@ export async function analyzeQuestion(
       pageUrl: window.location.href,
       responseMode: state.settings.responseMode,
       courseName: question.courseName, // Academic course for context
-      qaMode: isQASandboxActive(),
+      ...qaContextMetadata(),
     };
   }
 
     // Send to background script for API processing
     // Use streaming via port for full (non-quick) mode
+    if (context.qaMode === true) await ensureQATabRegistered(context);
     if (generation !== requestGeneration) return;
     const port = chrome.runtime.connect({ name: "stream-analysis" });
     activePorts.add(port);

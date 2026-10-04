@@ -3,11 +3,7 @@
  * Styles for the overlay, question highlighting, and result display
  */
 
-/* ============================================
-   Host-page leakage protection
-   Some sites (e.g. example.com) declare `div { opacity: 0.8 }`, which would
-   wash out our UI. Keep our containers fully opaque.
-   ============================================ */
+/* Keep Study Assist controls opaque when host-page styles affect descendants. */
 #study-assist-overlay,
 #study-assist-overlay div,
 #study-assist-quick-container,

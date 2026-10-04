@@ -22,6 +22,29 @@ beforeEach(() => { mocks.run.mockReset(); mocks.track.mockReset().mockResolvedVa
 afterEach(() => setLlmFetch(undefined));
 
 describe("pipeline cancellation and accounting", () => {
+  it.each(["moodle-mcq", "moodle-quiz", "moodle-match", "netacad-mcq", "netacad-quiz"])("records %s as QA in Quick and Full", async scenario => {
+    const qaContext = { ...context, qaMode: true, pageUrl: `${chrome.runtime.getURL("qa.html")}?scenario=${scenario}&fullMode=false` };
+    mocks.run.mockResolvedValue(result("ANSWER: A\nCONFIDENCE: HIGH"));
+    expect((await analyzeQuestion(qaContext)).success).toBe(true);
+    expect(mocks.track.mock.calls[0][0].platform).toBe("qa-manual");
+    mocks.track.mockClear();
+    setLlmFetch(async () => new Response('data: {"choices":[{"delta":{"content":"ANSWER: A"}}]}\n\ndata: [DONE]\n\n'));
+    const port = { postMessage: vi.fn() };
+    await analyzeQuestionStreaming({ ...qaContext, pageUrl: qaContext.pageUrl.replace("fullMode=false", "fullMode=true") }, port as any);
+    expect(mocks.track.mock.calls[0][0].platform).toBe("qa-manual");
+    expect(port.postMessage.mock.calls.some(([message]) => message.type === "STREAM_COMPLETE")).toBe(true);
+  });
+
+  it.each([
+    ["https://campus.test/moodle/quiz", "moodle"],
+    ["https://www.netacad.com/quiz", "netacad"],
+    ["https://campus.test/qa.html?scenario=moodle-mcq&fullMode=false", "moodle"],
+  ])("preserves real-page classification for %s", async (pageUrl, platform) => {
+    mocks.run.mockResolvedValue(result("ANSWER: A\nCONFIDENCE: HIGH"));
+    await analyzeQuestion({ ...context, pageUrl });
+    expect(mocks.track.mock.calls[0][0].platform).toBe(platform);
+  });
+
   it.each([false, true])("tracks output-limit cost only when usage was reported (%s)", async usageReported => {
     mocks.run.mockResolvedValueOnce({
       result: { success: false, error: { kind: "output_limit", message: "limit", retryable: false }, usage: { inputTokens: usageReported ? 100 : 0, outputTokens: usageReported ? 50 : 0 }, usageReported },

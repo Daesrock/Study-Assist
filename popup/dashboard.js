@@ -842,7 +842,7 @@ function renderDashboard(stats, history, config, devMode, storageInfo) {
       <div class="qa-guide">
         <h3>Validación rápida sin entrar a un quiz real</h3>
         <ul>
-          <li>Inyecta un escenario en <strong>example.com</strong>.</li>
+          <li>Abre un escenario en la página QA propia de Study Assist.</li>
           <li>Quick: <strong>SHIFT</strong> para analizar; Full: activa el modo de abajo y clic en la pregunta.</li>
           <li>Usa <strong>ALT+W</strong> para re-detectar y repetir pruebas.</li>
         </ul>
@@ -1121,78 +1121,52 @@ function bindDynamicEvents(history, devMode) {
   });
 
   // Manual QA menu
-  const QA_TEST_URL = "https://example.com";
+  const QA_TEST_URL = chrome.runtime.getURL("qa.html");
 
-  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-  const sendQAMessageWithRetry = async (tabId, message) => {
-    let lastError = null;
-    for (let attempt = 1; attempt <= 8; attempt++) {
-      try {
-        await chrome.tabs.sendMessage(tabId, message);
-        return true;
-      } catch (error) {
-        lastError = error;
-        await sleep(350);
-      }
-    }
-    throw lastError || new Error("No se pudo comunicar con la pestaña de QA");
+  const waitForQATabLoad = async (tabId) => {
+    const current = await chrome.tabs.get(tabId);
+    if (current.status === "complete") return;
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        chrome.tabs.onUpdated.removeListener(onUpdated);
+        reject(new Error("La página QA tardó demasiado en cargar"));
+      }, 15000);
+      const onUpdated = (updatedTabId, changeInfo) => {
+        if (updatedTabId !== tabId || changeInfo.status !== "complete") return;
+        clearTimeout(timeout);
+        chrome.tabs.onUpdated.removeListener(onUpdated);
+        resolve();
+      };
+      chrome.tabs.onUpdated.addListener(onUpdated);
+    });
   };
 
-  const getUsableQATabId = async () => {
-    const existingTabs = await chrome.tabs.query({
-      url: ["https://example.com/*"],
-      currentWindow: true,
-    });
-
-    if (existingTabs.length > 0 && existingTabs[0]?.id) {
-      const tabId = existingTabs[0].id;
-      await chrome.tabs.update(tabId, { active: true });
-      // Recargar para que la pestaña use siempre el content script/CSS actuales.
-      try {
-        await chrome.tabs.reload(tabId);
-      } catch {
-        // Si falla la recarga, seguimos con la pestaña tal cual.
-      }
-      await sleep(1200);
-      return tabId;
+  const getUsableQATabId = async (qaUrl) => {
+    const existingTabs = await chrome.tabs.query({ currentWindow: true });
+    const existingTab = existingTabs.find((tab) => tab.url?.startsWith(`${QA_TEST_URL}?`));
+    if (existingTab?.id) {
+      await chrome.tabs.update(existingTab.id, { url: qaUrl, active: true });
+      await waitForQATabLoad(existingTab.id);
+      return existingTab.id;
     }
 
-    const qaTab = await chrome.tabs.create({
-      url: QA_TEST_URL,
-      active: true,
-    });
-
-    if (!qaTab?.id) {
-      throw new Error("No se pudo crear pestaña QA");
-    }
-
-    // Esperar a que cargue para que el content script esté disponible
-    await sleep(1200);
+    const qaTab = await chrome.tabs.create({ url: qaUrl, active: true });
+    if (!qaTab?.id) throw new Error("No se pudo crear pestaña QA");
+    await waitForQATabLoad(qaTab.id);
     return qaTab.id;
   };
 
   const runQAScenario = async (scenario) => {
     try {
-      const tabId = await getUsableQATabId();
-      const registration = await chrome.runtime.sendMessage({ type: "REGISTER_QA_TAB", tabId });
-      if (!registration?.success) throw new Error(registration?.error || "QA registration failed");
       const fullModeEl = document.getElementById("qa-full-mode");
       const fullMode = !!(fullModeEl && fullModeEl.checked);
-      await sendQAMessageWithRetry(tabId, {
-        type: "QA_INJECT_SCENARIO",
-        scenario,
-        fullMode,
-      });
-
-      alert(
-        fullMode
-          ? "Escenario QA cargado (modo FULL).\n\nSe abrió el resumen: haz clic en una pregunta para analizar con streaming.\nCTRL+SHIFT fuerza el validador.\nALT+W para re-detectar."
-          : "Escenario QA cargado.\n\nSiguiente paso:\n1) SHIFT para quick mode\n2) ALT+W para re-detección",
-      );
+      const url = new URL(QA_TEST_URL);
+      url.searchParams.set("scenario", scenario);
+      url.searchParams.set("fullMode", String(fullMode));
+      await getUsableQATabId(url.href);
     } catch (e) {
       alert(
-        "No se pudo ejecutar QA automáticamente. Verifica permisos de la extensión y vuelve a intentar desde una pestaña web normal.",
+        "No se pudo abrir la página QA. Verifica que la extensión esté habilitada y vuelve a intentar.",
       );
     }
   };
@@ -1455,7 +1429,7 @@ function showQAGuideModal() {
     <pre>
 1) Configurar un proveedor y su API key en la página Proveedores.
 2) Asignar Principal (y Validador opcional) y elegir el modelo de prueba QA.
-3) Desde este panel, ejecutar un escenario (se abrirá/reutilizará example.com):
+3) Desde este panel, ejecutar un escenario (se abrirá/reutilizará la página QA de Study Assist):
    Moodle: MCQ, V/F, Match, Short Answer, Numerical, Gap Select, Multi, Quiz Real.
    NetAcad: MCQ, Matching, Quiz Real.
 4) Verificar:
@@ -1463,7 +1437,7 @@ function showQAGuideModal() {
    - Quick mode (SHIFT) responde correctamente.
    - En Moodle V/F, quick mode muestra V o F.
    - Modo full muestra el análisis en streaming sin errores.
-5) Repetir con cada proveedor/rol que uses. Al terminar, cierra la pestaña de example.com.
+5) Repetir con cada proveedor/rol que uses. Al terminar, cierra la pestaña QA.
     </pre>
   `;
 
@@ -1699,7 +1673,7 @@ function renderRecordDetailPage(r, idx, history, devMode, apiData) {
     { k: "Modelo", v: shortModel(r.model) || "—" },
     {
       k: "Plataforma",
-      v: isQA ? "QA Manual (example.com)" : r.platform || "—",
+      v: isQA ? "QA Manual (Study Assist)" : r.platform || "—",
     },
     { k: "Tipo de Pregunta", v: r.questionType || "—" },
     { k: "Modo de Respuesta", v: r.responseMode || "—" },

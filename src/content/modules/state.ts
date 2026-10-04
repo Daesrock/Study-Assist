@@ -4,11 +4,12 @@
  */
 
 import type { State, Settings } from "../../types/index.js";
+import { DEV_LOGGING } from "../../background/modules/logger.js";
 
 // ============================================
 // Debug Mode
 // ============================================
-export const DEBUG_MODE = false;
+export const DEBUG_MODE = DEV_LOGGING;
 export const log = (...args: unknown[]): void => {
   if (DEBUG_MODE) {
     console.log(...args);
