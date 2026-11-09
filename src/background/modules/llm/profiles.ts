@@ -11,12 +11,16 @@ import type {
   ProviderRoles,
   RoleAssignment,
   ModelPriceInfo,
+  ModelCapabilities,
 } from "../constants.js";
 import { logProviders } from "../constants.js";
 import { encryptApiKey, decryptApiKey } from "../crypto.js";
 import type { ProviderPreset, ProviderEndpoint, CustomProviderConfig } from "./contract.js";
 import { findPreset, listPresets, listTemplates, ensureRegistry, resetRegistry, resolvePresetForModel, resolveEndpointId } from "./registry.js";
-import { getPriceIndex, lookupModelInfo, resolveModelInfo } from "./pricing.js";
+import { getPriceIndex, lookupModelInfo, resolveModelInfo, getCapabilityIndex, lookupModelCapabilities, resolveModelCapabilities } from "./pricing.js";
+import { isNvidiaNimUrl } from "./modelIdentity.js";
+import { getNvidiaCatalog, classifyNvidiaModels } from "./nvidiaCatalog.js";
+import type { NvidiaModelStatus } from "./nvidiaCatalog.js";
 import { computeAutoSelection } from "./selection.js";
 import { assertSafeProviderUrl } from "../security.js";
 import { sealHeaders } from "./headerSecrets.js";
@@ -155,7 +159,7 @@ export function canRoleHandle(
 export function resolveModelVision(
   profile: ProviderProfile | null | undefined,
   model: string,
-  info: ModelPriceInfo | null | undefined,
+  info: ModelCapabilities | null | undefined,
 ): boolean {
   const override = profile?.visionOverrides?.[model];
   if (typeof override === "boolean") return override;
@@ -188,19 +192,20 @@ export async function resolveRole(
   const profile = await getProfile(role.provider);
   const thinking = profile?.thinking ?? preset.defaultThinking;
   const info = await resolveModelInfo(role.provider, model);
-  const vision = resolveModelVision(profile, model, info);
+  const capabilities = await resolveModelCapabilities(role.provider, model);
+  const vision = resolveModelVision(profile, model, capabilities);
   // Reasoning is only blocked when LiteLLM explicitly says the model cannot
   // reason. Unknown models (custom providers, brand-new ids) keep trusting the
   // user's thinking preference instead.
-  const reasoning = info?.reasoning === false ? false : true;
+  const reasoning = capabilities?.reasoning === false ? false : true;
   const adaptiveThinking = info?.adaptive === true;
 
   if (thinking) {
     logProviders("role thinking resolved", {
       provider: role.provider,
       model,
-      knownToLitellm: !!info,
-      litellmReasoning: info?.reasoning ?? null,
+      knownToLitellm: !!capabilities,
+      litellmReasoning: capabilities?.reasoning ?? null,
       reasoning,
     });
   }
@@ -224,6 +229,8 @@ export interface PublicProviderProfile {
   lastSync: number | null;
   /** LiteLLM price/capability info per visible model id (null when unknown). */
   modelInfo: Record<string, ModelPriceInfo | null>;
+  modelCapabilities: Record<string, ModelCapabilities | null>;
+  nvidia?: NvidiaModelStatus;
   /** Gateway endpoints (empty for single-endpoint providers). */
   endpoints: ProviderEndpoint[];
   /** Resolved endpoint id per visible model (for the UI tag/selector). */
@@ -243,6 +250,8 @@ export async function getProviderState(): Promise<ProviderState> {
   const presets = listPresets();
   const stored = await getProviderProfiles();
   const index = await getPriceIndex();
+  const capabilityIndex = await getCapabilityIndex();
+  const nvidiaCatalog = await getNvidiaCatalog();
   const roles = await getRoles();
 
   const profiles: PublicProviderProfile[] = presets.map((preset) => {
@@ -263,12 +272,15 @@ export async function getProviderState(): Promise<ProviderState> {
       ...new Set([...models, ...customModels, ...selectedModels, ...roleModels]),
     ];
     const modelInfo: Record<string, ModelPriceInfo | null> = {};
+    const modelCapabilities: Record<string, ModelCapabilities | null> = {};
     const modelEndpoints: Record<string, string> = {};
     const visionModels: string[] = [];
     for (const id of visible) {
       const info = lookupModelInfo(index, preset.id, id);
       modelInfo[id] = info;
-      if (resolveModelVision(profile, id, info)) visionModels.push(id);
+      const capabilities = lookupModelCapabilities(index, capabilityIndex, preset.id, id, nvidiaCatalog);
+      modelCapabilities[id] = capabilities;
+      if (resolveModelVision(profile, id, capabilities)) visionModels.push(id);
       const endpoint = resolveEndpointId(preset.id, id);
       if (endpoint) modelEndpoints[id] = endpoint;
     }
@@ -283,6 +295,8 @@ export async function getProviderState(): Promise<ProviderState> {
       selectionMode: profile?.selectionMode ?? "auto",
       lastSync: profile?.lastSync ?? null,
       modelInfo,
+      modelCapabilities,
+      ...(isNvidiaNimUrl(preset.baseUrl) ? { nvidia: classifyNvidiaModels(nvidiaCatalog, visible) } : {}),
       endpoints: (preset.endpoints ?? []).map(({ headers: _headers, ...endpoint }) => endpoint),
       modelEndpoints,
     };
@@ -341,7 +355,7 @@ export async function applyDetectedModels(
   // Same resolver as the role/state paths: overrides win, then fresh metadata,
   // then the legacy list. The result is stored back for compatibility.
   const visionModels = candidates
-    .filter((c) => resolveModelVision(profile, c.id, c.info))
+    .filter((c) => resolveModelVision(profile, c.id, c.capabilities ?? c.info))
     .map((c) => c.id);
 
   const mode = profile?.selectionMode ?? "auto";

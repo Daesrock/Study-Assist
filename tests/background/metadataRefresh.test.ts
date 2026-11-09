@@ -13,6 +13,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { mockStorage, chromeRuntime, chromeStorageLocal } from "../setup";
 import { setLlmFetch } from "../../src/background/modules/llm/transport";
 import { encryptApiKey } from "../../src/background/modules/crypto";
+import { resetRegistry } from "../../src/background/modules/llm/registry";
 import {
   PRICE_REFRESH_TIMEOUT_MS,
   __setPriceIndexForTests,
@@ -22,6 +23,67 @@ import {
 } from "../../src/background/modules/llm/pricing";
 
 const LITELLM_URL = "model_prices_and_context_window.json";
+
+describe("NVIDIA explicit catalog refresh", () => {
+  const model = "deepseek-ai/deepseek-v4.1-flash";
+  const ngcRoute = {
+    match: "api.ngc.nvidia.com",
+    json: { resultPageTotal: 1, results: [{ groupValue: "ENDPOINT", resources: [{
+      name: "deepseek-v4.1-flash", labels: [{ key: "publisher", values: ["deepseek-ai"] }, { key: "general", unresolvedValues: ["nim_type_preview"] }],
+    }] }] },
+  };
+  const nimRoute = { match: "integrate.api.nvidia.com/v1/models", json: { data: [{ id: model }] } };
+
+  beforeEach(async () => {
+    resetRegistry();
+    mockStorage.customProviders = { nim: { id: "nim", label: "My NVIDIA", baseUrl: "https://integrate.api.nvidia.com/v1", dialect: "openai-compatible" } };
+    mockStorage.providerProfiles = { nim: { apiKey: await encryptApiKey("fake-nim-key"), models: [model], selectedModels: [model], selectionMode: "manual" } };
+  });
+  afterEach(() => resetRegistry());
+
+  it("updates the existing provider only on explicit detection and preserves selections", async () => {
+    const { calls } = installFetch([litellmRoute(), nimRoute, ngcRoute]);
+    const first = await send({ type: "GET_PROVIDER_STATE" });
+    expect(first.state.profiles.find((p: any) => p.id === "nim").nvidia.fetchedAt).toBeNull();
+    expect(calls).toHaveLength(0);
+    const detected = await send({ type: "FETCH_PROVIDER_MODELS", provider: "nim" });
+    expect(detected.success).toBe(true);
+    const profile = detected.state.profiles.find((p: any) => p.id === "nim");
+    expect(profile.nvidia.freeEndpoints[model]).toBe(true);
+    expect(profile.selectedModels).toEqual([model]);
+    expect(profile.modelInfo[model]).toBeNull();
+    const publicCalls = calls.filter(c => c.url.includes("api.ngc.nvidia.com"));
+    expect(publicCalls).toHaveLength(1);
+    expect(publicCalls[0].init.headers).toBeUndefined();
+    expect(JSON.stringify(publicCalls)).not.toContain("fake-nim-key");
+    await send({ type: "GET_PROVIDER_STATE" });
+    await send({ type: "UPDATE_MODEL_PRICES" });
+    expect(calls.filter(c => c.url.includes("api.ngc.nvidia.com"))).toHaveLength(1);
+  });
+
+  it("does not query NGC when saving a key or testing an actual model; wire id is unchanged", async () => {
+    const { calls } = installFetch([
+      litellmRoute(), nimRoute, ngcRoute,
+      { match: "integrate.api.nvidia.com/v1/chat/completions", json: { choices: [{ message: { content: "OK" }, finish_reason: "stop" }], usage: { prompt_tokens: 10, completion_tokens: 2 } } },
+    ]);
+    expect((await send({ type: "SAVE_PROVIDER_KEY", provider: "nim", rawKey: "replacement-key", test: true })).success).toBe(true);
+    const tested = await send({ type: "TEST_PROVIDER_CONNECTION", provider: "nim", model });
+    expect(tested.success).toBe(true);
+    expect(tested.costUsd).toBeUndefined();
+    expect(calls.find(c => c.url.includes("chat/completions"))?.body.model).toBe(model);
+    expect(calls.some(c => c.url.includes("api.ngc.nvidia.com"))).toBe(false);
+  });
+
+  it("returns a warning with the previous date and classification when NGC fails", async () => {
+    mockStorage.nvidiaFreeEndpointCatalog = { entries: [{ publisher: "deepseek-ai", name: "deepseek-v4.1-flash" }], fetchedAt: 1, refreshFailed: false };
+    installFetch([litellmRoute(), nimRoute, { match: "api.ngc.nvidia.com", status: 503 }]);
+    const detected = await send({ type: "FETCH_PROVIDER_MODELS", provider: "nim" });
+    expect(detected.success).toBe(true);
+    expect(detected.warning).toContain("Free Endpoint");
+    const profile = detected.state.profiles.find((p: any) => p.id === "nim");
+    expect(profile.nvidia).toMatchObject({ fetchedAt: 1, refreshFailed: true, freeEndpoints: { [model]: true } });
+  });
+});
 const ANTHROPIC_MODELS_URL = "api.anthropic.com/v1/models";
 const ANTHROPIC_MESSAGES_URL = "api.anthropic.com/v1/messages";
 

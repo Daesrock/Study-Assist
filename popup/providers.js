@@ -237,14 +237,19 @@ function renderModelRow(profile, model) {
     ? `${formatPrice(info.inputPer1M)} / ${formatPrice(info.outputPer1M)} ${escapeHtml(t("providerPricePerM"))}`
     : escapeHtml(t("providerPriceUnavailable"));
   const ctxText = info && info.maxInput ? formatContext(info.maxInput) : "";
+  const freeEndpoint = profile.nvidia?.freeEndpoints?.[model] === true;
+  const freeBadge = profile.nvidia
+    ? `<span class="model-free-endpoint ${freeEndpoint ? "confirmed" : "unknown"}">${escapeHtml(t(freeEndpoint ? "providerFreeEndpoint" : "providerFreeEndpointUnknown"))}</span>`
+    : "";
 
   return `
-    <div class="model-row" data-model="${escapeAttr(model)}" data-selected="${included ? "1" : "0"}">
+    <div class="model-row" data-model="${escapeAttr(model)}" data-selected="${included ? "1" : "0"}" data-free-endpoint="${freeEndpoint ? "1" : "0"}">
       <input type="checkbox" class="model-include" ${included ? "checked" : ""} title="${escapeAttr(t("providerIncludeTitle"))}" />
       <div class="model-main">
         <span class="model-id">${escapeHtml(model)}</span>
         <span class="model-meta">
           <span class="model-price">${priceText}</span>
+          ${freeBadge}
           ${ctxText ? `<span class="model-ctx">ctx ${escapeHtml(ctxText)}</span>` : ""}
         </span>
       </div>
@@ -297,6 +302,11 @@ function renderCard(preset) {
       </div>
     </div>
     <div class="provider-models-legend">${escapeHtml(t("providerModelsLegend"))}</div>
+    ${profile.nvidia ? `<div class="provider-nvidia-status" role="status">${escapeHtml(
+      profile.nvidia.fetchedAt
+        ? t("providerNvidiaUpdated", [new Date(profile.nvidia.fetchedAt).toLocaleString()])
+        : t("providerNvidiaNotChecked")
+    )}${profile.nvidia.refreshFailed ? ` · ${escapeHtml(t("providerNvidiaRefreshFailed"))}` : ""}</div>` : ""}
     ${renderSelectionMode(profile)}
     <div class="provider-models-toolbar">
       <input type="search" class="model-search" placeholder="${escapeAttr(
@@ -306,6 +316,7 @@ function renderCard(preset) {
         <input type="checkbox" class="model-filter-selected" ${view.mode === "selected" ? "checked" : ""} />
         ${escapeHtml(t("providerOnlySelected"))}
       </label>
+      ${profile.nvidia ? `<label class="model-only-selected"><input type="checkbox" class="model-filter-free" ${view.freeOnly ? "checked" : ""} /> ${escapeHtml(t("providerOnlyFreeEndpoint"))}</label>` : ""}
       <span class="model-count"></span>
       <button class="btn btn-outline select-all-filtered">${escapeHtml(t("providerSelectAll"))}</button>
       <button class="btn btn-outline select-none">${escapeHtml(t("providerSelectNone"))}</button>
@@ -389,7 +400,8 @@ function applyModelFilter(card, profile) {
     const selected = row.dataset.selected === "1";
     const matches = !query || model.includes(query);
     const passesMode = view.mode !== "selected" || selected;
-    const show = matches && passesMode;
+    const passesFree = !profile.nvidia || !view.freeOnly || row.dataset.freeEndpoint === "1";
+    const show = matches && passesMode && passesFree;
     row.style.display = show ? "" : "none";
     if (show) visible++;
   });
@@ -405,6 +417,12 @@ function applyModelFilter(card, profile) {
 
 /** Fetch /models, refresh state and return a summary (or an error). */
 async function runDetection(provider) {
+  if (profileOf(provider).nvidia) {
+    // Called directly by the Detect button so the optional permission request
+    // retains Chrome's user gesture. Denial still allows /models detection.
+    try { await chrome.permissions.request({ origins: ["https://api.ngc.nvidia.com/*"] }); }
+    catch { /* The background returns a classification warning. */ }
+  }
   const before = profileOf(provider).models.slice();
   debug("detecting models", provider);
   const res = await send({ type: "FETCH_PROVIDER_MODELS", provider });
@@ -588,6 +606,15 @@ function bindCard(card, preset, profile) {
     });
   }
 
+  const filterFree = card.querySelector(".model-filter-free");
+  if (filterFree) {
+    filterFree.addEventListener("change", () => {
+      viewOf(provider).freeOnly = filterFree.checked;
+      persistView();
+      applyModelFilter(card, profileOf(provider));
+    });
+  }
+
   const selectAllBtn = card.querySelector(".select-all-filtered");
   if (selectAllBtn) {
     selectAllBtn.addEventListener("click", () => setVisibleSelection(card, provider, true));
@@ -706,8 +733,6 @@ function applyTemplateToForm(template) {
     setVal("ap-maxtokens", "max_tokens");
     setVal("ap-prefixes", "");
     setChecked("ap-thinking", false);
-    setChecked("ap-images", false);
-    setChecked("ap-matching", true);
     if (note) note.style.display = "none";
     return;
   }
@@ -717,8 +742,6 @@ function applyTemplateToForm(template) {
   setVal("ap-dialect", template.dialect);
   setVal("ap-maxtokens", template.maxTokensParam || "max_tokens");
   setChecked("ap-thinking", !!template.defaultThinking);
-  setChecked("ap-images", !!template.capabilities?.images);
-  setChecked("ap-matching", template.capabilities?.matching !== false);
 
   if (note) {
     if (template.endpoints?.length) {
@@ -736,8 +759,6 @@ function resetAddProviderForm() {
   setVal("ap-template", "");
   setVal("ap-maxtokens", "max_tokens");
   setChecked("ap-thinking", false);
-  setChecked("ap-images", false);
-  setChecked("ap-matching", true);
   selectedTemplate = null;
   const note = document.getElementById("ap-endpoints-note");
   if (note) note.style.display = "none";
@@ -788,8 +809,6 @@ async function saveCustomProviderFromForm() {
       : "max_tokens",
     defaultThinking: !!document.getElementById("ap-thinking")?.checked,
     capabilities: {
-      images: !!document.getElementById("ap-images")?.checked,
-      matching: !!document.getElementById("ap-matching")?.checked,
       reasoning: true,
     },
   };

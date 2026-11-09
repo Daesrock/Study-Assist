@@ -50,11 +50,9 @@ const elements = {
   // Roles
   primaryProvider: document.getElementById("primary-provider"),
   primaryModel: document.getElementById("primary-model"),
-  primaryModelManual: document.getElementById("primary-model-manual"),
   primaryWarning: document.getElementById("primary-warning"),
   validatorProvider: document.getElementById("validator-provider"),
   validatorModel: document.getElementById("validator-model"),
-  validatorModelManual: document.getElementById("validator-model-manual"),
   openProviders: document.getElementById("open-providers"),
   rolesStatus: document.getElementById("roles-status"),
   // Domain management
@@ -161,10 +159,8 @@ function setupEventListeners() {
   // Roles
   elements.primaryProvider.addEventListener("change", () => onRoleChange("primary"));
   elements.primaryModel.addEventListener("change", () => onRoleModelChange("primary"));
-  elements.primaryModelManual.addEventListener("change", () => onRoleModelChange("primary"));
   elements.validatorProvider.addEventListener("change", () => onRoleChange("validator"));
   elements.validatorModel.addEventListener("change", () => onRoleModelChange("validator"));
-  elements.validatorModelManual.addEventListener("change", () => onRoleModelChange("validator"));
   if (elements.openProviders) {
     elements.openProviders.addEventListener("click", openProviders);
   }
@@ -254,12 +250,10 @@ function roleEls(role) {
     ? {
         provider: elements.primaryProvider,
         model: elements.primaryModel,
-        manual: elements.primaryModelManual,
       }
     : {
         provider: elements.validatorProvider,
         model: elements.validatorModel,
-        manual: elements.validatorModelManual,
       };
 }
 
@@ -300,7 +294,7 @@ function renderModels(role) {
   if (!providerId) {
     setOptions(els.model, [], "");
     els.model.style.display = "none";
-    els.manual.style.display = "none";
+    els.model.disabled = true;
     if (role === "primary") elements.primaryWarning.style.display = "none";
     return;
   }
@@ -310,23 +304,15 @@ function renderModels(role) {
   const assignedModel =
     assigned && assigned.provider === providerId ? assigned.model : "";
   const models = modelsForProvider(providerId);
-  const options = [
-    ...models.map((m) => ({ value: m, label: m })),
-    { value: "__other__", label: t("otherOption", "Other...") },
-  ];
-  const selected = models.includes(assignedModel)
-    ? assignedModel
-    : assignedModel
-      ? "__other__"
-      : models[0] || "__other__";
+  const options = models.length
+    ? models.map((model) => ({ value: model, label: model }))
+    : [{ value: "", label: t("popupSelectModelsInProviders", "Select models in Providers") }];
+  const selected = models.includes(assignedModel) ? assignedModel : models[0] || "";
   setOptions(els.model, options, selected);
-
-  const isOther = els.model.value === "__other__";
-  els.manual.style.display = isOther ? "" : "none";
-  if (isOther) els.manual.value = assignedModel || "";
+  els.model.disabled = models.length === 0;
 
   if (role === "primary") {
-    updatePrimaryWarning(providerId, isOther ? els.manual.value : els.model.value);
+    updatePrimaryWarning(providerId, els.model.value);
   }
 }
 
@@ -349,9 +335,8 @@ function readRole(role) {
   const els = roleEls(role);
   const providerId = els.provider.value;
   if (!providerId) return null;
-  let model = els.model.value;
-  if (model === "__other__") model = els.manual.value.trim();
-  if (!model) return null;
+  const model = els.model.value;
+  if (!model || !modelsForProvider(providerId).includes(model)) return null;
   return { provider: providerId, model };
 }
 
@@ -376,7 +361,7 @@ async function onRoleChange(role) {
 
 async function onRoleModelChange(role) {
   const els = roleEls(role);
-  els.manual.style.display = els.model.value === "__other__" ? "" : "none";
+  if (role === "primary") updatePrimaryWarning(els.provider.value, els.model.value);
   await persistRoles();
 }
 

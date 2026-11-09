@@ -150,7 +150,9 @@ export function normalizeCustomProvider(config: CustomProviderConfig): ProviderP
     maxTokensParam: config.maxTokensParam ?? "max_tokens",
     capabilities: {
       images: config.capabilities?.images ?? false,
-      matching: config.capabilities?.matching ?? true,
+      // Matching questions use text prompts; ignore the removed manual gate,
+      // including false values saved by older versions of the provider form.
+      matching: true,
       reasoning: config.capabilities?.reasoning ?? true,
     },
     headers: config.headers,
