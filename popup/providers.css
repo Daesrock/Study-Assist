@@ -521,6 +521,28 @@ body {
   color: var(--text-secondary);
 }
 
+.model-free-endpoint {
+  display: inline-block;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 11px;
+}
+
+.model-free-endpoint.confirmed {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.model-free-endpoint.unknown,
+.provider-nvidia-status {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.provider-nvidia-status {
+  margin: 8px 0;
+}
+
 .provider-card-actions {
   display: flex;
   justify-content: flex-end;

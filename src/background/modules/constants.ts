@@ -126,8 +126,14 @@ export interface ErrorLogObject {
   hasImages?: boolean;
 }
 
+/** Portable capabilities; these do not imply a tariff or deployment limits. */
+export interface ModelCapabilities {
+  vision: boolean | null;
+  reasoning?: boolean | null;
+}
+
 /** Price/capability metadata for a single model id (LiteLLM-derived). */
-export interface ModelPriceInfo {
+export interface ModelPriceInfo extends ModelCapabilities {
   /** USD per 1M input tokens. */
   inputPer1M: number;
   /** USD per 1M output tokens. */

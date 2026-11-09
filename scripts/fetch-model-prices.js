@@ -22,7 +22,7 @@ const OUT_FILE = resolve(
   "model-prices.json",
 );
 
-const WANTED_PROVIDERS = new Set(["anthropic", "openai", "deepseek"]);
+const WANTED_PROVIDERS = new Set(["anthropic", "openai", "deepseek", "nvidia_nim"]);
 
 function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -93,9 +93,15 @@ async function main() {
 
   const raw = await response.json();
   const models = {};
+  const capabilities = {};
   for (const key of Object.keys(raw)) {
     const info = toInfo(raw[key]);
     if (info) models[key] = info;
+    const entry = raw[key];
+    if (!isRecord(entry)) continue;
+    const vision = typeof entry.supports_vision === "boolean" ? entry.supports_vision : null;
+    const reasoning = typeof entry.supports_reasoning === "boolean" ? entry.supports_reasoning : null;
+    if (vision !== null || reasoning !== null) capabilities[key] = { vision, reasoning };
   }
 
   const count = Object.keys(models).length;
@@ -109,6 +115,7 @@ async function main() {
     source: SOURCE_URL,
     count,
     models,
+    capabilities,
   };
 
   mkdirSync(dirname(OUT_FILE), { recursive: true });

@@ -162,6 +162,61 @@ beforeEach(() => {
   vi.unstubAllGlobals();
 });
 
+function nvidiaState() {
+  const state: any = providerState({ models: ["deepseek-ai/deepseek-v4.1-flash", "z-ai/glm-5.3", "other/unknown"], selectedModels: ["z-ai/glm-5.3", "other/unknown"], modelInfo: {} });
+  Object.assign(state.presets[0], { id: "nim", label: "NVIDIA", baseUrl: "https://integrate.api.nvidia.com/v1", dialect: "openai-compatible" });
+  state.profiles[0].id = "nim";
+  state.profiles[0].nvidia = {
+    freeEndpoints: { "deepseek-ai/deepseek-v4.1-flash": true, "z-ai/glm-5.3": true, "other/unknown": null },
+    fetchedAt: 123,
+    refreshFailed: false,
+  };
+  return state;
+}
+
+describe("NVIDIA Free Endpoint controls", () => {
+  it("combines free, selected and search filters without editing selections or detecting", async () => {
+    await bootProviders({ GET_PROVIDER_STATE: { success: true, state: nvidiaState() } });
+    expect(row("other/unknown", "nim").querySelector(".model-free-endpoint")?.textContent).toBe("providerFreeEndpointUnknown");
+    expect(card("nim").querySelector(".provider-nvidia-status")?.textContent).toContain("providerNvidiaUpdated");
+    const free = card("nim").querySelector(".model-filter-free") as HTMLInputElement;
+    free.checked = true;
+    free.dispatchEvent(new Event("change"));
+    expect(row("other/unknown", "nim").style.display).toBe("none");
+    expect(row("deepseek-ai/deepseek-v4.1-flash", "nim").style.display).toBe("");
+    const selected = card("nim").querySelector(".model-filter-selected") as HTMLInputElement;
+    selected.checked = true;
+    selected.dispatchEvent(new Event("change"));
+    expect(row("deepseek-ai/deepseek-v4.1-flash", "nim").style.display).toBe("none");
+    expect(row("z-ai/glm-5.3", "nim").style.display).toBe("");
+    const search = card("nim").querySelector(".model-search") as HTMLInputElement;
+    search.value = "deepseek";
+    search.dispatchEvent(new Event("input"));
+    expect(row("z-ai/glm-5.3", "nim").style.display).toBe("none");
+    expect((row("other/unknown", "nim").querySelector(".model-include") as HTMLInputElement).checked).toBe(true);
+    const sent = vi.mocked(chrome.runtime.sendMessage).mock.calls.map(([message]: any) => message.type);
+    expect(sent).not.toContain("FETCH_PROVIDER_MODELS");
+    expect(sent).not.toContain("SET_MODEL_SELECTED");
+    expect(chrome.storage.local.set).toHaveBeenCalledWith(expect.objectContaining({ providersView: expect.objectContaining({ nim: expect.objectContaining({ freeOnly: true }) }) }));
+  });
+
+  it("requests only the catalog permission on Detect and preserves filter after rendering", async () => {
+    const permission = vi.mocked(chrome.permissions.request).mockResolvedValue(true);
+    await bootProviders({
+      GET_PROVIDER_STATE: { success: true, state: nvidiaState() },
+      FETCH_PROVIDER_MODELS: { success: true, models: nvidiaState().profiles[0].models.map((id: string) => ({ id })), state: nvidiaState() },
+    });
+    const free = card("nim").querySelector(".model-filter-free") as HTMLInputElement;
+    free.checked = true;
+    free.dispatchEvent(new Event("change"));
+    (card("nim").querySelector(".detect-models") as HTMLButtonElement).click();
+    await flush();
+    expect(permission).toHaveBeenCalledWith({ origins: ["https://api.ngc.nvidia.com/*"] });
+    expect((card("nim").querySelector(".model-filter-free") as HTMLInputElement).checked).toBe(true);
+    expect(row("other/unknown", "nim").style.display).toBe("none");
+  });
+});
+
 describe("providers page metadata refresh", () => {
   it("applies the connection test's fresh capabilities without a reload", async () => {
     await bootProviders({

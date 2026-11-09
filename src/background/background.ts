@@ -13,7 +13,9 @@ import { getUsageStats, getRecentHistory, clearUsageData, getStorageInfo, trimHi
 import { getProviderState, getRoles, saveProviderKey, clearProviderKey, setModelVision, setModelSelected, setModelEndpoint, setSelectionMode, addCustomModel, saveRoles, saveProfile, getProviderKey, applyDetectedModels, saveQaModel, saveCustomProvider, deleteCustomProvider } from "./modules/llm/profiles.js";
 import { fetchModels } from "./modules/llm/catalog.js";
 import { getPreset, ensureRegistry, resetRegistry } from "./modules/llm/registry.js";
-import { getPriceIndex, lookupModelInfo, refreshPrices } from "./modules/llm/pricing.js";
+import { getPriceIndex, lookupModelInfo, refreshPrices, getCapabilityIndex, lookupModelCapabilities } from "./modules/llm/pricing.js";
+import { isNvidiaNimUrl } from "./modules/llm/modelIdentity.js";
+import { refreshNvidiaCatalog, getNvidiaCatalog } from "./modules/llm/nvidiaCatalog.js";
 import { CONTENT_SETTINGS, isExtensionPage, senderKey, validateAnalysis, qaTabs, isQAPageUrl } from "./modules/security.js";
 import { AnalysisSession } from "./modules/analysisSession.js";
 
@@ -83,6 +85,7 @@ function metadataWarning(result: { success: boolean; error?: string }): string |
 async function detectProviderModels(
   provider: string,
   apiKey: string,
+  refreshNvidia = false,
 ): Promise<{
   success: boolean;
   models: DetectedModel[];
@@ -94,18 +97,26 @@ async function detectProviderModels(
   // reasoning from current metadata. A failed refresh is a warning, never a
   // detection failure.
   const refresh = await refreshPrices();
-  const warning = metadataWarning(refresh);
+  let warning = metadataWarning(refresh);
 
   const result = await fetchModels(preset, apiKey);
   if (!result.success) {
     return { success: false, models: [], error: result.error, warning };
   }
 
+  if (refreshNvidia && isNvidiaNimUrl(preset.baseUrl) && !await refreshNvidiaCatalog()) {
+    const detail = chrome.i18n?.getMessage?.("providerNvidiaRefreshFailed") || "Could not update Free Endpoint classification. Previous information was kept.";
+    warning = [warning, detail].filter(Boolean).join(" ");
+  }
+
   const index = await getPriceIndex();
+  const capabilityIndex = await getCapabilityIndex();
+  const nvidiaCatalog = await getNvidiaCatalog();
   const candidates = result.models.map((model) => ({
     id: model.id,
     created: model.created,
     info: lookupModelInfo(index, provider, model.id),
+    capabilities: lookupModelCapabilities(index, capabilityIndex, provider, model.id, nvidiaCatalog),
   }));
   await applyDetectedModels(provider, candidates);
 
@@ -407,7 +418,7 @@ async function handleMessage(
         const apiKey = message.rawKey || (await getProviderKey(provider));
         if (!apiKey) return { success: false, error: "No API key for provider." };
 
-        const outcome = await detectProviderModels(provider, apiKey);
+        const outcome = await detectProviderModels(provider, apiKey, true);
         return {
           success: outcome.success,
           models: outcome.models,

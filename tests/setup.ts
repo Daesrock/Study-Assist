@@ -74,6 +74,10 @@ const chromeMock = {
   action: chromeAction,
   runtime: chromeRuntime,
   tabs: chromeTabs,
+  permissions: {
+    contains: vi.fn(async () => true),
+    request: vi.fn(async () => true),
+  },
 };
 
 // @ts-expect-error - Mocking global chrome

@@ -109,10 +109,9 @@
   "validatorProvider": { "message": "Validator (optional)", "description": "Validator role section title" },
   "providerField": { "message": "Provider", "description": "Provider select label" },
   "modelField": { "message": "Model", "description": "Model select label" },
-  "manualModelPlaceholder": { "message": "Other model id...", "description": "Manual model input placeholder" },
+  "popupSelectModelsInProviders": { "message": "Select models in Providers", "description": "Empty model selector in the popup" },
   "configureProviders": { "message": "Configure providers", "description": "Open providers page button" },
   "noneOption": { "message": "None", "description": "None option" },
-  "otherOption": { "message": "Other...", "description": "Other model option" },
   "noProviderConfigured": { "message": "Configure a provider first.", "description": "No provider warning" },
   "rolesSaved": { "message": "Saved.", "description": "Roles saved status" },
   "providerVisionWarning": { "message": "This model cannot handle image questions.", "description": "Vision warning in popup" },
@@ -148,8 +147,6 @@
   "providerAddAdvanced": { "message": "Advanced", "description": "Advanced options summary" },
   "providerMaxTokensParam": { "message": "Token limit field", "description": "max_tokens vs max_completion_tokens" },
   "providerDefaultThinking": { "message": "Thinking / reasoning by default", "description": "Custom provider default thinking" },
-  "providerCapImages": { "message": "Supports images", "description": "Custom provider image capability" },
-  "providerCapMatching": { "message": "Supports matching questions", "description": "Custom provider matching capability" },
   "providerCancel": { "message": "Cancel", "description": "Cancel button" },
   "providerSaveProvider": { "message": "Save provider", "description": "Save custom provider button" },
   "providerCustomBadge": { "message": "Custom", "description": "Badge for user-defined providers" },
@@ -168,5 +165,11 @@
   "providerTemplateCustom": { "message": "Custom (blank)", "description": "Blank template option" },
   "providerMultiEndpointNote": { "message": "This provider uses multiple endpoints (routed per model)", "description": "Note for multi-endpoint templates" },
   "providerHeaders": { "message": "Headers (Name: value per line)", "description": "Custom request headers field" },
-  "providerDialectResponses": { "message": "OpenAI Responses", "description": "OpenAI Responses dialect" }
+  "providerDialectResponses": { "message": "OpenAI Responses", "description": "OpenAI Responses dialect" },
+  "providerFreeEndpoint": { "message": "Free Endpoint" },
+  "providerFreeEndpointUnknown": { "message": "Free Endpoint unconfirmed" },
+  "providerOnlyFreeEndpoint": { "message": "Only Free Endpoint" },
+  "providerNvidiaUpdated": { "message": "Free Endpoint: last checked $DATE$", "placeholders": { "date": { "content": "$1" } } },
+  "providerNvidiaNotChecked": { "message": "Click Detect models to check NVIDIA's Free Endpoint labels." },
+  "providerNvidiaRefreshFailed": { "message": "Could not update Free Endpoint classification. Previous information was kept." }
 }

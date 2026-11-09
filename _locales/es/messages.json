@@ -109,10 +109,9 @@
   "validatorProvider": { "message": "Validador (opcional)", "description": "Titulo rol validador" },
   "providerField": { "message": "Proveedor", "description": "Etiqueta select proveedor" },
   "modelField": { "message": "Modelo", "description": "Etiqueta select modelo" },
-  "manualModelPlaceholder": { "message": "Otro model id...", "description": "Placeholder modelo manual" },
+  "popupSelectModelsInProviders": { "message": "Selecciona modelos en Proveedores", "description": "Selector vacío de modelos en el popup" },
   "configureProviders": { "message": "Configurar proveedores", "description": "Boton abrir proveedores" },
   "noneOption": { "message": "Ninguno", "description": "Opcion ninguno" },
-  "otherOption": { "message": "Otro...", "description": "Opcion otro modelo" },
   "noProviderConfigured": { "message": "Configura un proveedor primero.", "description": "Aviso sin proveedor" },
   "rolesSaved": { "message": "Guardado.", "description": "Estado roles guardados" },
   "providerVisionWarning": { "message": "Este modelo no sirve para preguntas con imagenes.", "description": "Aviso de vision en popup" },
@@ -148,8 +147,6 @@
   "providerAddAdvanced": { "message": "Avanzado", "description": "Resumen de opciones avanzadas" },
   "providerMaxTokensParam": { "message": "Campo de límite de tokens", "description": "max_tokens vs max_completion_tokens" },
   "providerDefaultThinking": { "message": "Thinking / razonamiento por defecto", "description": "Thinking por defecto del proveedor" },
-  "providerCapImages": { "message": "Admite imágenes", "description": "Capacidad de imágenes" },
-  "providerCapMatching": { "message": "Admite preguntas de relación", "description": "Capacidad de matching" },
   "providerCancel": { "message": "Cancelar", "description": "Botón cancelar" },
   "providerSaveProvider": { "message": "Guardar proveedor", "description": "Guardar proveedor personalizado" },
   "providerCustomBadge": { "message": "Personalizado", "description": "Badge de proveedores definidos por el usuario" },
@@ -168,5 +165,11 @@
   "providerTemplateCustom": { "message": "Personalizado (vacío)", "description": "Opción de plantilla vacía" },
   "providerMultiEndpointNote": { "message": "Este proveedor usa varios endpoints (se enruta por modelo)", "description": "Nota para plantillas multi-endpoint" },
   "providerHeaders": { "message": "Cabeceras (Nombre: valor por línea)", "description": "Campo de cabeceras personalizadas" },
-  "providerDialectResponses": { "message": "OpenAI Responses", "description": "Dialecto OpenAI Responses" }
+  "providerDialectResponses": { "message": "OpenAI Responses", "description": "Dialecto OpenAI Responses" },
+  "providerFreeEndpoint": { "message": "Free Endpoint" },
+  "providerFreeEndpointUnknown": { "message": "Free Endpoint sin confirmar" },
+  "providerOnlyFreeEndpoint": { "message": "Solo Free Endpoint" },
+  "providerNvidiaUpdated": { "message": "Free Endpoint: última consulta $DATE$", "placeholders": { "date": { "content": "$1" } } },
+  "providerNvidiaNotChecked": { "message": "Pulsa Detectar modelos para consultar las etiquetas Free Endpoint de NVIDIA." },
+  "providerNvidiaRefreshFailed": { "message": "No se pudo actualizar la clasificación Free Endpoint. Se conservó la información anterior." }
 }

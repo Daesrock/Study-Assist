@@ -7,9 +7,15 @@
  * GitHub on demand. No AI is involved: it is a straight id → entry lookup.
  */
 
-import type { ModelPriceInfo } from "../constants.js";
+import type { ModelPriceInfo, ModelCapabilities } from "../constants.js";
 import { logProviders } from "../constants.js";
 import { llmRequest } from "./transport.js";
+import { resolvePresetForModel } from "./registry.js";
+import { isNvidiaNimUrl } from "./modelIdentity.js";
+import { buildCapabilityIndex, lookupNvidiaCapabilities } from "./capabilities.js";
+import type { CapabilityIndex } from "./capabilities.js";
+import { getNvidiaCatalog, lookupNvidiaCatalogVision } from "./nvidiaCatalog.js";
+import type { NvidiaCatalog } from "./nvidiaCatalog.js";
 
 export type PriceIndex = Record<string, ModelPriceInfo>;
 
@@ -21,7 +27,7 @@ const SOURCE_URL =
   "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json";
 
 /** Providers we care about. Entries from other back-ends are ignored. */
-const WANTED_PROVIDERS = new Set(["anthropic", "openai", "deepseek"]);
+const WANTED_PROVIDERS = new Set(["anthropic", "openai", "deepseek", "nvidia_nim"]);
 
 /**
  * Live-refresh budget. Metadata drives pricing, vision and reasoning gates, so
@@ -30,6 +36,7 @@ const WANTED_PROVIDERS = new Set(["anthropic", "openai", "deepseek"]);
 export const PRICE_REFRESH_TIMEOUT_MS = 15_000;
 
 let cached: PriceIndex | null = null;
+let capabilityCache: CapabilityIndex | null = null;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -151,6 +158,11 @@ export function lookupModelInfo(
   const id = modelId.trim();
   if (!id) return null;
 
+  if (isNvidiaNimUrl(resolvePresetForModel(presetId, id)?.baseUrl ?? "") || presetId === "nvidia_nim") {
+    const hit = index[`nvidia_nim/${id}`];
+    return hit?.provider === "nvidia_nim" ? hit : null;
+  }
+
   for (const candidate of [id, `${presetId}/${id}`]) {
     const hit = index[candidate];
     if (hit) return hit;
@@ -173,7 +185,8 @@ async function loadSnapshot(): Promise<PriceIndex> {
     if (typeof fetch !== "function") return {};
     const response = await fetch(chrome.runtime.getURL(SNAPSHOT_FILE));
     if (!response.ok) return {};
-    const json = (await response.json()) as { models?: unknown };
+    const json = (await response.json()) as { models?: unknown; capabilities?: unknown };
+    if (!capabilityCache && isRecord(json?.capabilities)) capabilityCache = json.capabilities as CapabilityIndex;
     return isRecord(json?.models) ? (json.models as PriceIndex) : {};
   } catch (error) {
     logProviders("price snapshot load failed", (error as Error).message);
@@ -203,6 +216,40 @@ export async function resolveModelInfo(
 ): Promise<ModelPriceInfo | null> {
   const index = await getPriceIndex();
   return lookupModelInfo(index, presetId, modelId);
+}
+
+/** Separate cache: cross-provider capabilities never become billable prices. */
+export async function getCapabilityIndex(): Promise<CapabilityIndex> {
+  if (capabilityCache) return capabilityCache;
+  const stored = (await chrome.storage.local.get("modelCapabilities")).modelCapabilities;
+  if (isRecord(stored)) capabilityCache = stored as CapabilityIndex;
+  if (!capabilityCache) {
+    await getPriceIndex();
+    if (!capabilityCache) await loadSnapshot();
+  }
+  return capabilityCache ??= Object.fromEntries(Object.entries(await getPriceIndex()).map(
+    ([id, info]) => [id, { vision: info.vision, reasoning: info.reasoning ?? null }],
+  ));
+}
+
+export function lookupModelCapabilities(
+  prices: PriceIndex,
+  capabilities: CapabilityIndex,
+  presetId: string,
+  model: string,
+  nvidiaCatalog?: NvidiaCatalog,
+): ModelCapabilities | null {
+  const price = lookupModelInfo(prices, presetId, model);
+  if (!isNvidiaNimUrl(resolvePresetForModel(presetId, model)?.baseUrl ?? "") && presetId !== "nvidia_nim") return price;
+  const portable = lookupNvidiaCapabilities(capabilities, model);
+  const nvidiaVision = nvidiaCatalog ? lookupNvidiaCatalogVision(nvidiaCatalog, model) : null;
+  if (!price && !portable && nvidiaVision === null) return null;
+  return { vision: nvidiaVision ?? price?.vision ?? portable?.vision ?? null, reasoning: price?.reasoning ?? portable?.reasoning ?? null };
+}
+
+export async function resolveModelCapabilities(presetId: string, model: string): Promise<ModelCapabilities | null> {
+  const nvidia = isNvidiaNimUrl(resolvePresetForModel(presetId, model)?.baseUrl ?? "") || presetId === "nvidia_nim";
+  return lookupModelCapabilities(await getPriceIndex(), await getCapabilityIndex(), presetId, model, nvidia ? await getNvidiaCatalog() : undefined);
 }
 
 /** Epoch ms of the last successful live refresh, or null. */
@@ -267,6 +314,7 @@ async function runPriceRefresh(): Promise<RefreshPricesResult> {
     }
 
     const index = buildPriceIndex(raw);
+    const capabilities = buildCapabilityIndex(raw);
     const count = Object.keys(index).length;
     if (count === 0) {
       return refreshFailure("Empty price index", stale);
@@ -275,8 +323,9 @@ async function runPriceRefresh(): Promise<RefreshPricesResult> {
     const fetchedAt = Date.now();
     // Persist index + timestamp together first, then publish to memory: a
     // failed write must never leave the in-memory cache ahead of storage.
-    await chrome.storage.local.set({ [STORAGE_KEY]: index, [FETCHED_KEY]: fetchedAt });
+    await chrome.storage.local.set({ [STORAGE_KEY]: index, [FETCHED_KEY]: fetchedAt, modelCapabilities: capabilities });
     cached = index;
+    capabilityCache = capabilities;
     logProviders("prices refreshed", { count, fetchedAt });
     return { success: true, count, fetchedAt };
   } catch (error) {
@@ -306,4 +355,5 @@ export function refreshPrices(): Promise<RefreshPricesResult> {
 /** Test seam: inject a price index and skip storage/snapshot. */
 export function __setPriceIndexForTests(index: PriceIndex | null): void {
   cached = index;
+  capabilityCache = null;
 }

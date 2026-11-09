@@ -21,6 +21,8 @@ export function setLlmFetch(fn: LlmFetch | undefined): void {
 
 export interface LlmRequestOptions {
   url: string;
+  /** Structured metadata query, added only after validating the base URL. */
+  query?: Record<string, string>;
   init: FetchOptionsWithSignal;
   /** Retries after the first attempt. Default 2. */
   retries?: number;
@@ -30,8 +32,10 @@ export interface LlmRequestOptions {
 
 export function llmRequest(opts: LlmRequestOptions): Promise<Response> {
   assertSafeProviderUrl(opts.url);
+  const url = new URL(opts.url);
+  for (const [key, value] of Object.entries(opts.query ?? {})) url.searchParams.set(key, value);
   return fetchWithRetry(
-    opts.url,
+    opts.query ? url.href : opts.url,
     { ...opts.init, redirect: "error", credentials: "omit" },
     opts.retries ?? 2,
     opts.timeout ?? 30000,

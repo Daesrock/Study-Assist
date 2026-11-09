@@ -7,7 +7,7 @@
  * (DeepSeek) fall back to a capability score.
  */
 
-import type { ModelPriceInfo } from "../constants.js";
+import type { ModelPriceInfo, ModelCapabilities } from "../constants.js";
 
 export interface SelectionCandidate {
   id: string;
@@ -15,6 +15,7 @@ export interface SelectionCandidate {
   created?: number;
   /** LiteLLM price/capability metadata, when known. */
   info?: ModelPriceInfo | null;
+  capabilities?: ModelCapabilities | null;
 }
 
 export interface AutoSelectionOptions {
@@ -45,7 +46,7 @@ export function isEligible(candidate: SelectionCandidate, now = Date.now()): boo
   return !isDeprecated(info, now);
 }
 
-function capabilityScore(info: ModelPriceInfo | null | undefined): number {
+function capabilityScore(info: (ModelCapabilities & { maxInput?: number }) | null | undefined): number {
   if (!info) return 0;
   let score = 0;
   if (info.reasoning) score += 3;
@@ -77,7 +78,7 @@ export function computeAutoSelection(
     const createdA = a.created ?? -Infinity;
     const createdB = b.created ?? -Infinity;
     if (createdB !== createdA) return createdB - createdA;
-    return capabilityScore(b.info) - capabilityScore(a.info);
+    return capabilityScore(b.capabilities ?? b.info) - capabilityScore(a.capabilities ?? a.info);
   });
 
   const selected: string[] = [];
